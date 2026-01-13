@@ -1,0 +1,448 @@
+// app/api/migrate/import/route.ts
+import { NextResponse } from "next/server";
+import path from "path";
+import fs from "fs/promises";
+
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+
+/** =========
+ *  Types
+ *  ========= */
+type ISODate = string;
+
+type WidgetType =
+  | "calendar"
+  | "memo"
+  | "photo"
+  | "todo"
+  | "chart"
+  | "notice"
+  | "mood"
+  | "weather";
+
+type WidgetLayout = {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  minW?: number;
+  minH?: number;
+  maxW?: number;
+  maxH?: number;
+  static?: boolean;
+};
+
+type Dashboard = {
+  id: string;
+  name: string;
+  ownerId?: string;
+  groupId?: string;
+  createdAt: ISODate;
+  updatedAt: ISODate;
+};
+
+type Widget = {
+  id: string;
+  dashboardId: string;
+  type: WidgetType;
+  layout: WidgetLayout;
+  settings?: Record<string, unknown>;
+  createdBy?: string;
+  createdAt: ISODate;
+  updatedAt: ISODate;
+};
+
+type WidgetDataBase = {
+  id: string;
+  widgetId: string;
+  dashboardId: string;
+  createdAt: ISODate;
+  updatedAt: ISODate;
+};
+
+type Memo = WidgetDataBase & { text: string; color?: string };
+type Todo = WidgetDataBase & { date: string; title: string; done: boolean; order?: number };
+type Mood = WidgetDataBase & {
+  date: string;
+  mood: "great" | "good" | "ok" | "bad" | "awful";
+  note?: string;
+};
+type Notice = WidgetDataBase & { title: string; body: string; pinned?: boolean };
+
+type Metric = WidgetDataBase & { name: string; unit?: string; chartType?: "line" | "bar" };
+type MetricEntry = WidgetDataBase & { metricId: string; date: string; value: number };
+
+type CalendarEvent = WidgetDataBase & {
+  title: string;
+  startAt: ISODate;
+  endAt?: ISODate;
+  allDay?: boolean;
+  location?: string;
+  description?: string;
+};
+
+type WeatherCache = {
+  id: string;
+  widgetId: string;
+  dashboardId: string;
+  locationKey: string;
+  payload: unknown;
+  fetchedAt: ISODate;
+};
+
+type SnapshotWithoutPhotos = {
+  dashboards: Dashboard[];
+  widgets: Widget[];
+  memos: Memo[];
+  todos: Todo[];
+  moods: Mood[];
+  notices: Notice[];
+  metrics: Metric[];
+  metricEntries: MetricEntry[];
+  calendarEvents: CalendarEvent[];
+  weatherCache: WeatherCache[];
+};
+
+type ImportRequestBody =
+  | { userId: string; snapshot: SnapshotWithoutPhotos }
+  // 편의: snapshot 래핑 없이 바로 보내는 것도 허용 (userId는 헤더로)
+  | SnapshotWithoutPhotos;
+
+/** =========
+ *  Helpers (type guards)
+ *  ========= */
+function isRecord(v: unknown): v is Record<string, unknown> {
+  return typeof v === "object" && v !== null;
+}
+function isString(v: unknown): v is string {
+  return typeof v === "string";
+}
+function isNumber(v: unknown): v is number {
+  return typeof v === "number" && Number.isFinite(v);
+}
+function isBoolean(v: unknown): v is boolean {
+  return typeof v === "boolean";
+}
+function isArray(v: unknown): v is unknown[] {
+  return Array.isArray(v);
+}
+function hasKeys<T extends string>(obj: Record<string, unknown>, keys: readonly T[]): obj is Record<T, unknown> {
+  return keys.every((k) => k in obj);
+}
+
+/** ISODate는 "문자열" 정도만 최소검증 (빡세게 하면 오탐이 생김) */
+function isISODate(v: unknown): v is ISODate {
+  return isString(v) && v.length >= 10; // 최소한의 sanity check
+}
+
+/** WidgetLayout */
+function isWidgetLayout(v: unknown): v is WidgetLayout {
+  if (!isRecord(v)) return false;
+  if (!isNumber(v.x) || !isNumber(v.y) || !isNumber(v.w) || !isNumber(v.h)) return false;
+
+  // optional numeric/bool fields
+  const optionalNumbers: (keyof Pick<WidgetLayout, "minW" | "minH" | "maxW" | "maxH">)[] = ["minW", "minH", "maxW", "maxH"];
+  for (const k of optionalNumbers) {
+    const val = v[k as string];
+    if (val !== undefined && !isNumber(val)) return false;
+  }
+  const st = v.static;
+  if (st !== undefined && !isBoolean(st)) return false;
+
+  return true;
+}
+
+/** Dashboard */
+function isDashboard(v: unknown): v is Dashboard {
+  if (!isRecord(v)) return false;
+  if (!hasKeys(v, ["id", "name", "createdAt", "updatedAt"])) return false;
+  if (!isString(v.id) || !isString(v.name)) return false;
+  if (!isISODate(v.createdAt) || !isISODate(v.updatedAt)) return false;
+
+  const ownerId = v.ownerId;
+  if (ownerId !== undefined && !isString(ownerId)) return false;
+  const groupId = v.groupId;
+  if (groupId !== undefined && !isString(groupId)) return false;
+
+  return true;
+}
+
+/** WidgetType */
+function isWidgetType(v: unknown): v is WidgetType {
+  return (
+    v === "calendar" ||
+    v === "memo" ||
+    v === "photo" ||
+    v === "todo" ||
+    v === "chart" ||
+    v === "notice" ||
+    v === "mood" ||
+    v === "weather"
+  );
+}
+
+/** Widget */
+function isWidget(v: unknown): v is Widget {
+  if (!isRecord(v)) return false;
+  if (!hasKeys(v, ["id", "dashboardId", "type", "layout", "createdAt", "updatedAt"])) return false;
+  if (!isString(v.id) || !isString(v.dashboardId) || !isWidgetType(v.type)) return false;
+  if (!isWidgetLayout(v.layout)) return false;
+  if (!isISODate(v.createdAt) || !isISODate(v.updatedAt)) return false;
+
+  const createdBy = v.createdBy;
+  if (createdBy !== undefined && !isString(createdBy)) return false;
+
+  // settings는 object면 OK (array도 object이긴 한데, settings를 array로 쓰진 않으니 막자)
+  const settings = v.settings;
+  if (settings !== undefined) {
+    if (!isRecord(settings)) return false;
+  }
+  return true;
+}
+
+/** WidgetDataBase */
+function isWidgetDataBase(v: unknown): v is WidgetDataBase {
+  if (!isRecord(v)) return false;
+  if (!hasKeys(v, ["id", "widgetId", "dashboardId", "createdAt", "updatedAt"])) return false;
+  if (!isString(v.id) || !isString(v.widgetId) || !isString(v.dashboardId)) return false;
+  if (!isISODate(v.createdAt) || !isISODate(v.updatedAt)) return false;
+  return true;
+}
+
+/** Memo */
+function isMemo(v: unknown): v is Memo {
+  if (!isWidgetDataBase(v)) return false;
+  if (!("text" in v) || !isString(v.text)) return false;
+  const color = (v as Record<string, unknown>).color;
+  if (color !== undefined && !isString(color)) return false;
+  return true;
+}
+
+/** Todo */
+function isTodo(v: unknown): v is Todo {
+  if (!isWidgetDataBase(v)) return false;
+  const r = v as Record<string, unknown>;
+  if (!isString(r.date) || !isString(r.title) || !isBoolean(r.done)) return false;
+  if (r.order !== undefined && !isNumber(r.order)) return false;
+  return true;
+}
+
+/** Mood */
+function isMood(v: unknown): v is Mood {
+  if (!isWidgetDataBase(v)) return false;
+  const r = v as Record<string, unknown>;
+  if (!isString(r.date)) return false;
+
+  const mood = r.mood;
+  const ok =
+    mood === "great" || mood === "good" || mood === "ok" || mood === "bad" || mood === "awful";
+  if (!ok) return false;
+
+  const note = r.note;
+  if (note !== undefined && !isString(note)) return false;
+  return true;
+}
+
+/** Notice */
+function isNotice(v: unknown): v is Notice {
+  if (!isWidgetDataBase(v)) return false;
+  const r = v as Record<string, unknown>;
+  if (!isString(r.title) || !isString(r.body)) return false;
+  if (r.pinned !== undefined && !isBoolean(r.pinned)) return false;
+  return true;
+}
+
+/** Metric */
+function isMetric(v: unknown): v is Metric {
+  if (!isWidgetDataBase(v)) return false;
+  const r = v as Record<string, unknown>;
+  if (!isString(r.name)) return false;
+  if (r.unit !== undefined && !isString(r.unit)) return false;
+  const ct = r.chartType;
+  if (ct !== undefined && ct !== "line" && ct !== "bar") return false;
+  return true;
+}
+
+/** MetricEntry */
+function isMetricEntry(v: unknown): v is MetricEntry {
+  if (!isWidgetDataBase(v)) return false;
+  const r = v as Record<string, unknown>;
+  if (!isString(r.metricId) || !isString(r.date) || !isNumber(r.value)) return false;
+  return true;
+}
+
+/** CalendarEvent */
+function isCalendarEvent(v: unknown): v is CalendarEvent {
+  if (!isWidgetDataBase(v)) return false;
+  const r = v as Record<string, unknown>;
+  if (!isString(r.title) || !isISODate(r.startAt)) return false;
+  if (r.endAt !== undefined && !isISODate(r.endAt)) return false;
+  if (r.allDay !== undefined && !isBoolean(r.allDay)) return false;
+  if (r.location !== undefined && !isString(r.location)) return false;
+  if (r.description !== undefined && !isString(r.description)) return false;
+  return true;
+}
+
+/** WeatherCache */
+function isWeatherCache(v: unknown): v is WeatherCache {
+  if (!isRecord(v)) return false;
+  if (!hasKeys(v, ["id", "widgetId", "dashboardId", "locationKey", "payload", "fetchedAt"])) return false;
+  if (!isString(v.id) || !isString(v.widgetId) || !isString(v.dashboardId) || !isString(v.locationKey)) return false;
+  if (!isISODate(v.fetchedAt)) return false;
+  // payload는 unknown 그대로 둠
+  return true;
+}
+
+function isSnapshotWithoutPhotos(v: unknown): v is SnapshotWithoutPhotos {
+  if (!isRecord(v)) return false;
+
+  const keys: (keyof SnapshotWithoutPhotos)[] = [
+    "dashboards",
+    "widgets",
+    "memos",
+    "todos",
+    "moods",
+    "notices",
+    "metrics",
+    "metricEntries",
+    "calendarEvents",
+    "weatherCache",
+  ];
+
+  if (!keys.every((k) => k in v)) return false;
+
+  const d = v.dashboards;
+  const w = v.widgets;
+  const memos = v.memos;
+  const todos = v.todos;
+  const moods = v.moods;
+  const notices = v.notices;
+  const metrics = v.metrics;
+  const metricEntries = v.metricEntries;
+  const calendarEvents = v.calendarEvents;
+  const weatherCache = v.weatherCache;
+
+  if (!isArray(d) || !d.every(isDashboard)) return false;
+  if (!isArray(w) || !w.every(isWidget)) return false;
+  if (!isArray(memos) || !memos.every(isMemo)) return false;
+  if (!isArray(todos) || !todos.every(isTodo)) return false;
+  if (!isArray(moods) || !moods.every(isMood)) return false;
+  if (!isArray(notices) || !notices.every(isNotice)) return false;
+  if (!isArray(metrics) || !metrics.every(isMetric)) return false;
+  if (!isArray(metricEntries) || !metricEntries.every(isMetricEntry)) return false;
+  if (!isArray(calendarEvents) || !calendarEvents.every(isCalendarEvent)) return false;
+  if (!isArray(weatherCache) || !weatherCache.every(isWeatherCache)) return false;
+
+  return true;
+}
+
+type ParsedImport = {
+  userId: string;
+  snapshot: SnapshotWithoutPhotos;
+};
+
+function parseImportBody(body: unknown, headerUserId?: string | null): ParsedImport | null {
+  // 케이스 1) { userId, snapshot }
+  if (isRecord(body) && "snapshot" in body) {
+    const userId = body.userId;
+    const snapshot = body.snapshot;
+
+    if (!isString(userId)) return null;
+    if (!isSnapshotWithoutPhotos(snapshot)) return null;
+
+    return { userId, snapshot };
+  }
+
+  // 케이스 2) snapshot만 통째로 + userId는 헤더(x-user-id)로
+  if (isSnapshotWithoutPhotos(body)) {
+    const userId = headerUserId ?? null;
+    if (!userId || !isString(userId)) return null;
+    return { userId, snapshot: body };
+  }
+
+  return null;
+}
+
+/** =========
+ *  IO helpers
+ *  ========= */
+function jsonError(status: number, error: string, details?: Record<string, unknown>) {
+  return NextResponse.json({ ok: false, error, ...(details ? { details } : {}) }, { status });
+}
+
+async function ensureDir(dirPath: string) {
+  await fs.mkdir(dirPath, { recursive: true });
+}
+
+async function stageSnapshotToDisk(params: { userId: string; snapshot: SnapshotWithoutPhotos }) {
+  const baseDir =
+    process.env.MIGRATION_STAGING_DIR ??
+    path.join(process.cwd(), "data", "migration-staging");
+
+  const userDir = path.join(baseDir, params.userId);
+  await ensureDir(userDir);
+
+  const ts = new Date().toISOString().replace(/[:.]/g, "-");
+  const filePath = path.join(userDir, `snapshot-${ts}.json`);
+
+  await fs.writeFile(filePath, JSON.stringify(params.snapshot, null, 2), "utf-8");
+  return path.relative(process.cwd(), filePath);
+}
+
+/** =========
+ *  Route
+ *  ========= */
+export async function POST(request: Request) {
+  const headerUserId = request.headers.get("x-user-id");
+
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return jsonError(400, "Invalid JSON body");
+  }
+
+  const parsed = parseImportBody(body, headerUserId);
+  if (!parsed) {
+    return jsonError(400, "Invalid request body", {
+      hint: "Send { userId, snapshot } or send snapshot directly with header x-user-id",
+    });
+  }
+
+  const { userId, snapshot } = parsed;
+
+  // ✅ 지금 단계: 디스크 스테이징 저장
+  const stagedPath = await stageSnapshotToDisk({ userId, snapshot });
+
+  /**
+   * ================================
+   * TODO: PRISMA UPSERT (DB 준비되면 여기로 교체)
+   * ================================
+   *
+   * import는 "로그인 순간 최종 상태" 스냅샷
+   * 권장 구현:
+   *   await prisma.$transaction(async (tx) => {
+   *     // dashboards: upsert id 기준, ownerId는 userId로 세팅(또는 유지)
+   *     // widgets: upsert id 기준 (layout/settings는 Json)
+   *     // memos/todos/... : upsert id 기준
+   *   })
+   */
+
+  return NextResponse.json({
+    ok: true,
+    stagedPath,
+    counts: {
+      dashboards: snapshot.dashboards.length,
+      widgets: snapshot.widgets.length,
+      memos: snapshot.memos.length,
+      todos: snapshot.todos.length,
+      moods: snapshot.moods.length,
+      notices: snapshot.notices.length,
+      metrics: snapshot.metrics.length,
+      metricEntries: snapshot.metricEntries.length,
+      calendarEvents: snapshot.calendarEvents.length,
+      weatherCache: snapshot.weatherCache.length,
+    },
+  });
+}

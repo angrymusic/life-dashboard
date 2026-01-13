@@ -1,0 +1,245 @@
+// prisma/schema.prisma
+// Based on your schema.ts (server-side, Postgres).
+// Notes:
+// - IDs are client-generated UUID strings. Prisma model uses String @id.
+// - layout/settings/payload are JSON for flexibility.
+// - Photo stores storagePath (server disk relative path). No Blob here.
+// - Ownership: keep it simple. Dashboards have ownerId/groupId. Other tables relate via dashboardId.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Dashboard {
+  id        String   @id
+  name      String
+
+  ownerId   String?  // user id
+  groupId   String?  // family/group id
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  widgets   Widget[]
+
+  @@index([ownerId])
+  @@index([groupId])
+  @@index([updatedAt])
+}
+
+model Widget {
+  id          String   @id
+  dashboardId String
+  type        String   // WidgetType: "calendar" | "memo" | ...
+  layout      Json     // WidgetLayout
+  settings    Json?
+
+  createdBy   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  dashboard   Dashboard @relation(fields: [dashboardId], references: [id], onDelete: Cascade)
+
+  memos         Memo[]
+  todos         Todo[]
+  photos        Photo[]
+  moods         Mood[]
+  notices       Notice[]
+  metrics       Metric[]
+  calendarEvents CalendarEvent[]
+  weatherCache  WeatherCache[]
+
+  @@index([dashboardId])
+  @@index([dashboardId, type])
+  @@index([updatedAt])
+}
+
+model Memo {
+  id          String   @id
+  widgetId    String
+  dashboardId String
+
+  text        String
+  color       String?
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  widget      Widget @relation(fields: [widgetId], references: [id], onDelete: Cascade)
+
+  @@index([widgetId])
+  @@index([dashboardId])
+  @@index([updatedAt])
+}
+
+model Todo {
+  id          String   @id
+  widgetId    String
+  dashboardId String
+
+  date        String   // YMD "YYYY-MM-DD"
+  title       String
+  done        Boolean
+  order       Int?
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  widget      Widget @relation(fields: [widgetId], references: [id], onDelete: Cascade)
+
+  @@index([widgetId, date])
+  @@index([dashboardId, date])
+  @@index([updatedAt])
+}
+
+model Photo {
+  id          String   @id
+  widgetId    String
+  dashboardId String
+
+  storagePath String   // relative path like "photos/2026/01/uuid.jpg"
+  mimeType    String
+  caption     String?
+  takenAt     DateTime?
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  widget      Widget @relation(fields: [widgetId], references: [id], onDelete: Cascade)
+
+  @@index([widgetId])
+  @@index([dashboardId])
+  @@index([takenAt])
+}
+
+model Mood {
+  id          String   @id
+  widgetId    String
+  dashboardId String
+
+  date        String   // YMD
+  mood        String   // "great" | "good" | ...
+  note        String?
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  widget      Widget @relation(fields: [widgetId], references: [id], onDelete: Cascade)
+
+  @@index([widgetId, date])
+  @@index([dashboardId, date])
+}
+
+model Notice {
+  id          String   @id
+  widgetId    String
+  dashboardId String
+
+  title       String
+  body        String
+  pinned      Boolean?
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  widget      Widget @relation(fields: [widgetId], references: [id], onDelete: Cascade)
+
+  @@index([widgetId])
+  @@index([dashboardId])
+  @@index([pinned])
+  @@index([updatedAt])
+}
+
+model Metric {
+  id          String   @id
+  widgetId    String
+  dashboardId String
+
+  name        String
+  unit        String?
+  chartType   String?  // "line" | "bar"
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  widget      Widget @relation(fields: [widgetId], references: [id], onDelete: Cascade)
+  entries     MetricEntry[]
+
+  @@index([widgetId])
+  @@index([dashboardId])
+  @@index([updatedAt])
+}
+
+model MetricEntry {
+  id          String   @id
+  widgetId    String
+  dashboardId String
+
+  metricId    String
+  date        String   // YMD
+  value       Float
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  metric      Metric @relation(fields: [metricId], references: [id], onDelete: Cascade)
+
+  @@index([metricId, date])
+  @@index([widgetId, date])
+  @@index([dashboardId, date])
+}
+
+model CalendarEvent {
+  id          String   @id
+  widgetId    String
+  dashboardId String
+
+  title       String
+  startAt     DateTime
+  endAt       DateTime?
+  allDay      Boolean?
+  location    String?
+  description String?
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  widget      Widget @relation(fields: [widgetId], references: [id], onDelete: Cascade)
+
+  @@index([widgetId, startAt])
+  @@index([dashboardId, startAt])
+}
+
+model WeatherCache {
+  id          String   @id
+  widgetId    String
+  dashboardId String
+
+  locationKey String
+  payload     Json
+  fetchedAt   DateTime
+
+  widget      Widget @relation(fields: [widgetId], references: [id], onDelete: Cascade)
+
+  @@index([widgetId, fetchedAt])
+  @@index([dashboardId, fetchedAt])
+}
+
+model Member {
+  id          String   @id // userId
+  groupId     String
+  role        String   // "parent" | "child"
+  displayName String
+  avatarUrl   String?
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([groupId])
+  @@index([role])
+}
