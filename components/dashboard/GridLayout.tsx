@@ -1,6 +1,7 @@
 "use client";
 
-import React from "react";
+import "react-grid-layout/css/styles.css";
+import "react-resizable/css/styles.css";
 import ReactGridLayout, {
   noCompactor,
   useContainerWidth,
@@ -8,7 +9,6 @@ import ReactGridLayout, {
 import type { Layout } from "react-grid-layout";
 import type { Widget } from "@/db/schema";
 import { MemoWidget } from "./widgets/MemoWidget";
-import { WidgetCard } from "../common/WidgetCard";
 
 type Props = {
   widgets: Widget[];
@@ -23,9 +23,9 @@ export default function GridLayout({ widgets, onLayoutChange }: Props) {
 
   return (
     <div ref={containerRef}>
-      {/* {mounted && (
+      {mounted && (
         <ReactGridLayout
-          layout={[...layout, { i: "dummy", x: 2, y: 0, w: 1, h: 1 }]}
+          layout={layout}
           width={width}
           gridConfig={{ cols: 12, rowHeight: 30 }}
           compactor={compactor}
@@ -52,28 +52,8 @@ export default function GridLayout({ widgets, onLayoutChange }: Props) {
               {w.type === "memo" ? <MemoWidget widgetId={w.id} /> : null}
             </div>
           ))}
-          <div key={"dummy"}>
-            <WidgetCard>
-              <div className="text-sm text-red-500">
-                지원하지 않는 위젯 유형입니다.
-              </div>
-            </WidgetCard>
-          </div>
         </ReactGridLayout>
-      )} */}
-      <ReactGridLayout
-        layout={[
-          { i: "a", x: 0, y: 0, w: 1, h: 2, static: true },
-          { i: "b", x: 1, y: 0, w: 3, h: 2, minW: 2, maxW: 4 },
-          { i: "c", x: 4, y: 0, w: 1, h: 2 },
-        ]}
-        width={width}
-        gridConfig={{ cols: 12, rowHeight: 30 }}
-      >
-        <div key="a">a</div>
-        <div key="b">b</div>
-        <div key="c">c</div>
-      </ReactGridLayout>
+      )}
     </div>
   );
 }
