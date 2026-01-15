@@ -25,9 +25,9 @@ export function useWidget(widgetId: Id) {
 }
 
 /** memo 위젯 데이터 */
-export function useMemos(widgetId: Id) {
+export function useMemoOne(widgetId: Id) {
   return useLiveQuery(
-    async () => db.memos.where("widgetId").equals(widgetId).sortBy("updatedAt"),
+    () => db.memos.where("widgetId").equals(widgetId).first(),
     [widgetId]
   );
 }

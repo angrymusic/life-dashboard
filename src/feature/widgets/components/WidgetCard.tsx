@@ -1,10 +1,10 @@
-export function WidgetCard({
-  title,
-  children,
-}: {
+import { PropsWithChildren } from "react";
+
+type WidgetCardProps = PropsWithChildren<{
   title?: string;
-  children: React.ReactNode;
-}) {
+}>;
+
+export function WidgetCard({ title, children }: WidgetCardProps) {
   return (
     <div className="flex flex-col border rounded-lg shadow-sm w-full h-full p-4 bg-white dark:bg-gray-800 overflow-hidden">
       <div

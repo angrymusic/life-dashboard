@@ -1,9 +1,16 @@
 "use client";
 
 import { useState } from "react";
-import { Button } from "@/components/ui/button";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import type { WidgetType } from "@/db/schema";
+import { Button } from "@/shared/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/shared/ui/dialog";
+import type { WidgetType } from "@/shared/db/schema";
+import { widgetOptions } from "@/feature/dashboard/libs/widgetOptions";
 
 type Props = {
   open: boolean;
@@ -28,17 +35,24 @@ export function AddWidgetDialog({ open, onOpenChange, onAdd }: Props) {
         </DialogHeader>
 
         <div className="grid gap-2">
-          <button
-            type="button"
-            onClick={() => setSelected("memo")}
-            className={[
-              "text-left rounded-lg border p-3 transition",
-              selected === "memo" ? "border-gray-900 dark:border-gray-100" : "border-gray-200 dark:border-gray-700",
-            ].join(" ")}
-          >
-            <div className="font-medium">Memo</div>
-            <div className="text-sm text-gray-500">간단한 메모를 적어요</div>
-          </button>
+          {widgetOptions.map((option) => (
+            <button
+              key={option.type}
+              type="button"
+              onClick={() => setSelected(option.type)}
+              className={[
+                "text-left rounded-lg border p-3 transition",
+                selected === option.type
+                  ? "border-gray-900 dark:border-gray-100"
+                  : "border-gray-200 dark:border-gray-700",
+              ].join(" ")}
+            >
+              <div className="font-medium">{option.title}</div>
+              <div className="text-sm text-gray-500">
+                {option.description}
+              </div>
+            </button>
+          ))}
         </div>
 
         <DialogFooter>

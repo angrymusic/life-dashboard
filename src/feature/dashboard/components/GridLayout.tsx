@@ -6,9 +6,12 @@ import ReactGridLayout, {
   noCompactor,
   useContainerWidth,
 } from "react-grid-layout";
-import type { Layout } from "react-grid-layout";
-import type { Widget } from "@/db/schema";
-import { MemoWidget } from "./widgets/MemoWidget";
+import type { Widget } from "@/shared/db/schema";
+import { MemoWidget } from "@/feature/widgets/components/MemoWidget";
+import {
+  applyGridLayout,
+  toGridLayout,
+} from "@/feature/dashboard/libs/layout";
 
 type Props = {
   widgets: Widget[];
@@ -19,7 +22,7 @@ export default function GridLayout({ widgets, onLayoutChange }: Props) {
   const { width, containerRef, mounted } = useContainerWidth();
   const compactor = { ...noCompactor, preventCollision: true };
 
-  const layout: Layout = widgets.map((w) => ({ ...w.layout, i: w.id }));
+  const layout = toGridLayout(widgets);
 
   return (
     <div ref={containerRef}>
@@ -34,18 +37,9 @@ export default function GridLayout({ widgets, onLayoutChange }: Props) {
             handle: ".widget-drag-handle",
             cancel: "textarea, input, button, select, a",
           }}
-          onLayoutChange={(nextLayout) => {
-            const next = widgets.map((w) => {
-              const l = nextLayout.find((it) => it.i === w.id);
-              if (!l) return w;
-
-              const { i: _i, ...layoutWithoutI } = l;
-
-              return { ...w, layout: layoutWithoutI };
-            });
-
-            onLayoutChange(next);
-          }}
+          onLayoutChange={(nextLayout) =>
+            onLayoutChange(applyGridLayout(widgets, nextLayout))
+          }
         >
           {widgets.map((w) => (
             <div key={w.id} className="h-full">
