@@ -1,8 +1,10 @@
 import { useCallback } from "react";
 import { addWidget } from "@/shared/db/db";
 import type { Id, Widget } from "@/shared/db/schema";
-import { getNextMemoLayout } from "@/feature/dashboard/libs/layout";
+import { createWidgetLayout } from "@/feature/dashboard/libs/layout";
 
+const MIN_W = 3;
+const MIN_H = 4;
 export function useAddMemoWidget(
   dashboardId: Id | undefined,
   widgets: Widget[] | undefined
@@ -13,7 +15,12 @@ export function useAddMemoWidget(
     await addWidget({
       dashboardId,
       type: "memo",
-      layout: getNextMemoLayout(widgets?.map((w) => w.layout) ?? []),
+      layout: createWidgetLayout(widgets?.map((w) => w.layout) ?? [], {
+        w: MIN_W,
+        h: MIN_H,
+        minW: MIN_W,
+        minH: MIN_H,
+      }),
       payload: { type: "memo", data: { text: "", color: undefined } },
     });
   }, [dashboardId, widgets]);
