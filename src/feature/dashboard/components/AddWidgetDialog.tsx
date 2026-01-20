@@ -48,9 +48,7 @@ export function AddWidgetDialog({ open, onOpenChange, onAdd }: Props) {
               ].join(" ")}
             >
               <div className="font-medium">{option.title}</div>
-              <div className="text-sm text-gray-500">
-                {option.description}
-              </div>
+              <div className="text-sm text-gray-500">{option.description}</div>
             </button>
           ))}
         </div>

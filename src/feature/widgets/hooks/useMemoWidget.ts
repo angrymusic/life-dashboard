@@ -79,6 +79,7 @@ export function useMemoWidget(widgetId: Id) {
     memo,
     value,
     isEditing,
+    beginEdit,
     handleFocus,
     handleChange,
     handleBlur,

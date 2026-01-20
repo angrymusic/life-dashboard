@@ -33,8 +33,6 @@ export default function GridLayout({ widgets, onLayoutChange }: Props) {
           gridConfig={{ cols: 12, rowHeight: 30 }}
           compactor={compactor}
           dragConfig={{
-            enabled: true,
-            handle: ".widget-drag-handle",
             cancel: "textarea, input, button, select, a",
           }}
           onLayoutChange={(nextLayout) =>

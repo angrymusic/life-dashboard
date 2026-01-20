@@ -1,36 +1,69 @@
-import { Id } from "@/shared/db/schema";
-import { WidgetCard } from "./WidgetCard";
 import { useMemoWidget } from "@/feature/widgets/hooks/useMemoWidget";
+import { Id } from "@/shared/db/schema";
+import { ActionMenuButton, ActionMenuItem } from "@/shared/ui/buttons/DropdownButton";
+import { Pencil } from "lucide-react";
+import { WidgetCard } from "./WidgetCard";
 
 type MemoWidgetProps = {
   widgetId: Id;
+  canEdit?: boolean;
 };
-export function MemoWidget({ widgetId }: MemoWidgetProps) {
+
+export function MemoWidget({ widgetId, canEdit = true }: MemoWidgetProps) {
   const {
     value,
     isEditing,
-    handleFocus,
+    beginEdit, // ✅ 훅에 추가 추천
     handleChange,
     handleBlur,
     handleKeyDown,
   } = useMemoWidget(widgetId);
 
-  return (
-    <WidgetCard title="Memo">
-      <div className="flex h-full min-h-0 flex-col">
-        <textarea
-          className="w-full flex-1 min-h-0 resize-none rounded-md border border-gray-300 dark:border-gray-700 bg-transparent p-2 text-sm outline-none focus:ring-1 focus:ring-blue-500"
-          value={value}
-          placeholder="메모를 입력하세요"
-          onFocus={handleFocus}
-          onChange={handleChange}
-          onBlur={handleBlur}
-          onKeyDown={handleKeyDown}
-        />
+  const actions : ActionMenuItem[] = [
+    {
+      text: "수정",
+      icon:<Pencil/>,
+      onClick: beginEdit,
+    },
+    // 추가 액션 아이템들을 여기에 넣을 수 있습니다.
+  ];
 
+  return (
+    <WidgetCard>
+      <div className="flex h-full min-h-0 flex-col">
+        <div className="mb-2 flex items-center justify-end shrink-0">
+          {canEdit && !isEditing ? (
+            // <Button className="text-xs px-2 py-0 h-7" onClick={beginEdit}>
+            //   수정
+            // </Button>
+            <ActionMenuButton items={actions} />
+          ) : null}
+        </div>
+
+        {/* 본문 */}
+        {isEditing ? (
+          <textarea
+            className="w-full flex-1 min-h-0 resize-none rounded-md border border-gray-300 dark:border-gray-700 bg-transparent p-2 text-sm outline-none focus:ring-1 focus:ring-blue-500"
+            value={value}
+            placeholder="메모를 입력하세요"
+            onChange={handleChange}
+            onBlur={handleBlur}
+            onKeyDown={handleKeyDown}
+            autoFocus
+          />
+        ) : (
+          <div className="w-full flex-1 min-h-0 overflow-auto rounded-md border border-transparent p-2 text-sm whitespace-pre-wrap break-words">
+            {value?.trim() ? (
+              value
+            ) : (
+              <span className="text-gray-400">메모가 없습니다</span>
+            )}
+          </div>
+        )}
+
+        {/* 하단 안내 */}
         <div className="mt-2 flex items-center justify-between text-xs text-gray-400 shrink-0">
-          <span>저장: 포커스 아웃 / Ctrl(⌘)+Enter · 취소: Esc</span>
-          {isEditing ? <span>● 편집 중</span> : null}
+          {!canEdit && <span className="opacity-70">읽기 전용</span>}
         </div>
       </div>
     </WidgetCard>
