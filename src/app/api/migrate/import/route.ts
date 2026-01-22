@@ -104,10 +104,10 @@ type SnapshotWithoutPhotos = {
   weatherCache: WeatherCache[];
 };
 
-type ImportRequestBody =
-  | { userId: string; snapshot: SnapshotWithoutPhotos }
-  // 편의: snapshot 래핑 없이 바로 보내는 것도 허용 (userId는 헤더로)
-  | SnapshotWithoutPhotos;
+// type ImportRequestBody =
+//   | { userId: string; snapshot: SnapshotWithoutPhotos }
+//   // 편의: snapshot 래핑 없이 바로 보내는 것도 허용 (userId는 헤더로)
+//   | SnapshotWithoutPhotos;
 
 /** =========
  *  Helpers (type guards)
