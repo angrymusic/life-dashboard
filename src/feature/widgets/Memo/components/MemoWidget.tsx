@@ -1,8 +1,14 @@
+import { useState } from "react";
 import { useMemoWidget } from "@/feature/widgets/Memo/hooks/useMemoWidget";
 import { Id } from "@/shared/db/schema";
-import { ActionMenuButton, ActionMenuItem } from "@/shared/ui/buttons/DropdownButton";
-import { Pencil } from "lucide-react";
+import { deleteWidgetCascade } from "@/shared/db/db";
+import {
+  ActionMenuButton,
+  ActionMenuItem,
+} from "@/shared/ui/buttons/DropdownButton";
+import { Pencil, Trash2 } from "lucide-react";
 import { WidgetCard } from "@/feature/widgets/shared/components/WidgetCard";
+import { WidgetDeleteDialog } from "@/feature/widgets/shared/components/WidgetDeleteDialog";
 
 type MemoWidgetProps = {
   widgetId: Id;
@@ -18,15 +24,31 @@ export function MemoWidget({ widgetId, canEdit = true }: MemoWidgetProps) {
     handleBlur,
     handleKeyDown,
   } = useMemoWidget(widgetId);
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
 
-  const actions : ActionMenuItem[] = [
+  const actions: ActionMenuItem[] = [
     {
       text: "수정",
-      icon:<Pencil/>,
+      icon: <Pencil />,
       onClick: beginEdit,
+    },
+    {
+      text: "위젯 삭제",
+      icon: <Trash2 />,
+      danger: true,
+      onClick: () => setIsDeleteDialogOpen(true),
     },
     // 추가 액션 아이템들을 여기에 넣을 수 있습니다.
   ];
+
+  const handleDelete = async () => {
+    await deleteWidgetCascade(widgetId);
+    setIsDeleteDialogOpen(false);
+  };
+
+  const closeDeleteDialog = () => {
+    setIsDeleteDialogOpen(false);
+  };
 
   return (
     <WidgetCard>
@@ -65,6 +87,14 @@ export function MemoWidget({ widgetId, canEdit = true }: MemoWidgetProps) {
         <div className="mt-2 flex items-center justify-between text-xs text-gray-400 shrink-0">
           {!canEdit && <span className="opacity-70">읽기 전용</span>}
         </div>
+        {canEdit ? (
+          <WidgetDeleteDialog
+            open={isDeleteDialogOpen}
+            widgetName="메모"
+            onClose={closeDeleteDialog}
+            onConfirm={handleDelete}
+          />
+        ) : null}
       </div>
     </WidgetCard>
   );
