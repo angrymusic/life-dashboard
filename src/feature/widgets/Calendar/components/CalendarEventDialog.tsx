@@ -373,17 +373,37 @@ export function CalendarEventDialog({
                     key={`cycle-${index}`}
                     className="grid grid-cols-[1.4fr_0.6fr_auto_auto] items-center gap-2"
                   >
-                    <input
-                      aria-label={`Pattern label ${index + 1}`}
-                      className="w-full rounded-md border border-gray-300 dark:border-gray-700 bg-transparent px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-blue-500"
-                      placeholder={`패턴 ${index + 1}`}
-                      value={item.label}
-                      onChange={(event) =>
-                        updateCyclePatternItem(index, {
-                          label: event.target.value,
-                        })
-                      }
-                    />
+                    <div className="flex flex-col gap-1">
+                      <label className="flex items-center gap-1 text-[10px] text-gray-400">
+                        <input
+                          type="checkbox"
+                          checked={Boolean(item.isGap)}
+                          onChange={() =>
+                            updateCyclePatternItem(index, {
+                              isGap: !item.isGap,
+                            })
+                          }
+                        />
+                        공백
+                      </label>
+                      <input
+                        aria-label={`Pattern label ${index + 1}`}
+                        className={cn(
+                          "w-full rounded-md border border-gray-300 dark:border-gray-700 bg-transparent px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-blue-500",
+                          item.isGap
+                            ? "text-gray-400 placeholder:text-gray-400"
+                            : ""
+                        )}
+                        placeholder={item.isGap ? "공백" : `패턴 ${index + 1}`}
+                        value={item.isGap ? "" : item.label}
+                        onChange={(event) =>
+                          updateCyclePatternItem(index, {
+                            label: event.target.value,
+                          })
+                        }
+                        disabled={Boolean(item.isGap)}
+                      />
+                    </div>
                     <input
                       type="number"
                       min={1}
@@ -409,12 +429,15 @@ export function CalendarEventDialog({
                               "h-5 w-5 rounded-full border border-gray-200",
                               (item.color ?? draftColor) === color
                                 ? "ring-2 ring-gray-900/50"
-                                : ""
+                                : "",
+                              item.isGap ? "opacity-40" : ""
                             )}
                             style={{ backgroundColor: color }}
-                            onClick={() =>
-                              updateCyclePatternItem(index, { color })
-                            }
+                            onClick={() => {
+                              if (item.isGap) return;
+                              updateCyclePatternItem(index, { color });
+                            }}
+                            disabled={Boolean(item.isGap)}
                           />
                         ))}
                       </div>
@@ -422,13 +445,18 @@ export function CalendarEventDialog({
                         <input
                           type="color"
                           aria-label={`Pattern custom color ${index + 1}`}
-                          className="h-6 w-7 rounded border border-gray-200 bg-transparent p-0"
+                          className={cn(
+                            "h-6 w-7 rounded border border-gray-200 bg-transparent p-0",
+                            item.isGap ? "opacity-40" : ""
+                          )}
                           value={item.color ?? draftColor}
-                          onChange={(event) =>
+                          onChange={(event) => {
+                            if (item.isGap) return;
                             updateCyclePatternItem(index, {
                               color: event.target.value || draftColor,
-                            })
-                          }
+                            });
+                          }}
+                          disabled={Boolean(item.isGap)}
                         />
                       </label>
                     </div>

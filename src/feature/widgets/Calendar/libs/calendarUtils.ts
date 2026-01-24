@@ -497,6 +497,10 @@ export function expandCalendarEvents(
           cursor = addDays(cursor, 1);
           continue;
         }
+        if (patternItem.isGap) {
+          cursor = addDays(cursor, 1);
+          continue;
+        }
 
         const occurrenceStart = startOfDay(cursor);
         const occurrenceAllDay = true;

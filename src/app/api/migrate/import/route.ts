@@ -320,6 +320,7 @@ function isCalendarRecurrence(v: unknown): v is CalendarRecurrence {
       if (!isString(item.label)) return false;
       if (item.days !== undefined && !isNumber(item.days)) return false;
       if (item.color !== undefined && !isString(item.color)) return false;
+      if (item.isGap !== undefined && !isBoolean(item.isGap)) return false;
     }
     if (v.until !== undefined && !isString(v.until)) return false;
     return true;

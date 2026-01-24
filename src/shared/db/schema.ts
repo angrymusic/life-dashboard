@@ -138,6 +138,7 @@ export type CalendarRecurrenceCycleItem = {
   label: string;
   days?: number;
   color?: string;
+  isGap?: boolean;
 };
 
 export type CalendarRecurrenceCycle = {
