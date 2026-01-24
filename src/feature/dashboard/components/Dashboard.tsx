@@ -8,6 +8,7 @@ import { AddWidgetDialog } from "./AddWidgetDialog";
 
 import { useDashboards, useDashboardWidgets } from "@/shared/db/queries";
 import { useEnsureDashboard } from "@/feature/dashboard/hooks/useEnsureDashboard";
+import { useAddCalendarWidget } from "@/feature/dashboard/hooks/useAddCalendarWidget";
 import { useAddMemoWidget } from "@/feature/dashboard/hooks/useAddMemoWidget";
 import { useCommitWidgetLayout } from "@/feature/dashboard/hooks/useCommitWidgetLayout";
 
@@ -24,6 +25,7 @@ export default function Dashboard() {
     dashboardId ?? "__none__"
   );
 
+  const addCalendarWidget = useAddCalendarWidget(dashboardId, widgets);
   const addMemoWidget = useAddMemoWidget(dashboardId, widgets);
   const commitWidgetLayout = useCommitWidgetLayout();
 
@@ -48,6 +50,7 @@ export default function Dashboard() {
         open={dialogOpen}
         onOpenChange={setDialogOpen}
         onAdd={(type) => {
+          if (type === "calendar") void addCalendarWidget();
           if (type === "memo") void addMemoWidget();
         }}
       />

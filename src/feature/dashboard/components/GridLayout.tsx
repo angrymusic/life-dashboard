@@ -7,7 +7,8 @@ import ReactGridLayout, {
   useContainerWidth,
 } from "react-grid-layout";
 import type { Widget } from "@/shared/db/schema";
-import { MemoWidget } from "@/feature/widgets/components/MemoWidget";
+import { CalendarWidget } from "@/feature/widgets/Calendar/components/CalendarWidget";
+import { MemoWidget } from "@/feature/widgets/Memo/components/MemoWidget";
 import {
   applyGridLayout,
   toGridLayout,
@@ -42,6 +43,9 @@ export default function GridLayout({ widgets, onLayoutChange }: Props) {
           {widgets.map((w) => (
             <div key={w.id} className="h-full">
               {w.type === "memo" ? <MemoWidget widgetId={w.id} /> : null}
+              {w.type === "calendar" ? (
+                <CalendarWidget widgetId={w.id} />
+              ) : null}
             </div>
           ))}
         </ReactGridLayout>

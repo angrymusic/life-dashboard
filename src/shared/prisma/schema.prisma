@@ -205,6 +205,8 @@ model CalendarEvent {
   allDay      Boolean?
   location    String?
   description String?
+  color       String?
+  recurrence  Json?
 
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt

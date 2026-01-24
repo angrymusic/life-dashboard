@@ -127,6 +127,36 @@ export interface MetricEntry extends WidgetDataBase {
 }
 
 /** 캘린더 이벤트(단순) */
+export type CalendarRecurrenceWeekly = {
+  type: "weekly";
+  daysOfWeek: number[];
+  intervalWeeks?: number;
+  until?: YMD;
+};
+
+export type CalendarRecurrenceCycleItem = {
+  label: string;
+  days?: number;
+  color?: string;
+};
+
+export type CalendarRecurrenceCycle = {
+  type: "cycle";
+  pattern: CalendarRecurrenceCycleItem[];
+  until?: YMD;
+};
+
+export type CalendarRecurrenceYearly = {
+  type: "yearly";
+  intervalYears?: number;
+  until?: YMD;
+};
+
+export type CalendarRecurrence =
+  | CalendarRecurrenceWeekly
+  | CalendarRecurrenceCycle
+  | CalendarRecurrenceYearly;
+
 export interface CalendarEvent extends WidgetDataBase {
   title: string;
   startAt: ISODate;
@@ -134,6 +164,8 @@ export interface CalendarEvent extends WidgetDataBase {
   allDay?: boolean;
   location?: string;
   description?: string;
+  color?: string;
+  recurrence?: CalendarRecurrence;
 }
 
 /** 날씨 캐시(선택 저장) */

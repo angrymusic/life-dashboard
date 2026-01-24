@@ -73,6 +73,36 @@ type Notice = WidgetDataBase & { title: string; body: string; pinned?: boolean }
 type Metric = WidgetDataBase & { name: string; unit?: string; chartType?: "line" | "bar" };
 type MetricEntry = WidgetDataBase & { metricId: string; date: string; value: number };
 
+type CalendarRecurrenceWeekly = {
+  type: "weekly";
+  daysOfWeek: number[];
+  intervalWeeks?: number;
+  until?: string;
+};
+
+type CalendarRecurrenceCycleItem = {
+  label: string;
+  days?: number;
+  color?: string;
+};
+
+type CalendarRecurrenceCycle = {
+  type: "cycle";
+  pattern: CalendarRecurrenceCycleItem[];
+  until?: string;
+};
+
+type CalendarRecurrenceYearly = {
+  type: "yearly";
+  intervalYears?: number;
+  until?: string;
+};
+
+type CalendarRecurrence =
+  | CalendarRecurrenceWeekly
+  | CalendarRecurrenceCycle
+  | CalendarRecurrenceYearly;
+
 type CalendarEvent = WidgetDataBase & {
   title: string;
   startAt: ISODate;
@@ -80,6 +110,8 @@ type CalendarEvent = WidgetDataBase & {
   allDay?: boolean;
   location?: string;
   description?: string;
+  color?: string;
+  recurrence?: CalendarRecurrence;
 };
 
 type WeatherCache = {
@@ -272,6 +304,34 @@ function isMetricEntry(v: unknown): v is MetricEntry {
   return true;
 }
 
+function isCalendarRecurrence(v: unknown): v is CalendarRecurrence {
+  if (!isRecord(v)) return false;
+  const type = v.type;
+  if (type === "weekly") {
+    if (!isArray(v.daysOfWeek) || !v.daysOfWeek.every(isNumber)) return false;
+    if (v.intervalWeeks !== undefined && !isNumber(v.intervalWeeks)) return false;
+    if (v.until !== undefined && !isString(v.until)) return false;
+    return true;
+  }
+  if (type === "cycle") {
+    if (!isArray(v.pattern)) return false;
+    for (const item of v.pattern) {
+      if (!isRecord(item)) return false;
+      if (!isString(item.label)) return false;
+      if (item.days !== undefined && !isNumber(item.days)) return false;
+      if (item.color !== undefined && !isString(item.color)) return false;
+    }
+    if (v.until !== undefined && !isString(v.until)) return false;
+    return true;
+  }
+  if (type === "yearly") {
+    if (v.intervalYears !== undefined && !isNumber(v.intervalYears)) return false;
+    if (v.until !== undefined && !isString(v.until)) return false;
+    return true;
+  }
+  return false;
+}
+
 /** CalendarEvent */
 function isCalendarEvent(v: unknown): v is CalendarEvent {
   if (!isWidgetDataBase(v)) return false;
@@ -281,6 +341,10 @@ function isCalendarEvent(v: unknown): v is CalendarEvent {
   if (r.allDay !== undefined && !isBoolean(r.allDay)) return false;
   if (r.location !== undefined && !isString(r.location)) return false;
   if (r.description !== undefined && !isString(r.description)) return false;
+  if (r.color !== undefined && !isString(r.color)) return false;
+  if (r.recurrence !== undefined && !isCalendarRecurrence(r.recurrence)) {
+    return false;
+  }
   return true;
 }
 
