@@ -55,7 +55,7 @@ export function ActionMenuButton({
           <DropdownMenuItem
             key={`${item.text}-${idx}`}
             disabled={item.disabled}
-            onSelect={(e) => {
+            onSelect={(_e) => {
               // Radix: 기본적으로 select 시 focus 처리/닫힘이 일어나는데,
               // 안전하게 클릭만 실행하고 싶으면 preventDefault 가능.
               // 여기서는 "클릭하면 닫히고 실행"이 자연스러워서 그냥 실행만.

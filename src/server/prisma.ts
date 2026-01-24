@@ -6,7 +6,6 @@ import { PrismaClient } from "@prisma/client";
  * globalThis에 캐시하는 패턴(실무에서 흔히 쓰는 방식)으로 고정한다.
  */
 declare global {
-  // eslint-disable-next-line no-var
   var __prisma: PrismaClient | undefined;
 }
 

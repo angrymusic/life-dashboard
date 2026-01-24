@@ -55,7 +55,14 @@ export type CreateWidgetPayload =
       type: "calendar";
       data: Pick<
         CalendarEvent,
-        "title" | "startAt" | "endAt" | "allDay" | "location" | "description"
+        | "title"
+        | "startAt"
+        | "endAt"
+        | "allDay"
+        | "location"
+        | "description"
+        | "color"
+        | "recurrence"
       >;
     }
   | {
@@ -290,6 +297,8 @@ export async function addWidget(params: {
           allDay: p.data.allDay,
           location: p.data.location,
           description: p.data.description,
+          color: p.data.color,
+          recurrence: p.data.recurrence,
           createdAt: now,
           updatedAt: now,
         };

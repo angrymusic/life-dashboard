@@ -1,8 +1,8 @@
-import { useMemoWidget } from "@/feature/widgets/hooks/useMemoWidget";
+import { useMemoWidget } from "@/feature/widgets/Memo/hooks/useMemoWidget";
 import { Id } from "@/shared/db/schema";
 import { ActionMenuButton, ActionMenuItem } from "@/shared/ui/buttons/DropdownButton";
 import { Pencil } from "lucide-react";
-import { WidgetCard } from "./WidgetCard";
+import { WidgetCard } from "@/feature/widgets/shared/components/WidgetCard";
 
 type MemoWidgetProps = {
   widgetId: Id;
