@@ -133,10 +133,9 @@ export function CalendarWidget({
   };
 
   return (
-    <WidgetCard>
-      <div className="flex h-full min-h-0 flex-col">
+    <WidgetCard
+      header={
         <WidgetHeader
-          className="mb-2"
           canEdit={canEdit}
           actions={actions}
           left={
@@ -163,6 +162,9 @@ export function CalendarWidget({
             </div>
           }
         />
+      }
+    >
+      <div className="flex h-full min-h-0 flex-col">
 
         <div className="grid grid-cols-7 text-center text-xs font-medium text-gray-500">
           {WEEK_DAYS.map((day) => (
