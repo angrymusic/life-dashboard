@@ -9,6 +9,7 @@ import { AddWidgetDialog } from "./AddWidgetDialog";
 import { useDashboards, useDashboardWidgets } from "@/shared/db/queries";
 import { useEnsureDashboard } from "@/feature/dashboard/hooks/useEnsureDashboard";
 import { useAddCalendarWidget } from "@/feature/dashboard/hooks/useAddCalendarWidget";
+import { useAddChartWidget } from "@/feature/dashboard/hooks/useAddChartWidget";
 import { useAddMemoWidget } from "@/feature/dashboard/hooks/useAddMemoWidget";
 import { useAddTodoWidget } from "@/feature/dashboard/hooks/useAddTodoWidget";
 import { useAddWeatherWidget } from "@/feature/dashboard/hooks/useAddWeatherWidget";
@@ -28,6 +29,7 @@ export default function Dashboard() {
   );
 
   const addCalendarWidget = useAddCalendarWidget(dashboardId, widgets);
+  const addChartWidget = useAddChartWidget(dashboardId, widgets);
   const addMemoWidget = useAddMemoWidget(dashboardId, widgets);
   const addTodoWidget = useAddTodoWidget(dashboardId, widgets);
   const addWeatherWidget = useAddWeatherWidget(dashboardId, widgets);
@@ -55,6 +57,7 @@ export default function Dashboard() {
         onOpenChange={setDialogOpen}
         onAdd={(type) => {
           if (type === "calendar") void addCalendarWidget();
+          if (type === "chart") void addChartWidget();
           if (type === "memo") void addMemoWidget();
           if (type === "todo") void addTodoWidget();
           if (type === "weather") void addWeatherWidget();
