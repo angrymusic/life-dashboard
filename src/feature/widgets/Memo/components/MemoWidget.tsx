@@ -1,13 +1,10 @@
 import { useMemoWidget } from "@/feature/widgets/Memo/hooks/useMemoWidget";
 import { Id } from "@/shared/db/schema";
-import {
-  ActionMenuButton,
-  ActionMenuItem,
-} from "@/shared/ui/buttons/DropdownButton";
-import { Pencil, Trash2 } from "lucide-react";
+import { Pencil } from "lucide-react";
 import { WidgetCard } from "@/feature/widgets/shared/components/WidgetCard";
 import { WidgetDeleteDialog } from "@/feature/widgets/shared/components/WidgetDeleteDialog";
-import { useWidgetDeleteDialog } from "@/feature/widgets/shared/hooks/useWidgetDeleteDialog";
+import { WidgetHeader } from "@/feature/widgets/shared/components/WidgetHeader";
+import { useWidgetActionMenu } from "@/feature/widgets/shared/hooks/useWidgetActionMenu";
 
 type MemoWidgetProps = {
   widgetId: Id;
@@ -23,39 +20,35 @@ export function MemoWidget({ widgetId, canEdit = true }: MemoWidgetProps) {
     handleBlur,
     handleKeyDown,
   } = useMemoWidget(widgetId);
+  const canShowActions = canEdit && !isEditing;
   const {
-    isOpen: isDeleteDialogOpen,
-    open: openDeleteDialog,
-    close: closeDeleteDialog,
-    confirm: handleDelete,
-  } = useWidgetDeleteDialog({ widgetId });
-
-  const actions: ActionMenuItem[] = [
-    {
-      text: "수정",
-      icon: <Pencil />,
-      onClick: beginEdit,
+    actions,
+    deleteDialog: {
+      isOpen: isDeleteDialogOpen,
+      close: closeDeleteDialog,
+      confirm: handleDelete,
     },
-    {
-      text: "위젯 삭제",
-      icon: <Trash2 />,
-      danger: true,
-      onClick: openDeleteDialog,
-    },
-    // 추가 액션 아이템들을 여기에 넣을 수 있습니다.
-  ];
+  } = useWidgetActionMenu({
+    widgetId,
+    canEdit: canShowActions,
+    deleteLabel: "위젯 삭제",
+    extraItems: [
+      {
+        text: "수정",
+        icon: <Pencil />,
+        onClick: beginEdit,
+      },
+    ],
+  });
 
   return (
     <WidgetCard>
       <div className="flex h-full min-h-0 flex-col">
-        <div className="mb-2 flex items-center justify-end shrink-0">
-          {canEdit && !isEditing ? (
-            // <Button className="text-xs px-2 py-0 h-7" onClick={beginEdit}>
-            //   수정
-            // </Button>
-            <ActionMenuButton items={actions} />
-          ) : null}
-        </div>
+        <WidgetHeader
+          className="mb-2 shrink-0"
+          actions={actions}
+          canEdit={canShowActions}
+        />
 
         {/* 본문 */}
         {isEditing ? (

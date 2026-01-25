@@ -11,10 +11,7 @@ import { useCalendarWidget } from "@/feature/widgets/Calendar/hooks/useCalendarW
 import type { Id } from "@/shared/db/schema";
 import { cn } from "@/shared/lib/utils";
 import { Button } from "@/shared/ui/button";
-import {
-  ActionMenuButton,
-  ActionMenuItem,
-} from "@/shared/ui/buttons/DropdownButton";
+import { ActionMenuItem } from "@/shared/ui/buttons/DropdownButton";
 import {
   CalendarEventInstance,
   WEEK_DAYS,
@@ -28,7 +25,8 @@ import { WidgetCard } from "@/feature/widgets/shared/components/WidgetCard";
 import { CalendarEventDialog } from "@/feature/widgets/Calendar/components/CalendarEventDialog";
 import { CalendarDeleteDialog } from "@/feature/widgets/Calendar/components/CalendarDeleteDialog";
 import { WidgetDeleteDialog } from "@/feature/widgets/shared/components/WidgetDeleteDialog";
-import { useWidgetDeleteDialog } from "@/feature/widgets/shared/hooks/useWidgetDeleteDialog";
+import { WidgetHeader } from "@/feature/widgets/shared/components/WidgetHeader";
+import { useWidgetActionMenu } from "@/feature/widgets/shared/hooks/useWidgetActionMenu";
 
 type CalendarWidgetProps = {
   widgetId: Id;
@@ -86,13 +84,7 @@ export function CalendarWidget({
     canCreate,
   } = useCalendarWidget(widgetId);
 
-  const {
-    isOpen: isWidgetDeleteOpen,
-    open: openWidgetDeleteDialog,
-    close: closeWidgetDeleteDialog,
-    confirm: handleWidgetDelete,
-  } = useWidgetDeleteDialog({ widgetId });
-  const actions = useMemo<ActionMenuItem[]>(
+  const extraActions = useMemo<ActionMenuItem[]>(
     () => [
       {
         text: "오늘로 이동",
@@ -105,15 +97,22 @@ export function CalendarWidget({
         onClick: startAdd,
         disabled: !canCreate,
       },
-      {
-        text: "위젯 삭제",
-        icon: <Trash2 className="size-4" />,
-        danger: true,
-        onClick: openWidgetDeleteDialog,
-      },
     ],
-    [goToday, startAdd, canCreate, openWidgetDeleteDialog]
+    [goToday, startAdd, canCreate]
   );
+  const {
+    actions,
+    deleteDialog: {
+      isOpen: isWidgetDeleteOpen,
+      close: closeWidgetDeleteDialog,
+      confirm: handleWidgetDelete,
+    },
+  } = useWidgetActionMenu({
+    widgetId,
+    canEdit,
+    deleteLabel: "위젯 삭제",
+    extraItems: extraActions,
+  });
   const [deleteTarget, setDeleteTarget] =
     useState<CalendarEventInstance | null>(null);
 
@@ -136,31 +135,34 @@ export function CalendarWidget({
   return (
     <WidgetCard>
       <div className="flex h-full min-h-0 flex-col">
-        <div className="mb-2 flex items-center justify-between">
-          <div className="flex items-center gap-1">
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              aria-label="Previous month"
-              onClick={goPrevMonth}
-            >
-              <ChevronLeft className="size-4" />
-            </Button>
-            <div className="min-w-[72px] text-center text-base font-semibold">
-              {formatMonth(viewDate)}
+        <WidgetHeader
+          className="mb-2"
+          canEdit={canEdit}
+          actions={actions}
+          left={
+            <div className="flex items-center gap-1">
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                aria-label="Previous month"
+                onClick={goPrevMonth}
+              >
+                <ChevronLeft className="size-4" />
+              </Button>
+              <div className="min-w-[72px] text-center text-base font-semibold">
+                {formatMonth(viewDate)}
+              </div>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                aria-label="Next month"
+                onClick={goNextMonth}
+              >
+                <ChevronRight className="size-4" />
+              </Button>
             </div>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              aria-label="Next month"
-              onClick={goNextMonth}
-            >
-              <ChevronRight className="size-4" />
-            </Button>
-          </div>
-
-          {canEdit ? <ActionMenuButton items={actions} /> : null}
-        </div>
+          }
+        />
 
         <div className="grid grid-cols-7 text-center text-xs font-medium text-gray-500">
           {WEEK_DAYS.map((day) => (
