@@ -10,7 +10,6 @@ import {
 import { useCalendarWidget } from "@/feature/widgets/Calendar/hooks/useCalendarWidget";
 import type { Id } from "@/shared/db/schema";
 import { cn } from "@/shared/lib/utils";
-import { deleteWidgetCascade } from "@/shared/db/db";
 import { Button } from "@/shared/ui/button";
 import {
   ActionMenuButton,
@@ -29,6 +28,7 @@ import { WidgetCard } from "@/feature/widgets/shared/components/WidgetCard";
 import { CalendarEventDialog } from "@/feature/widgets/Calendar/components/CalendarEventDialog";
 import { CalendarDeleteDialog } from "@/feature/widgets/Calendar/components/CalendarDeleteDialog";
 import { WidgetDeleteDialog } from "@/feature/widgets/shared/components/WidgetDeleteDialog";
+import { useWidgetDeleteDialog } from "@/feature/widgets/shared/hooks/useWidgetDeleteDialog";
 
 type CalendarWidgetProps = {
   widgetId: Id;
@@ -86,7 +86,12 @@ export function CalendarWidget({
     canCreate,
   } = useCalendarWidget(widgetId);
 
-  const [isWidgetDeleteOpen, setIsWidgetDeleteOpen] = useState(false);
+  const {
+    isOpen: isWidgetDeleteOpen,
+    open: openWidgetDeleteDialog,
+    close: closeWidgetDeleteDialog,
+    confirm: handleWidgetDelete,
+  } = useWidgetDeleteDialog({ widgetId });
   const actions = useMemo<ActionMenuItem[]>(
     () => [
       {
@@ -104,10 +109,10 @@ export function CalendarWidget({
         text: "위젯 삭제",
         icon: <Trash2 className="size-4" />,
         danger: true,
-        onClick: () => setIsWidgetDeleteOpen(true),
+        onClick: openWidgetDeleteDialog,
       },
     ],
-    [goToday, startAdd, canCreate, setIsWidgetDeleteOpen]
+    [goToday, startAdd, canCreate, openWidgetDeleteDialog]
   );
   const [deleteTarget, setDeleteTarget] =
     useState<CalendarEventInstance | null>(null);
@@ -126,15 +131,6 @@ export function CalendarWidget({
     if (!deleteTarget) return;
     await deleteEvent(deleteTarget, "future", selectedYmd);
     setDeleteTarget(null);
-  };
-
-  const handleWidgetDelete = async () => {
-    await deleteWidgetCascade(widgetId);
-    setIsWidgetDeleteOpen(false);
-  };
-
-  const closeWidgetDeleteDialog = () => {
-    setIsWidgetDeleteOpen(false);
   };
 
   return (
