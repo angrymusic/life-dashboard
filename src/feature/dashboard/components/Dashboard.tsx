@@ -10,6 +10,7 @@ import { useDashboards, useDashboardWidgets } from "@/shared/db/queries";
 import { useEnsureDashboard } from "@/feature/dashboard/hooks/useEnsureDashboard";
 import { useAddCalendarWidget } from "@/feature/dashboard/hooks/useAddCalendarWidget";
 import { useAddMemoWidget } from "@/feature/dashboard/hooks/useAddMemoWidget";
+import { useAddTodoWidget } from "@/feature/dashboard/hooks/useAddTodoWidget";
 import { useAddWeatherWidget } from "@/feature/dashboard/hooks/useAddWeatherWidget";
 import { useCommitWidgetLayout } from "@/feature/dashboard/hooks/useCommitWidgetLayout";
 
@@ -28,6 +29,7 @@ export default function Dashboard() {
 
   const addCalendarWidget = useAddCalendarWidget(dashboardId, widgets);
   const addMemoWidget = useAddMemoWidget(dashboardId, widgets);
+  const addTodoWidget = useAddTodoWidget(dashboardId, widgets);
   const addWeatherWidget = useAddWeatherWidget(dashboardId, widgets);
   const commitWidgetLayout = useCommitWidgetLayout();
 
@@ -54,6 +56,7 @@ export default function Dashboard() {
         onAdd={(type) => {
           if (type === "calendar") void addCalendarWidget();
           if (type === "memo") void addMemoWidget();
+          if (type === "todo") void addTodoWidget();
           if (type === "weather") void addWeatherWidget();
         }}
       />
