@@ -42,13 +42,16 @@ export function MemoWidget({ widgetId, canEdit = true }: MemoWidgetProps) {
   });
 
   return (
-    <WidgetCard>
-      <div className="flex h-full min-h-0 flex-col">
+    <WidgetCard
+      header={
         <WidgetHeader
-          className="mb-2 shrink-0"
+          className="shrink-0"
           actions={actions}
           canEdit={canShowActions}
         />
+      }
+    >
+      <div className="flex h-full min-h-0 flex-col">
 
         {/* 본문 */}
         {isEditing ? (
