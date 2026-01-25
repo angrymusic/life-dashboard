@@ -6,6 +6,7 @@ import ReactGridLayout, {
   noCompactor,
   useContainerWidth,
 } from "react-grid-layout";
+import type { Layout } from "react-grid-layout";
 import type { Widget } from "@/shared/db/schema";
 import { CalendarWidget } from "@/feature/widgets/Calendar/components/CalendarWidget";
 import { MemoWidget } from "@/feature/widgets/Memo/components/MemoWidget";
@@ -16,14 +17,17 @@ import {
 
 type Props = {
   widgets: Widget[];
-  onLayoutChange: (next: Widget[]) => void;
+  onLayoutCommit: (next: Widget[]) => void;
 };
 
-export default function GridLayout({ widgets, onLayoutChange }: Props) {
+export default function GridLayout({ widgets, onLayoutCommit }: Props) {
   const { width, containerRef, mounted } = useContainerWidth();
   const compactor = { ...noCompactor, preventCollision: true };
 
   const layout = toGridLayout(widgets);
+  const handleLayoutCommit = (nextLayout: Layout) => {
+    onLayoutCommit(applyGridLayout(widgets, nextLayout));
+  };
 
   return (
     <div ref={containerRef}>
@@ -36,9 +40,8 @@ export default function GridLayout({ widgets, onLayoutChange }: Props) {
           dragConfig={{
             cancel: "textarea, input, button, select, a",
           }}
-          onLayoutChange={(nextLayout) =>
-            onLayoutChange(applyGridLayout(widgets, nextLayout))
-          }
+          onDragStop={(nextLayout) => handleLayoutCommit(nextLayout)}
+          onResizeStop={(nextLayout) => handleLayoutCommit(nextLayout)}
         >
           {widgets.map((w) => (
             <div key={w.id} className="h-full">

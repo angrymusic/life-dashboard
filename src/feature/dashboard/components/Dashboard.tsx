@@ -40,7 +40,7 @@ export default function Dashboard() {
       ) : (
         <GridLayout
           widgets={widgets}
-          onLayoutChange={commitWidgetLayout}
+          onLayoutCommit={commitWidgetLayout}
         />
       )}
 

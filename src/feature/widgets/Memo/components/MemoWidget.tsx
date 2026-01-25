@@ -1,7 +1,5 @@
-import { useState } from "react";
 import { useMemoWidget } from "@/feature/widgets/Memo/hooks/useMemoWidget";
 import { Id } from "@/shared/db/schema";
-import { deleteWidgetCascade } from "@/shared/db/db";
 import {
   ActionMenuButton,
   ActionMenuItem,
@@ -9,6 +7,7 @@ import {
 import { Pencil, Trash2 } from "lucide-react";
 import { WidgetCard } from "@/feature/widgets/shared/components/WidgetCard";
 import { WidgetDeleteDialog } from "@/feature/widgets/shared/components/WidgetDeleteDialog";
+import { useWidgetDeleteDialog } from "@/feature/widgets/shared/hooks/useWidgetDeleteDialog";
 
 type MemoWidgetProps = {
   widgetId: Id;
@@ -24,7 +23,12 @@ export function MemoWidget({ widgetId, canEdit = true }: MemoWidgetProps) {
     handleBlur,
     handleKeyDown,
   } = useMemoWidget(widgetId);
-  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const {
+    isOpen: isDeleteDialogOpen,
+    open: openDeleteDialog,
+    close: closeDeleteDialog,
+    confirm: handleDelete,
+  } = useWidgetDeleteDialog({ widgetId });
 
   const actions: ActionMenuItem[] = [
     {
@@ -36,19 +40,10 @@ export function MemoWidget({ widgetId, canEdit = true }: MemoWidgetProps) {
       text: "위젯 삭제",
       icon: <Trash2 />,
       danger: true,
-      onClick: () => setIsDeleteDialogOpen(true),
+      onClick: openDeleteDialog,
     },
     // 추가 액션 아이템들을 여기에 넣을 수 있습니다.
   ];
-
-  const handleDelete = async () => {
-    await deleteWidgetCascade(widgetId);
-    setIsDeleteDialogOpen(false);
-  };
-
-  const closeDeleteDialog = () => {
-    setIsDeleteDialogOpen(false);
-  };
 
   return (
     <WidgetCard>
