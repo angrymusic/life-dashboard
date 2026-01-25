@@ -145,6 +145,8 @@
 @layer base {
   * {
     @apply border-border outline-ring/50;
+    scrollbar-color: var(--primary) transparent;
+    scrollbar-width: thin;
   }
   body {
     @apply bg-background text-foreground;
@@ -154,6 +156,27 @@
   [role="button"]:not(:disabled) {
     cursor: pointer;
   }
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: var(--primary);
+  border-radius: 999px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in oklab, var(--primary) 85%, black);
+  border-color: transparent;
 }
 
 .react-grid-item > .react-resizable-handle {

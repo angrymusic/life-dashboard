@@ -9,6 +9,7 @@ import ReactGridLayout, {
 import type { Layout } from "react-grid-layout";
 import type { Widget } from "@/shared/db/schema";
 import { CalendarWidget } from "@/feature/widgets/Calendar/components/CalendarWidget";
+import { ChartWidget } from "@/feature/widgets/Chart/components/ChartWidget";
 import { MemoWidget } from "@/feature/widgets/Memo/components/MemoWidget";
 import { TodoWidget } from "@/feature/widgets/Todo/components/TodoWidget";
 import { WeatherWidget } from "@/feature/widgets/Weather/components/WeatherWidget";
@@ -49,6 +50,7 @@ export default function GridLayout({ widgets, onLayoutCommit }: Props) {
             <div key={w.id} className="h-full">
               {w.type === "memo" ? <MemoWidget widgetId={w.id} /> : null}
               {w.type === "todo" ? <TodoWidget widgetId={w.id} /> : null}
+              {w.type === "chart" ? <ChartWidget widgetId={w.id} /> : null}
               {w.type === "calendar" ? (
                 <CalendarWidget widgetId={w.id} />
               ) : null}
