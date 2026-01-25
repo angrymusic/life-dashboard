@@ -11,4 +11,9 @@ export const widgetOptions: WidgetOption[] = [
     title: "Memo",
     description: "간단한 메모를 적어요",
   },
+  {
+    type: "weather",
+    title: "Weather",
+    description: "이번 주 날씨를 확인해요",
+  },
 ];

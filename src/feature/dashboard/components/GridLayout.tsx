@@ -10,6 +10,7 @@ import type { Layout } from "react-grid-layout";
 import type { Widget } from "@/shared/db/schema";
 import { CalendarWidget } from "@/feature/widgets/Calendar/components/CalendarWidget";
 import { MemoWidget } from "@/feature/widgets/Memo/components/MemoWidget";
+import { WeatherWidget } from "@/feature/widgets/Weather/components/WeatherWidget";
 import {
   applyGridLayout,
   toGridLayout,
@@ -49,6 +50,7 @@ export default function GridLayout({ widgets, onLayoutCommit }: Props) {
               {w.type === "calendar" ? (
                 <CalendarWidget widgetId={w.id} />
               ) : null}
+              {w.type === "weather" ? <WeatherWidget widgetId={w.id} /> : null}
             </div>
           ))}
         </ReactGridLayout>

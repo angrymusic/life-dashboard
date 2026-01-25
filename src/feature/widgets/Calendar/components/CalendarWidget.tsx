@@ -20,6 +20,7 @@ import {
   formatMonthDay,
   getContrastColor,
   normalizeColor,
+  shiftYmd,
 } from "@/feature/widgets/Calendar/libs/calendarUtils";
 import { WidgetCard } from "@/feature/widgets/shared/components/WidgetCard";
 import { CalendarEventDialog } from "@/feature/widgets/Calendar/components/CalendarEventDialog";
@@ -27,6 +28,10 @@ import { CalendarDeleteDialog } from "@/feature/widgets/Calendar/components/Cale
 import { WidgetDeleteDialog } from "@/feature/widgets/shared/components/WidgetDeleteDialog";
 import { WidgetHeader } from "@/feature/widgets/shared/components/WidgetHeader";
 import { useWidgetActionMenu } from "@/feature/widgets/shared/hooks/useWidgetActionMenu";
+import { WeatherIcon } from "@/feature/widgets/Weather/components/WeatherIcon";
+import { useWeatherForecast } from "@/feature/widgets/Weather/hooks/useWeatherForecast";
+import { useWeatherLocation } from "@/feature/widgets/Weather/hooks/useWeatherLocation";
+import type { WeatherForecastDay } from "@/feature/widgets/Weather/libs/openMeteo";
 
 type CalendarWidgetProps = {
   widgetId: Id;
@@ -83,6 +88,17 @@ export function CalendarWidget({
     selectDate,
     canCreate,
   } = useCalendarWidget(widgetId);
+
+  const { location } = useWeatherLocation();
+  const { forecast } = useWeatherForecast(widgetId, { location, days: 7 });
+  const weatherByYmd = useMemo(() => {
+    const map = new Map<string, WeatherForecastDay>();
+    for (const day of forecast?.days ?? []) {
+      map.set(day.ymd, day);
+    }
+    return map;
+  }, [forecast?.days]);
+  const weekEndYmd = useMemo(() => shiftYmd(todayYmd, 6), [todayYmd]);
 
   const extraActions = useMemo<ActionMenuItem[]>(
     () => [
@@ -148,7 +164,7 @@ export function CalendarWidget({
               >
                 <ChevronLeft className="size-4" />
               </Button>
-              <div className="min-w-[72px] text-center text-base font-semibold">
+              <div className="min-w-[72px] text-center text-sm font-semibold @[360px]:text-base">
                 {formatMonth(viewDate)}
               </div>
               <Button
@@ -176,6 +192,21 @@ export function CalendarWidget({
           {calendarDays.map((day) => {
             const isSelected = day.ymd === selectedYmd;
             const isToday = day.ymd === todayYmd;
+            const weather = weatherByYmd.get(day.ymd);
+            const shouldShowWeather =
+              weather && day.ymd >= todayYmd && day.ymd <= weekEndYmd;
+            const tempMax =
+              weather && typeof weather.tempMax === "number"
+                ? Math.round(weather.tempMax)
+                : null;
+            const tempMin =
+              weather && typeof weather.tempMin === "number"
+                ? Math.round(weather.tempMin)
+                : null;
+            const weatherTitle =
+              tempMax !== null && tempMin !== null
+                ? `${tempMin}° / ${tempMax}°`
+                : undefined;
             const segments = day.segments;
             const overflow = day.overflow ?? 0;
             return (
@@ -184,7 +215,7 @@ export function CalendarWidget({
                 type="button"
                 onClick={() => selectDate(day.date)}
                 className={cn(
-                  "flex h-[72px] flex-col rounded-md border border-transparent p-0.5 text-left transition",
+                  "flex h-[56px] flex-col rounded-md border border-transparent p-0.5 text-left transition @[360px]:h-[72px]",
                   day.inMonth
                     ? "text-gray-900 dark:text-gray-100"
                     : "text-gray-400",
@@ -206,13 +237,31 @@ export function CalendarWidget({
                       />
                     ) : null}
                   </div>
-                  {overflow > 0 ? (
-                    <span className="text-[11px] text-gray-400">
-                      +{overflow}
-                    </span>
-                  ) : null}
+                  <div className="flex items-center gap-1">
+                    {shouldShowWeather ? (
+                      <span
+                        className="flex items-center gap-0.5 text-[10px] text-gray-500"
+                        title={weatherTitle}
+                      >
+                        <WeatherIcon
+                          code={weather?.weatherCode}
+                          className="size-3"
+                        />
+                        {tempMax !== null ? (
+                          <span className="hidden @[360px]:inline">
+                            {tempMax}°
+                          </span>
+                        ) : null}
+                      </span>
+                    ) : null}
+                    {overflow > 0 ? (
+                      <span className="text-[11px] text-gray-400">
+                        +{overflow}
+                      </span>
+                    ) : null}
+                  </div>
                 </div>
-                <div className="mt-0.5 space-y-0.5">
+                <div className="mt-0.5 space-y-0.5 hidden @[360px]:block">
                   {segments.map((segment, index) => {
                     if (!segment) {
                       return (
