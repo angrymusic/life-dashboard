@@ -47,6 +47,7 @@ model Widget {
 
   memos         Memo[]
   todos         Todo[]
+  ddays         Dday[]
   photos        Photo[]
   moods         Mood[]
   notices       Notice[]
@@ -86,6 +87,25 @@ model Todo {
   title       String
   done        Boolean
   order       Int?
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  widget      Widget @relation(fields: [widgetId], references: [id], onDelete: Cascade)
+
+  @@index([widgetId, date])
+  @@index([dashboardId, date])
+  @@index([updatedAt])
+}
+
+model Dday {
+  id          String   @id
+  widgetId    String
+  dashboardId String
+
+  title       String
+  date        String   // YMD "YYYY-MM-DD"
+  color       String?
 
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt

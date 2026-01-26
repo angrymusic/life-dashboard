@@ -17,6 +17,11 @@ export const widgetOptions: WidgetOption[] = [
     description: "오늘 할 일을 체크해요",
   },
   {
+    type: "dday",
+    title: "디데이",
+    description: "목표일까지 남은 날짜를 확인해요",
+  },
+  {
     type: "chart",
     title: "Chart",
     description: "목표 진행을 시간 순으로 기록해요",
