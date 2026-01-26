@@ -10,6 +10,7 @@ import type {
   Widget,
   Memo,
   Todo,
+  Dday,
   LocalPhoto,
   Mood,
   Notice,
@@ -44,6 +45,7 @@ export function getOrCreateLocalProfileId(): string {
 export type CreateWidgetPayload =
   | { type: "memo"; data: Pick<Memo, "text" | "color"> }
   | { type: "todo"; data: Pick<Todo, "date" | "title" | "done" | "order"> }
+  | { type: "dday"; data: Pick<Dday, "title" | "date" | "color"> }
   | {
       type: "photo";
       data: Pick<LocalPhoto, "blob" | "mimeType" | "caption" | "takenAt">;
@@ -76,6 +78,7 @@ export class LifeDashboardDB extends Dexie {
 
   memos!: Table<Memo, Id>;
   todos!: Table<Todo, Id>;
+  ddays!: Table<Dday, Id>;
   localPhotos!: Table<LocalPhoto, Id>;
   moods!: Table<Mood, Id>;
   notices!: Table<Notice, Id>;
@@ -94,7 +97,7 @@ export class LifeDashboardDB extends Dexie {
   constructor() {
     super("lifedashboard");
 
-    this.version(1).stores({
+    const storesV1 = {
       dashboards: "id, name, ownerId, groupId, updatedAt",
       widgets:
         "id, dashboardId, type, createdBy, updatedAt, [dashboardId+type]",
@@ -121,6 +124,13 @@ export class LifeDashboardDB extends Dexie {
       members: "id, groupId, role, displayName",
 
       migrationState: "id, status, migratedToUserId, updatedAt",
+    };
+
+    this.version(1).stores(storesV1);
+    this.version(2).stores({
+      ...storesV1,
+      ddays:
+        "id, widgetId, dashboardId, date, updatedAt, [widgetId+date], [dashboardId+date]",
     });
   }
 }
@@ -186,6 +196,7 @@ export async function addWidget(params: {
       db.widgets,
       db.memos,
       db.todos,
+      db.ddays,
       db.localPhotos,
       db.moods,
       db.notices,
@@ -226,6 +237,20 @@ export async function addWidget(params: {
           updatedAt: now,
         };
         await db.todos.add(todo);
+      }
+
+      if (p.type === "dday") {
+        const dday: Dday = {
+          id: newId(),
+          widgetId,
+          dashboardId: params.dashboardId,
+          title: p.data.title,
+          date: p.data.date,
+          color: p.data.color,
+          createdAt: now,
+          updatedAt: now,
+        };
+        await db.ddays.add(dday);
       }
 
       if (p.type === "photo") {
@@ -350,6 +375,7 @@ export async function deleteWidgetCascade(widgetId: Id) {
       db.widgets,
       db.memos,
       db.todos,
+      db.ddays,
       db.localPhotos,
       db.moods,
       db.notices,
@@ -363,6 +389,8 @@ export async function deleteWidgetCascade(widgetId: Id) {
         await db.memos.where("widgetId").equals(widgetId).delete();
       if (widget.type === "todo")
         await db.todos.where("widgetId").equals(widgetId).delete();
+      if (widget.type === "dday")
+        await db.ddays.where("widgetId").equals(widgetId).delete();
       if (widget.type === "photo")
         await db.localPhotos.where("widgetId").equals(widgetId).delete();
       if (widget.type === "mood")
@@ -408,6 +436,7 @@ export async function exportLocalSnapshot(): Promise<LocalSnapshot> {
     widgets,
     memos,
     todos,
+    ddays,
     moods,
     notices,
     metrics,
@@ -422,6 +451,7 @@ export async function exportLocalSnapshot(): Promise<LocalSnapshot> {
 
     db.memos.toArray(),
     db.todos.toArray(),
+    db.ddays.toArray(),
     db.moods.toArray(),
     db.notices.toArray(),
 
@@ -440,6 +470,7 @@ export async function exportLocalSnapshot(): Promise<LocalSnapshot> {
     widgets,
     memos,
     todos,
+    ddays,
     moods,
     notices,
     metrics,
@@ -481,6 +512,7 @@ export async function clearLocalDataExceptMigrationState() {
       db.widgets,
       db.memos,
       db.todos,
+      db.ddays,
       db.localPhotos,
       db.moods,
       db.notices,
@@ -496,6 +528,7 @@ export async function clearLocalDataExceptMigrationState() {
         db.widgets.clear(),
         db.memos.clear(),
         db.todos.clear(),
+        db.ddays.clear(),
         db.localPhotos.clear(),
         db.moods.clear(),
         db.notices.clear(),

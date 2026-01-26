@@ -16,6 +16,7 @@ type WidgetType =
   | "memo"
   | "photo"
   | "todo"
+  | "dday"
   | "chart"
   | "notice"
   | "mood"
@@ -63,6 +64,7 @@ type WidgetDataBase = {
 
 type Memo = WidgetDataBase & { text: string; color?: string };
 type Todo = WidgetDataBase & { date: string; title: string; done: boolean; order?: number };
+type Dday = WidgetDataBase & { title: string; date: string; color?: string };
 type Mood = WidgetDataBase & {
   date: string;
   mood: "great" | "good" | "ok" | "bad" | "awful";
@@ -128,6 +130,7 @@ type SnapshotWithoutPhotos = {
   widgets: Widget[];
   memos: Memo[];
   todos: Todo[];
+  ddays: Dday[];
   moods: Mood[];
   notices: Notice[];
   metrics: Metric[];
@@ -207,6 +210,7 @@ function isWidgetType(v: unknown): v is WidgetType {
     v === "memo" ||
     v === "photo" ||
     v === "todo" ||
+    v === "dday" ||
     v === "chart" ||
     v === "notice" ||
     v === "mood" ||
@@ -257,6 +261,15 @@ function isTodo(v: unknown): v is Todo {
   const r = v as Record<string, unknown>;
   if (!isString(r.date) || !isString(r.title) || !isBoolean(r.done)) return false;
   if (r.order !== undefined && !isNumber(r.order)) return false;
+  return true;
+}
+
+/** Dday */
+function isDday(v: unknown): v is Dday {
+  if (!isWidgetDataBase(v)) return false;
+  const r = v as Record<string, unknown>;
+  if (!isString(r.title) || !isString(r.date)) return false;
+  if (r.color !== undefined && !isString(r.color)) return false;
   return true;
 }
 
@@ -367,6 +380,7 @@ function isSnapshotWithoutPhotos(v: unknown): v is SnapshotWithoutPhotos {
     "widgets",
     "memos",
     "todos",
+    "ddays",
     "moods",
     "notices",
     "metrics",
@@ -381,6 +395,7 @@ function isSnapshotWithoutPhotos(v: unknown): v is SnapshotWithoutPhotos {
   const w = v.widgets;
   const memos = v.memos;
   const todos = v.todos;
+  const ddays = v.ddays;
   const moods = v.moods;
   const notices = v.notices;
   const metrics = v.metrics;
@@ -392,6 +407,7 @@ function isSnapshotWithoutPhotos(v: unknown): v is SnapshotWithoutPhotos {
   if (!isArray(w) || !w.every(isWidget)) return false;
   if (!isArray(memos) || !memos.every(isMemo)) return false;
   if (!isArray(todos) || !todos.every(isTodo)) return false;
+  if (!isArray(ddays) || !ddays.every(isDday)) return false;
   if (!isArray(moods) || !moods.every(isMood)) return false;
   if (!isArray(notices) || !notices.every(isNotice)) return false;
   if (!isArray(metrics) || !metrics.every(isMetric)) return false;
@@ -502,6 +518,7 @@ export async function POST(request: Request) {
       widgets: snapshot.widgets.length,
       memos: snapshot.memos.length,
       todos: snapshot.todos.length,
+      ddays: snapshot.ddays.length,
       moods: snapshot.moods.length,
       notices: snapshot.notices.length,
       metrics: snapshot.metrics.length,

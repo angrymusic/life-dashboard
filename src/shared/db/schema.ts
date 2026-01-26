@@ -15,6 +15,7 @@ export type WidgetType =
   | "memo"
   | "photo"
   | "todo"
+  | "dday"
   | "chart"
   | "notice"
   | "mood"
@@ -77,6 +78,13 @@ export interface Todo extends WidgetDataBase {
   title: string;
   done: boolean;
   order?: number;
+}
+
+/** D-day */
+export interface Dday extends WidgetDataBase {
+  title: string;
+  date: YMD;
+  color?: string;
 }
 
 /**
@@ -214,6 +222,7 @@ export interface LocalSnapshot {
 
   memos: Memo[];
   todos: Todo[];
+  ddays: Dday[];
   moods: Mood[];
   notices: Notice[];
 

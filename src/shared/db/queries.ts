@@ -44,6 +44,14 @@ export function useTodosByDate(widgetId: Id, date: YMD) {
   );
 }
 
+/** dday: 위젯별 */
+export function useDdays(widgetId: Id) {
+  return useLiveQuery(
+    async () => db.ddays.where("widgetId").equals(widgetId).sortBy("date"),
+    [widgetId]
+  );
+}
+
 /** photo: 로컬 사진(Blob 포함) */
 export function useLocalPhotos(widgetId: Id) {
   return useLiveQuery(
