@@ -11,6 +11,7 @@ import { useEnsureDashboard } from "@/feature/dashboard/hooks/useEnsureDashboard
 import { useAddCalendarWidget } from "@/feature/dashboard/hooks/useAddCalendarWidget";
 import { useAddChartWidget } from "@/feature/dashboard/hooks/useAddChartWidget";
 import { useAddDdayWidget } from "@/feature/dashboard/hooks/useAddDdayWidget";
+import { useAddMoodWidget } from "@/feature/dashboard/hooks/useAddMoodWidget";
 import { useAddMemoWidget } from "@/feature/dashboard/hooks/useAddMemoWidget";
 import { useAddTodoWidget } from "@/feature/dashboard/hooks/useAddTodoWidget";
 import { useAddWeatherWidget } from "@/feature/dashboard/hooks/useAddWeatherWidget";
@@ -32,6 +33,7 @@ export default function Dashboard() {
   const addCalendarWidget = useAddCalendarWidget(dashboardId, widgets);
   const addChartWidget = useAddChartWidget(dashboardId, widgets);
   const addDdayWidget = useAddDdayWidget(dashboardId, widgets);
+  const addMoodWidget = useAddMoodWidget(dashboardId, widgets);
   const addMemoWidget = useAddMemoWidget(dashboardId, widgets);
   const addTodoWidget = useAddTodoWidget(dashboardId, widgets);
   const addWeatherWidget = useAddWeatherWidget(dashboardId, widgets);
@@ -61,6 +63,7 @@ export default function Dashboard() {
           if (type === "calendar") void addCalendarWidget();
           if (type === "chart") void addChartWidget();
           if (type === "dday") void addDdayWidget();
+          if (type === "mood") void addMoodWidget();
           if (type === "memo") void addMemoWidget();
           if (type === "todo") void addTodoWidget();
           if (type === "weather") void addWeatherWidget();
