@@ -22,6 +22,11 @@ export const widgetOptions: WidgetOption[] = [
     description: "목표일까지 남은 날짜를 확인해요",
   },
   {
+    type: "mood",
+    title: "기분",
+    description: "현재 기분을 골라요",
+  },
+  {
     type: "chart",
     title: "Chart",
     description: "목표 진행을 시간 순으로 기록해요",
