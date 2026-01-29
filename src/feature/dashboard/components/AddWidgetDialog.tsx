@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Button } from "@/shared/ui/button";
 import {
   Dialog,
@@ -20,6 +20,12 @@ type Props = {
 
 export function AddWidgetDialog({ open, onOpenChange, onAdd }: Props) {
   const [selected, setSelected] = useState<WidgetType | null>(null);
+  const optionRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const handleAdd = (type: WidgetType) => {
+    onAdd(type);
+    onOpenChange(false);
+    setSelected(null);
+  };
 
   return (
     <Dialog
@@ -34,12 +40,56 @@ export function AddWidgetDialog({ open, onOpenChange, onAdd }: Props) {
           <DialogTitle>위젯 추가</DialogTitle>
         </DialogHeader>
 
-        <div className="grid gap-2">
-          {widgetOptions.map((option) => (
+        <div
+          className="grid gap-2"
+          role="radiogroup"
+          aria-label="위젯 종류"
+          onKeyDown={(event) => {
+            const keys = ["ArrowDown", "ArrowRight", "ArrowUp", "ArrowLeft"];
+            if (!keys.includes(event.key)) return;
+
+            event.preventDefault();
+
+            const currentIndex = selected
+              ? widgetOptions.findIndex((option) => option.type === selected)
+              : 0;
+            const direction =
+              event.key === "ArrowDown" || event.key === "ArrowRight" ? 1 : -1;
+            const nextIndex =
+              (currentIndex + direction + widgetOptions.length) %
+              widgetOptions.length;
+            const nextType = widgetOptions[nextIndex]?.type;
+
+            if (!nextType) return;
+
+            setSelected(nextType);
+            optionRefs.current[nextIndex]?.focus();
+          }}
+        >
+          {widgetOptions.map((option, index) => (
             <button
               key={option.type}
               type="button"
               onClick={() => setSelected(option.type)}
+              onKeyDown={(event) => {
+                if (event.key !== "Enter") return;
+                event.preventDefault();
+                handleAdd(option.type);
+              }}
+              ref={(node) => {
+                optionRefs.current[index] = node;
+              }}
+              role="radio"
+              aria-checked={selected === option.type}
+              tabIndex={
+                selected
+                  ? selected === option.type
+                    ? 0
+                    : -1
+                  : index === 0
+                    ? 0
+                    : -1
+              }
               className={[
                 "text-left rounded-lg border p-3 transition",
                 selected === option.type
@@ -61,9 +111,7 @@ export function AddWidgetDialog({ open, onOpenChange, onAdd }: Props) {
             disabled={!selected}
             onClick={() => {
               if (!selected) return;
-              onAdd(selected);
-              onOpenChange(false);
-              setSelected(null);
+              handleAdd(selected);
             }}
           >
             추가
