@@ -13,6 +13,7 @@ import { useAddChartWidget } from "@/feature/dashboard/hooks/useAddChartWidget";
 import { useAddDdayWidget } from "@/feature/dashboard/hooks/useAddDdayWidget";
 import { useAddMoodWidget } from "@/feature/dashboard/hooks/useAddMoodWidget";
 import { useAddMemoWidget } from "@/feature/dashboard/hooks/useAddMemoWidget";
+import { useAddPhotoWidget } from "@/feature/dashboard/hooks/useAddPhotoWidget";
 import { useAddTodoWidget } from "@/feature/dashboard/hooks/useAddTodoWidget";
 import { useAddWeatherWidget } from "@/feature/dashboard/hooks/useAddWeatherWidget";
 import { useCommitWidgetLayout } from "@/feature/dashboard/hooks/useCommitWidgetLayout";
@@ -35,6 +36,7 @@ export default function Dashboard() {
   const addDdayWidget = useAddDdayWidget(dashboardId, widgets);
   const addMoodWidget = useAddMoodWidget(dashboardId, widgets);
   const addMemoWidget = useAddMemoWidget(dashboardId, widgets);
+  const addPhotoWidget = useAddPhotoWidget(dashboardId, widgets);
   const addTodoWidget = useAddTodoWidget(dashboardId, widgets);
   const addWeatherWidget = useAddWeatherWidget(dashboardId, widgets);
   const commitWidgetLayout = useCommitWidgetLayout();
@@ -65,6 +67,7 @@ export default function Dashboard() {
           if (type === "dday") void addDdayWidget();
           if (type === "mood") void addMoodWidget();
           if (type === "memo") void addMemoWidget();
+          if (type === "photo") void addPhotoWidget();
           if (type === "todo") void addTodoWidget();
           if (type === "weather") void addWeatherWidget();
         }}
