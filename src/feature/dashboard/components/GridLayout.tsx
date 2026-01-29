@@ -2,6 +2,7 @@
 
 import "react-grid-layout/css/styles.css";
 import "react-resizable/css/styles.css";
+import { useCallback, useMemo } from "react";
 import ReactGridLayout, {
   noCompactor,
   useContainerWidth,
@@ -28,12 +29,23 @@ type Props = {
 
 export default function GridLayout({ widgets, onLayoutCommit }: Props) {
   const { width, containerRef, mounted } = useContainerWidth();
-  const compactor = { ...noCompactor, preventCollision: true };
+  const compactor = useMemo(
+    () => ({ ...noCompactor, preventCollision: true }),
+    []
+  );
+  const gridConfig = useMemo(() => ({ cols: 12, rowHeight: 30 }), []);
+  const dragConfig = useMemo(
+    () => ({ cancel: "textarea, input, button, select, a" }),
+    []
+  );
 
-  const layout = toGridLayout(widgets);
-  const handleLayoutCommit = (nextLayout: Layout) => {
-    onLayoutCommit(applyGridLayout(widgets, nextLayout));
-  };
+  const layout = useMemo(() => toGridLayout(widgets), [widgets]);
+  const handleLayoutCommit = useCallback(
+    (nextLayout: Layout) => {
+      onLayoutCommit(applyGridLayout(widgets, nextLayout));
+    },
+    [onLayoutCommit, widgets]
+  );
 
   return (
     <div ref={containerRef}>
@@ -41,13 +53,11 @@ export default function GridLayout({ widgets, onLayoutCommit }: Props) {
         <ReactGridLayout
           layout={layout}
           width={width}
-          gridConfig={{ cols: 12, rowHeight: 30 }}
+          gridConfig={gridConfig}
           compactor={compactor}
-          dragConfig={{
-            cancel: "textarea, input, button, select, a",
-          }}
-          onDragStop={(nextLayout) => handleLayoutCommit(nextLayout)}
-          onResizeStop={(nextLayout) => handleLayoutCommit(nextLayout)}
+          dragConfig={dragConfig}
+          onDragStop={handleLayoutCommit}
+          onResizeStop={handleLayoutCommit}
         >
           {widgets.map((w) => (
             <div key={w.id} className="h-full">
