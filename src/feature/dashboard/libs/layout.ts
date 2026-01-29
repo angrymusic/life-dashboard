@@ -28,6 +28,41 @@ export function toGridLayout(widgets: Widget[]): Layout {
   return widgets.map((w) => ({ ...w.layout, i: w.id }));
 }
 
+function toWidgetLayout(
+  item: Layout[number],
+  current: WidgetLayout
+): WidgetLayout {
+  const next: WidgetLayout = {
+    ...current,
+    x: item.x,
+    y: item.y,
+    w: item.w,
+    h: item.h,
+  };
+
+  if (item.minW !== undefined) next.minW = item.minW;
+  if (item.minH !== undefined) next.minH = item.minH;
+  if (item.maxW !== undefined) next.maxW = item.maxW;
+  if (item.maxH !== undefined) next.maxH = item.maxH;
+  if (item.static !== undefined) next.static = item.static;
+
+  return next;
+}
+
+function isSameLayout(a: WidgetLayout, b: WidgetLayout): boolean {
+  return (
+    a.x === b.x &&
+    a.y === b.y &&
+    a.w === b.w &&
+    a.h === b.h &&
+    a.minW === b.minW &&
+    a.minH === b.minH &&
+    a.maxW === b.maxW &&
+    a.maxH === b.maxH &&
+    Boolean(a.static) === Boolean(b.static)
+  );
+}
+
 export function applyGridLayout(
   widgets: Widget[],
   nextLayout: Layout
@@ -38,8 +73,29 @@ export function applyGridLayout(
     const layout = layoutById.get(w.id);
     if (!layout) return w;
 
-    const { i: _i, ...layoutWithoutI } = layout;
+    const next = toWidgetLayout(layout, w.layout);
+    if (isSameLayout(w.layout, next)) return w;
 
-    return { ...w, layout: layoutWithoutI };
+    return { ...w, layout: next };
   });
+}
+
+export function getLayoutUpdates(
+  widgets: Widget[],
+  nextLayout: Layout
+): Widget[] {
+  const layoutById = new Map(nextLayout.map((item) => [item.i, item]));
+  const updates: Widget[] = [];
+
+  for (const w of widgets) {
+    const layout = layoutById.get(w.id);
+    if (!layout) continue;
+
+    const next = toWidgetLayout(layout, w.layout);
+    if (isSameLayout(w.layout, next)) continue;
+
+    updates.push({ ...w, layout: next });
+  }
+
+  return updates;
 }

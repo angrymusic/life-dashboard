@@ -17,10 +17,7 @@ import { MemoWidget } from "@/feature/widgets/Memo/components/MemoWidget";
 import { PhotoWidget } from "@/feature/widgets/Photo/components/PhotoWidget";
 import { TodoWidget } from "@/feature/widgets/Todo/components/TodoWidget";
 import { WeatherWidget } from "@/feature/widgets/Weather/components/WeatherWidget";
-import {
-  applyGridLayout,
-  toGridLayout,
-} from "@/feature/dashboard/libs/layout";
+import { getLayoutUpdates, toGridLayout } from "@/feature/dashboard/libs/layout";
 
 type Props = {
   widgets: Widget[];
@@ -42,7 +39,9 @@ export default function GridLayout({ widgets, onLayoutCommit }: Props) {
   const layout = useMemo(() => toGridLayout(widgets), [widgets]);
   const handleLayoutCommit = useCallback(
     (nextLayout: Layout) => {
-      onLayoutCommit(applyGridLayout(widgets, nextLayout));
+      const updates = getLayoutUpdates(widgets, nextLayout);
+      if (updates.length === 0) return;
+      onLayoutCommit(updates);
     },
     [onLayoutCommit, widgets]
   );
