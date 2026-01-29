@@ -43,7 +43,7 @@ export function useTodosByDate(widgetId: Id, date: YMD) {
       db.todos
         .where("[widgetId+date]")
         .equals([widgetId, date])
-        .sortBy("order"),
+        .toArray(),
     [widgetId, date]
   );
 }
@@ -51,7 +51,11 @@ export function useTodosByDate(widgetId: Id, date: YMD) {
 /** dday: 위젯별 */
 export function useDdays(widgetId: Id) {
   return useLiveQuery(
-    async () => db.ddays.where("widgetId").equals(widgetId).sortBy("date"),
+    async () =>
+      db.ddays
+        .where("[widgetId+date]")
+        .between([widgetId, Dexie.minKey], [widgetId, Dexie.maxKey])
+        .toArray(),
     [widgetId]
   );
 }
@@ -61,10 +65,9 @@ export function useLocalPhotos(widgetId: Id) {
   return useLiveQuery(
     async () =>
       db.localPhotos
-        .where("widgetId")
-        .equals(widgetId)
-        .reverse()
-        .sortBy("takenAt"),
+        .where("[widgetId+takenAt]")
+        .between([widgetId, Dexie.minKey], [widgetId, Dexie.maxKey])
+        .toArray(),
     [widgetId]
   );
 }
@@ -83,10 +86,9 @@ export function useNotices(widgetId: Id) {
   return useLiveQuery(
     async () =>
       db.notices
-        .where("widgetId")
-        .equals(widgetId)
-        .reverse()
-        .sortBy("updatedAt"),
+        .where("[widgetId+updatedAt]")
+        .between([widgetId, Dexie.minKey], [widgetId, Dexie.maxKey])
+        .toArray(),
     [widgetId]
   );
 }
@@ -103,7 +105,10 @@ export function useMetrics(widgetId: Id) {
 export function useMetricEntries(metricId: Id) {
   return useLiveQuery(
     async () =>
-      db.metricEntries.where("metricId").equals(metricId).sortBy("date"),
+      db.metricEntries
+        .where("[metricId+date]")
+        .between([metricId, Dexie.minKey], [metricId, Dexie.maxKey])
+        .toArray(),
     [metricId]
   );
 }
@@ -112,7 +117,10 @@ export function useMetricEntries(metricId: Id) {
 export function useCalendarEvents(widgetId: Id) {
   return useLiveQuery(
     async () =>
-      db.calendarEvents.where("widgetId").equals(widgetId).sortBy("startAt"),
+      db.calendarEvents
+        .where("[widgetId+startAt]")
+        .between([widgetId, Dexie.minKey], [widgetId, Dexie.maxKey])
+        .toArray(),
     [widgetId]
   );
 }
