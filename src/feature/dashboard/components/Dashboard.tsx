@@ -17,10 +17,12 @@ import { useAddPhotoWidget } from "@/feature/dashboard/hooks/useAddPhotoWidget";
 import { useAddTodoWidget } from "@/feature/dashboard/hooks/useAddTodoWidget";
 import { useAddWeatherWidget } from "@/feature/dashboard/hooks/useAddWeatherWidget";
 import { useCommitWidgetLayout } from "@/feature/dashboard/hooks/useCommitWidgetLayout";
+import { Button } from "@/shared/ui/button";
 
 export default function Dashboard() {
   const dashboards = useDashboards();
-  useEnsureDashboard(dashboards);
+  const { error: dashboardError, isCreating, retry } =
+    useEnsureDashboard(dashboards);
   const [dialogOpen, setDialogOpen] = useState(false);
 
   // v1: 첫 대시보드를 기본 선택
@@ -43,7 +45,22 @@ export default function Dashboard() {
       <Header />
 
       {!dashboardId ? (
-        <div className="p-6 text-sm text-gray-500">대시보드 생성 중...</div>
+        <div className="p-6 text-sm">
+          {dashboardError ? (
+            <div className="space-y-3 text-red-600">
+              <div>대시보드를 생성하지 못했어요.</div>
+              <Button variant="outline" size="sm" onClick={retry}>
+                다시 시도
+              </Button>
+            </div>
+          ) : (
+            <div className="text-gray-500">
+              {isCreating
+                ? "대시보드 생성 중..."
+                : "대시보드를 불러오는 중..."}
+            </div>
+          )}
+        </div>
       ) : !widgets ? (
         <div className="p-6 text-sm text-gray-400">Loading widgets...</div>
       ) : (
