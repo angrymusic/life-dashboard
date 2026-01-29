@@ -1,4 +1,5 @@
 // src/db/queries.ts
+import Dexie from "dexie";
 import { useLiveQuery } from "dexie-react-hooks";
 import { db } from "./db";
 import type { Id, YMD } from "./schema";
@@ -116,15 +117,14 @@ export function useCalendarEvents(widgetId: Id) {
   );
 }
 
-/** weather cache */
+/** weather cache (latest entry only) */
 export function useWeatherCache(widgetId: Id) {
   return useLiveQuery(
     async () =>
       db.weatherCache
-        .where("widgetId")
-        .equals(widgetId)
-        .reverse()
-        .sortBy("fetchedAt"),
+        .where("[widgetId+fetchedAt]")
+        .between([widgetId, Dexie.minKey], [widgetId, Dexie.maxKey])
+        .last(),
     [widgetId]
   );
 }
