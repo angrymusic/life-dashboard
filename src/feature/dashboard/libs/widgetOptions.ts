@@ -12,6 +12,11 @@ export const widgetOptions: WidgetOption[] = [
     description: "간단한 메모를 적어요",
   },
   {
+    type: "photo",
+    title: "사진",
+    description: "사진 1장을 올려요",
+  },
+  {
     type: "todo",
     title: "Todo",
     description: "오늘 할 일을 체크해요",

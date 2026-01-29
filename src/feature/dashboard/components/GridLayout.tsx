@@ -13,6 +13,7 @@ import { ChartWidget } from "@/feature/widgets/Chart/components/ChartWidget";
 import { DdayWidget } from "@/feature/widgets/Dday/components/DdayWidget";
 import { MoodWidget } from "@/feature/widgets/Mood/components/MoodWidget";
 import { MemoWidget } from "@/feature/widgets/Memo/components/MemoWidget";
+import { PhotoWidget } from "@/feature/widgets/Photo/components/PhotoWidget";
 import { TodoWidget } from "@/feature/widgets/Todo/components/TodoWidget";
 import { WeatherWidget } from "@/feature/widgets/Weather/components/WeatherWidget";
 import {
@@ -54,6 +55,7 @@ export default function GridLayout({ widgets, onLayoutCommit }: Props) {
               {w.type === "todo" ? <TodoWidget widgetId={w.id} /> : null}
               {w.type === "dday" ? <DdayWidget widgetId={w.id} /> : null}
               {w.type === "mood" ? <MoodWidget widgetId={w.id} /> : null}
+              {w.type === "photo" ? <PhotoWidget widgetId={w.id} /> : null}
               {w.type === "chart" ? <ChartWidget widgetId={w.id} /> : null}
               {w.type === "calendar" ? (
                 <CalendarWidget widgetId={w.id} />
