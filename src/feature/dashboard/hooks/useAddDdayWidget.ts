@@ -3,7 +3,7 @@ import { addWidget } from "@/shared/db/db";
 import type { Id, Widget } from "@/shared/db/schema";
 import { createWidgetLayout } from "@/feature/dashboard/libs/layout";
 
-const MIN_W = 2;
+const MIN_W = 3;
 const MIN_H = 6;
 
 export function useAddDdayWidget(

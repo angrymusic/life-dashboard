@@ -3,7 +3,7 @@ import { addWidget } from "@/shared/db/db";
 import type { Id, Widget } from "@/shared/db/schema";
 import { createWidgetLayout } from "@/feature/dashboard/libs/layout";
 
-const MIN_W = 4;
+const MIN_W = 5;
 const MIN_H = 8;
 
 export function useAddChartWidget(

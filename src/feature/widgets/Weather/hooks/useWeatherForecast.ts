@@ -32,7 +32,7 @@ export function useWeatherForecast(
   options: UseWeatherForecastOptions = {}
 ) {
   const widget = useWidget(widgetId);
-  const weatherCache = useWeatherCache(widgetId);
+  const cacheEntry = useWeatherCache(widgetId);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const inFlightRef = useRef(false);
@@ -41,13 +41,6 @@ export function useWeatherForecast(
   const days = options.days ?? 7;
   const enabled = options.enabled ?? true;
   const cacheKey = useMemo(() => buildLocationKey(location), [location]);
-
-  const cacheEntry = useMemo(() => {
-    if (!weatherCache || weatherCache.length === 0) return null;
-    return weatherCache.reduce((latest, item) =>
-      item.fetchedAt > latest.fetchedAt ? item : latest
-    );
-  }, [weatherCache]);
 
   const forecast = useMemo<WeatherForecast | null>(() => {
     if (!cacheEntry) return null;

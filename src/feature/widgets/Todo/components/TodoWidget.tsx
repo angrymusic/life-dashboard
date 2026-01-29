@@ -87,7 +87,7 @@ export function TodoWidget({ widgetId, canEdit = true }: TodoWidgetProps) {
             >
               <ChevronLeft className="size-4" />
             </Button>
-            <div className="min-w-[84px] text-center leading-tight">
+            <div className="min-w-[80px] text-center leading-tight">
               <div className="text-sm font-semibold text-gray-800 dark:text-gray-100">
                 {isToday ? "오늘" : dateLabel}
               </div>
