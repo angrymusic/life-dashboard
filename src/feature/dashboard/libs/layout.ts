@@ -32,8 +32,10 @@ export function applyGridLayout(
   widgets: Widget[],
   nextLayout: Layout
 ): Widget[] {
+  const layoutById = new Map(nextLayout.map((item) => [item.i, item]));
+
   return widgets.map((w) => {
-    const layout = nextLayout.find((it) => it.i === w.id);
+    const layout = layoutById.get(w.id);
     if (!layout) return w;
 
     const { i: _i, ...layoutWithoutI } = layout;
