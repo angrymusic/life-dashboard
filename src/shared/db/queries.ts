@@ -12,9 +12,12 @@ export function useDashboards() {
 }
 
 /** 특정 대시보드의 위젯 메타 목록 */
-export function useDashboardWidgets(dashboardId: Id) {
+export function useDashboardWidgets(dashboardId?: Id) {
   return useLiveQuery(
-    async () => db.widgets.where("dashboardId").equals(dashboardId).toArray(),
+    async () => {
+      if (!dashboardId) return undefined;
+      return db.widgets.where("dashboardId").equals(dashboardId).toArray();
+    },
     [dashboardId]
   );
 }

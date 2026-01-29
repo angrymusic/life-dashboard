@@ -26,10 +26,7 @@ export default function Dashboard() {
   // v1: 첫 대시보드를 기본 선택
   const dashboardId = dashboards?.[0]?.id;
 
-  const widgets = useDashboardWidgets(
-    // dashboardId 없을 때는 query가 깨지지 않게 더미값
-    dashboardId ?? "__none__"
-  );
+  const widgets = useDashboardWidgets(dashboardId);
 
   const addCalendarWidget = useAddCalendarWidget(dashboardId, widgets);
   const addChartWidget = useAddChartWidget(dashboardId, widgets);
