@@ -159,6 +159,42 @@ export async function createDashboard(params: {
   return dashboard.id;
 }
 
+export async function deleteDashboardCascade(dashboardId: Id) {
+  await db.transaction(
+    "rw",
+    [
+      db.dashboards,
+      db.widgets,
+      db.memos,
+      db.todos,
+      db.ddays,
+      db.localPhotos,
+      db.moods,
+      db.notices,
+      db.metrics,
+      db.metricEntries,
+      db.calendarEvents,
+      db.weatherCache,
+    ],
+    async () => {
+      await Promise.all([
+        db.widgets.where("dashboardId").equals(dashboardId).delete(),
+        db.memos.where("dashboardId").equals(dashboardId).delete(),
+        db.todos.where("dashboardId").equals(dashboardId).delete(),
+        db.ddays.where("dashboardId").equals(dashboardId).delete(),
+        db.localPhotos.where("dashboardId").equals(dashboardId).delete(),
+        db.moods.where("dashboardId").equals(dashboardId).delete(),
+        db.notices.where("dashboardId").equals(dashboardId).delete(),
+        db.metrics.where("dashboardId").equals(dashboardId).delete(),
+        db.metricEntries.where("dashboardId").equals(dashboardId).delete(),
+        db.calendarEvents.where("dashboardId").equals(dashboardId).delete(),
+        db.weatherCache.where("dashboardId").equals(dashboardId).delete(),
+      ]);
+      await db.dashboards.delete(dashboardId);
+    }
+  );
+}
+
 /** =========================
  *  Widget CRUD (Local mode)
  *  ========================= */

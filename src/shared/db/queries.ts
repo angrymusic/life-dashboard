@@ -144,3 +144,8 @@ export function useMigrationState(localProfileId: string) {
     [localProfileId]
   );
 }
+
+/** members */
+export function useMembers() {
+  return useLiveQuery(async () => db.members.toArray(), []);
+}
