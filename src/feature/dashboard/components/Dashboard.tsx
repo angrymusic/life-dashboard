@@ -1,12 +1,18 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Header from "./Header";
 import Footer from "./Footer";
 import GridLayout from "./GridLayout";
 import { AddWidgetDialog } from "./AddWidgetDialog";
 
+import {
+  createDashboard,
+  deleteDashboardCascade,
+  getOrCreateLocalProfileId,
+} from "@/shared/db/db";
 import { useDashboards, useDashboardWidgets } from "@/shared/db/queries";
+import type { Id } from "@/shared/db/schema";
 import { useEnsureDashboard } from "@/feature/dashboard/hooks/useEnsureDashboard";
 import { useAddCalendarWidget } from "@/feature/dashboard/hooks/useAddCalendarWidget";
 import { useAddChartWidget } from "@/feature/dashboard/hooks/useAddChartWidget";
@@ -24,9 +30,24 @@ export default function Dashboard() {
   const { error: dashboardError, isCreating, retry } =
     useEnsureDashboard(dashboards);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [activeDashboardId, setActiveDashboardId] = useState<Id | undefined>();
 
-  // v1: 첫 대시보드를 기본 선택
-  const dashboardId = dashboards?.[0]?.id;
+  useEffect(() => {
+    if (!dashboards) return;
+    if (dashboards.length === 0) {
+      setActiveDashboardId(undefined);
+      return;
+    }
+    if (
+      activeDashboardId &&
+      dashboards.some((dashboard) => dashboard.id === activeDashboardId)
+    ) {
+      return;
+    }
+    setActiveDashboardId(dashboards[0].id);
+  }, [dashboards, activeDashboardId]);
+
+  const dashboardId = activeDashboardId;
 
   const widgets = useDashboardWidgets(dashboardId);
 
@@ -42,7 +63,28 @@ export default function Dashboard() {
 
   return (
     <div>
-      <Header />
+      <Header
+        dashboards={dashboards}
+        activeDashboardId={dashboardId}
+        onSelectDashboard={setActiveDashboardId}
+        onCreateDashboard={async (name) => {
+          const trimmed = name.trim();
+          if (!trimmed) return;
+          const ownerId = getOrCreateLocalProfileId();
+          const createdId = await createDashboard({
+            name: trimmed,
+            ownerId,
+          });
+          setActiveDashboardId(createdId);
+        }}
+        onDeleteDashboard={async (targetId) => {
+          await deleteDashboardCascade(targetId);
+          if (targetId !== activeDashboardId) return;
+          const remaining =
+            dashboards?.filter((dashboard) => dashboard.id !== targetId) ?? [];
+          setActiveDashboardId(remaining[0]?.id);
+        }}
+      />
 
       {!dashboardId ? (
         <div className="p-6 text-sm">

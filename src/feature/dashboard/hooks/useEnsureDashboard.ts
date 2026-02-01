@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { createDashboard, db } from "@/shared/db/db";
+import { createDashboard, db, getOrCreateLocalProfileId } from "@/shared/db/db";
 import type { Dashboard } from "@/shared/db/schema";
 
 export function useEnsureDashboard(dashboards: Dashboard[] | undefined) {
@@ -29,7 +29,10 @@ export function useEnsureDashboard(dashboards: Dashboard[] | undefined) {
         await db.transaction("rw", db.dashboards, async () => {
           const count = await db.dashboards.count();
           if (count > 0) return;
-          await createDashboard({ name: "My Dashboard" });
+          await createDashboard({
+            name: "My Dashboard",
+            ownerId: getOrCreateLocalProfileId(),
+          });
         });
       } catch (err) {
         const message =
