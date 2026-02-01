@@ -498,16 +498,14 @@ export async function POST(request: Request) {
 
   /**
    * ================================
-   * TODO: PRISMA UPSERT (DB 준비되면 여기로 교체)
+   * TODO: DB UPSERT (스토리지 준비되면 여기로 교체)
    * ================================
    *
    * import는 "로그인 순간 최종 상태" 스냅샷
    * 권장 구현:
-   *   await prisma.$transaction(async (tx) => {
-   *     // dashboards: upsert id 기준, ownerId는 userId로 세팅(또는 유지)
-   *     // widgets: upsert id 기준 (layout/settings는 Json)
-   *     // memos/todos/... : upsert id 기준
-   *   })
+   *   - 트랜잭션으로 dashboards/widgets/... upsert
+   *   - ownerId는 userId로 세팅(또는 유지)
+   *   - layout/settings는 JSON 그대로 저장
    */
 
   return NextResponse.json({
