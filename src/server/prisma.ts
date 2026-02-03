@@ -1,20 +1,25 @@
-// /server/prisma.ts
+import { PrismaPg } from "@prisma/adapter-pg";
 import { PrismaClient } from "@prisma/client";
+import { Pool } from "pg";
 
-/**
- * Next dev(HMR)에서 PrismaClient가 여러 번 생성되면 커넥션이 폭증할 수 있어서
- * globalThis에 캐시하는 패턴(실무에서 흔히 쓰는 방식)으로 고정한다.
- */
-declare global {
-  var __prisma: PrismaClient | undefined;
+const databaseUrl = process.env.DATABASE_URL;
+if (!databaseUrl) {
+  throw new Error("Missing DATABASE_URL");
 }
 
-export const prisma =
-  global.__prisma ??
-  new PrismaClient({
-    log: process.env.NODE_ENV === "development" ? ["query", "warn", "error"] : ["error"],
-  });
+const globalForPrisma = globalThis as {
+  prisma?: PrismaClient;
+  prismaPool?: Pool;
+};
+
+const pool =
+  globalForPrisma.prismaPool ?? new Pool({ connectionString: databaseUrl });
+const adapter = new PrismaPg(pool);
+const prisma = globalForPrisma.prisma ?? new PrismaClient({ adapter });
 
 if (process.env.NODE_ENV !== "production") {
-  global.__prisma = prisma;
+  globalForPrisma.prisma = prisma;
+  globalForPrisma.prismaPool = pool;
 }
+
+export default prisma;
