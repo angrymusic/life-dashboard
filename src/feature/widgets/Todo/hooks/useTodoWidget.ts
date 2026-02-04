@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
-import { db, newId, nowIso } from "@/shared/db/db";
+import { addTodoItem, deleteTodoItem, toggleTodoItem } from "@/shared/db/db";
 import { useTodosByDate, useWidget } from "@/shared/db/queries";
 import type { Id, Todo, YMD } from "@/shared/db/schema";
 
@@ -59,30 +59,23 @@ export function useTodoWidget(widgetId: Id) {
     const title = draftTitle.trim();
     if (!title) return;
 
-    const now = nowIso();
-    await db.todos.add({
-      id: newId(),
+    await addTodoItem({
       widgetId,
       dashboardId: widget.dashboardId,
       date: selectedYmd,
       title,
       done: false,
       order: nextOrder,
-      createdAt: now,
-      updatedAt: now,
     });
     setDraftTitle("");
   }, [draftTitle, widget, widgetId, selectedYmd, nextOrder]);
 
   const toggleTodo = useCallback(async (todo: Todo) => {
-    await db.todos.update(todo.id, {
-      done: !todo.done,
-      updatedAt: nowIso(),
-    });
+    await toggleTodoItem(todo);
   }, []);
 
   const deleteTodo = useCallback(async (todoId: Id) => {
-    await db.todos.delete(todoId);
+    await deleteTodoItem(todoId);
   }, []);
 
   const goPrevDay = useCallback(() => {

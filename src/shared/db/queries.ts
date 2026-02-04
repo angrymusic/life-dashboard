@@ -7,7 +7,16 @@ import type { Id, YMD } from "./schema";
 /** 대시보드 목록 */
 export function useDashboards() {
   return useLiveQuery(
-    async () => db.dashboards.orderBy("updatedAt").reverse().toArray(),
+    async () => {
+      const dashboards = await db.dashboards.toArray();
+      return dashboards.sort((a, b) => {
+        const aTime = a.createdAt ?? a.updatedAt ?? "";
+        const bTime = b.createdAt ?? b.updatedAt ?? "";
+        const diff = aTime.localeCompare(bTime);
+        if (diff !== 0) return diff;
+        return a.id.localeCompare(b.id);
+      });
+    },
     []
   );
 }
@@ -148,4 +157,9 @@ export function useMigrationState(localProfileId: string) {
 /** members */
 export function useMembers() {
   return useLiveQuery(async () => db.members.toArray(), []);
+}
+
+/** outbox count */
+export function useOutboxCount() {
+  return useLiveQuery(async () => db.outbox.count(), []);
 }

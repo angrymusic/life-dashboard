@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from "react";
 import type { ChangeEvent, FocusEvent, KeyboardEvent } from "react";
 import { useMemoOne } from "@/shared/db/queries";
-import { db, nowIso } from "@/shared/db/db";
+import { updateMemoText } from "@/shared/db/db";
 import type { Id } from "@/shared/db/schema";
 
 export function useMemoWidget(widgetId: Id) {
@@ -31,10 +31,7 @@ export function useMemoWidget(widgetId: Id) {
       return;
     }
 
-    await db.memos.update(memo.id, {
-      text: draft,
-      updatedAt: nowIso(),
-    });
+    await updateMemoText(memo, draft);
 
     setDraft(null);
   }, [memo, draft]);

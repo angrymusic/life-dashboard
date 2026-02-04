@@ -15,6 +15,9 @@ model User {
 
   accounts Account[]
   sessions Session[]
+  dashboards Dashboard[] @relation("DashboardOwner")
+  createdWidgets Widget[] @relation("WidgetCreator")
+  groupMembers GroupMember[]
 }
 
 model Account {
@@ -53,4 +56,265 @@ model VerificationToken {
   expires    DateTime
 
   @@unique([identifier, token])
+}
+
+model Group {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  dashboards Dashboard[]
+  members    GroupMember[]
+}
+
+model GroupMember {
+  id          String   @id @default(uuid())
+  groupId     String
+  userId      String?
+  email       String
+  role        String
+  displayName String
+  avatarUrl   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  group Group @relation(fields: [groupId], references: [id], onDelete: Cascade)
+  user  User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@unique([groupId, email])
+  @@unique([groupId, userId])
+  @@index([groupId])
+  @@index([userId])
+}
+
+model Dashboard {
+  id        String   @id @default(uuid())
+  name      String
+  ownerId   String?
+  groupId   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  owner          User?         @relation("DashboardOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  group          Group?        @relation(fields: [groupId], references: [id], onDelete: SetNull)
+  widgets        Widget[]
+  memos          Memo[]
+  todos          Todo[]
+  ddays          Dday[]
+  photos         Photo[]
+  moods          Mood[]
+  notices        Notice[]
+  metrics        Metric[]
+  metricEntries  MetricEntry[]
+  calendarEvents CalendarEvent[]
+  weatherCaches  WeatherCache[]
+
+  @@index([ownerId])
+  @@index([groupId])
+}
+
+model Widget {
+  id          String   @id @default(uuid())
+  dashboardId String
+  type        String
+  layout      Json
+  settings    Json?
+  createdBy   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  dashboard Dashboard @relation(fields: [dashboardId], references: [id], onDelete: Cascade)
+  creator   User?     @relation("WidgetCreator", fields: [createdBy], references: [id], onDelete: SetNull)
+  memos     Memo[]
+  todos     Todo[]
+  ddays     Dday[]
+  photos    Photo[]
+  moods     Mood[]
+  notices   Notice[]
+  metrics   Metric[]
+  entries   MetricEntry[]
+  events    CalendarEvent[]
+  weatherCache WeatherCache?
+
+  @@index([dashboardId])
+  @@index([createdBy])
+}
+
+model Memo {
+  id          String   @id @default(uuid())
+  widgetId    String
+  dashboardId String
+  text        String
+  color       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  widget    Widget    @relation(fields: [widgetId], references: [id], onDelete: Cascade)
+  dashboard Dashboard @relation(fields: [dashboardId], references: [id], onDelete: Cascade)
+
+  @@index([widgetId])
+  @@index([dashboardId])
+}
+
+model Todo {
+  id          String   @id @default(uuid())
+  widgetId    String
+  dashboardId String
+  date        String
+  title       String
+  done        Boolean
+  order       Int?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  widget    Widget    @relation(fields: [widgetId], references: [id], onDelete: Cascade)
+  dashboard Dashboard @relation(fields: [dashboardId], references: [id], onDelete: Cascade)
+
+  @@index([widgetId])
+  @@index([dashboardId])
+}
+
+model Dday {
+  id          String   @id @default(uuid())
+  widgetId    String
+  dashboardId String
+  title       String
+  date        String
+  color       String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  widget    Widget    @relation(fields: [widgetId], references: [id], onDelete: Cascade)
+  dashboard Dashboard @relation(fields: [dashboardId], references: [id], onDelete: Cascade)
+
+  @@index([widgetId])
+  @@index([dashboardId])
+}
+
+model Photo {
+  id          String   @id @default(uuid())
+  widgetId    String
+  dashboardId String
+  storagePath String
+  mimeType    String
+  caption     String?
+  takenAt     DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  widget    Widget    @relation(fields: [widgetId], references: [id], onDelete: Cascade)
+  dashboard Dashboard @relation(fields: [dashboardId], references: [id], onDelete: Cascade)
+
+  @@index([widgetId])
+  @@index([dashboardId])
+}
+
+model Mood {
+  id          String   @id @default(uuid())
+  widgetId    String
+  dashboardId String
+  date        String
+  mood        String
+  note        String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  widget    Widget    @relation(fields: [widgetId], references: [id], onDelete: Cascade)
+  dashboard Dashboard @relation(fields: [dashboardId], references: [id], onDelete: Cascade)
+
+  @@index([widgetId])
+  @@index([dashboardId])
+}
+
+model Notice {
+  id          String   @id @default(uuid())
+  widgetId    String
+  dashboardId String
+  title       String
+  body        String
+  pinned      Boolean?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  widget    Widget    @relation(fields: [widgetId], references: [id], onDelete: Cascade)
+  dashboard Dashboard @relation(fields: [dashboardId], references: [id], onDelete: Cascade)
+
+  @@index([widgetId])
+  @@index([dashboardId])
+}
+
+model Metric {
+  id          String   @id @default(uuid())
+  widgetId    String
+  dashboardId String
+  name        String
+  unit        String?
+  chartType   String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  widget    Widget    @relation(fields: [widgetId], references: [id], onDelete: Cascade)
+  dashboard Dashboard @relation(fields: [dashboardId], references: [id], onDelete: Cascade)
+  entries   MetricEntry[]
+
+  @@index([widgetId])
+  @@index([dashboardId])
+}
+
+model MetricEntry {
+  id          String   @id @default(uuid())
+  widgetId    String
+  dashboardId String
+  metricId    String
+  date        String
+  value       Float
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  metric    Metric   @relation(fields: [metricId], references: [id], onDelete: Cascade)
+  widget    Widget   @relation(fields: [widgetId], references: [id], onDelete: Cascade)
+  dashboard Dashboard @relation(fields: [dashboardId], references: [id], onDelete: Cascade)
+
+  @@index([metricId])
+  @@index([widgetId])
+  @@index([dashboardId])
+}
+
+model CalendarEvent {
+  id          String   @id @default(uuid())
+  widgetId    String
+  dashboardId String
+  title       String
+  startAt     DateTime
+  endAt       DateTime?
+  allDay      Boolean?
+  location    String?
+  description String?
+  color       String?
+  recurrence  Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  widget    Widget    @relation(fields: [widgetId], references: [id], onDelete: Cascade)
+  dashboard Dashboard @relation(fields: [dashboardId], references: [id], onDelete: Cascade)
+
+  @@index([widgetId])
+  @@index([dashboardId])
+}
+
+model WeatherCache {
+  id          String   @id @default(uuid())
+  widgetId    String
+  dashboardId String
+  locationKey String
+  payload     Json
+  fetchedAt   DateTime
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  widget    Widget    @relation(fields: [widgetId], references: [id], onDelete: Cascade)
+  dashboard Dashboard @relation(fields: [dashboardId], references: [id], onDelete: Cascade)
+
+  @@unique([widgetId])
+  @@index([dashboardId])
 }

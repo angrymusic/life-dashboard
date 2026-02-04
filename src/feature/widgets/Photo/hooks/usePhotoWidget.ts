@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo } from "react";
-import { db, newId, nowIso } from "@/shared/db/db";
+import { clearLocalPhotos, nowIso, replaceLocalPhoto } from "@/shared/db/db";
 import { useLocalPhotos, useWidget } from "@/shared/db/queries";
 import type { Id, LocalPhoto } from "@/shared/db/schema";
 
@@ -23,48 +23,43 @@ export function usePhotoWidget(widgetId: Id) {
   }, [photos]);
 
   const photoUrl = useMemo(() => {
-    if (!photo?.blob) return null;
-    return URL.createObjectURL(photo.blob);
+    if (!photo) return null;
+    if (photo.blob) return URL.createObjectURL(photo.blob);
+    if (photo.serverStoragePath) {
+      return `/api/photos?path=${encodeURIComponent(photo.serverStoragePath)}`;
+    }
+    return null;
   }, [photo]);
 
   useEffect(() => {
-    if (!photoUrl) return;
+    if (!photoUrl || !photo?.blob) return;
     return () => {
       URL.revokeObjectURL(photoUrl);
     };
-  }, [photoUrl]);
+  }, [photoUrl, photo?.blob]);
 
   const replacePhoto = useCallback(
     async (file: File) => {
       if (!widget) return;
       if (file.type && !file.type.startsWith("image/")) return;
 
-      const now = nowIso();
       const takenAt =
         file.lastModified > 0
           ? new Date(file.lastModified).toISOString()
-          : now;
+          : nowIso();
 
-      await db.transaction("rw", db.localPhotos, async () => {
-        await db.localPhotos.where("widgetId").equals(widgetId).delete();
-        await db.localPhotos.add({
-          id: newId(),
-          widgetId,
-          dashboardId: widget.dashboardId,
-          blob: file,
-          mimeType: file.type || "application/octet-stream",
-          caption: undefined,
-          takenAt,
-          createdAt: now,
-          updatedAt: now,
-        });
+      await replaceLocalPhoto({
+        widgetId,
+        dashboardId: widget.dashboardId,
+        file,
+        takenAt,
       });
     },
     [widget, widgetId]
   );
 
   const clearPhoto = useCallback(async () => {
-    await db.localPhotos.where("widgetId").equals(widgetId).delete();
+    await clearLocalPhotos(widgetId);
   }, [widgetId]);
 
   return {

@@ -1,5 +1,5 @@
 import { useCallback, useMemo } from "react";
-import { db, newId, nowIso } from "@/shared/db/db";
+import { addMood, deleteMoodsByIds, updateMood } from "@/shared/db/db";
 import { useMoodsByDate, useWidget } from "@/shared/db/queries";
 import type { Id, Mood, YMD } from "@/shared/db/schema";
 
@@ -24,28 +24,23 @@ export function useMoodWidget(widgetId: Id) {
   const setMood = useCallback(
     async (value: Mood["mood"]) => {
       if (!widget) return;
-      const now = nowIso();
       const list = moods ?? [];
       let keepId = mood?.id ?? null;
 
       if (mood) {
         if (mood.mood !== value) {
-          await db.moods.update(mood.id, {
+          await updateMood(mood, {
             mood: value,
             date: todayYmd,
-            updatedAt: now,
+            note: mood.note,
           });
         }
       } else {
-        keepId = newId();
-        await db.moods.add({
-          id: keepId,
+        keepId = await addMood({
           widgetId,
           dashboardId: widget.dashboardId,
           date: todayYmd,
           mood: value,
-          createdAt: now,
-          updatedAt: now,
         });
       }
 
@@ -54,7 +49,7 @@ export function useMoodWidget(widgetId: Id) {
         : [];
 
       if (extraIds.length) {
-        await db.moods.bulkDelete(extraIds);
+        await deleteMoodsByIds(extraIds);
       }
     },
     [widget, widgetId, todayYmd, mood, moods]

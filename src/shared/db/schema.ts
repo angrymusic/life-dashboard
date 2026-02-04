@@ -4,8 +4,8 @@
 // 핵심 원칙
 // - Shared Domain Types: 서버(Postgres)에도 그대로 넣기 쉬운 정본 구조
 // - Local-only 확장: 사진만 Blob을 로컬에 저장(LocalPhoto)
-// - outbox(변경 로그)는 사용하지 않음. 로그인 시점에 "최종 상태 스냅샷"을 export/import 한다.
-// - migrationState 테이블로 "이 로컬 프로필이 어떤 계정으로 마이그레이션 되었는지"만 관리한다.
+// - outbox(변경 로그)를 추가해서 서버 동기화용 이벤트 큐를 유지한다.
+// - migrationState 테이블로 "이 로컬 프로필이 어떤 계정으로 마이그레이션 되었는지"를 관리한다.
 
 export type Id = string; // crypto.randomUUID() 사용 추천
 export type ISODate = string; // new Date().toISOString()
@@ -101,7 +101,7 @@ export interface Photo extends WidgetDataBase {
 
 /** 로컬 전용 사진(IndexedDB에 Blob 저장) */
 export interface LocalPhoto extends Omit<Photo, "storagePath"> {
-  blob: Blob;
+  blob?: Blob;
   /** 로그인 후 업로드가 끝나서 서버 경로를 받았다면 저장해둘 수 있음(선택) */
   serverStoragePath?: string;
 }
@@ -185,6 +185,8 @@ export interface WeatherCache {
   locationKey: string;
   payload: unknown;
   fetchedAt: ISODate;
+  createdAt?: ISODate;
+  updatedAt?: ISODate;
 }
 
 /** (로그인/공유 이후) 멤버 캐시(선택) */
@@ -194,6 +196,37 @@ export interface Member {
   role: Role;
   displayName: string;
   avatarUrl?: string;
+  email?: string;
+  userId?: string;
+  createdAt: ISODate;
+  updatedAt: ISODate;
+}
+
+/** outbox 이벤트(서버 동기화용 큐) */
+export type OutboxOperation = "upsert" | "delete";
+export type OutboxEntityType =
+  | "dashboard"
+  | "widget"
+  | "memo"
+  | "todo"
+  | "dday"
+  | "localPhoto"
+  | "photo"
+  | "mood"
+  | "notice"
+  | "metric"
+  | "metricEntry"
+  | "calendarEvent"
+  | "weatherCache";
+
+export interface OutboxEvent {
+  id: string; // `${entityType}:${entityId}`
+  entityType: OutboxEntityType;
+  entityId: Id;
+  dashboardId?: Id;
+  widgetId?: Id;
+  operation: OutboxOperation;
+  payload?: Record<string, unknown>;
   createdAt: ISODate;
   updatedAt: ISODate;
 }
