@@ -2156,3 +2156,7 @@ export async function clearLocalDataExceptMigrationState() {
     }
   );
 }
+
+export async function deleteLocalDatabase() {
+  await db.delete();
+}
