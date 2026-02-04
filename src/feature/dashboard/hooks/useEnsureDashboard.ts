@@ -1,8 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { createDashboard, db, getOrCreateLocalProfileId } from "@/shared/db/db";
+import { ensureDefaultDashboard, getOrCreateLocalProfileId } from "@/shared/db/db";
 import type { Dashboard } from "@/shared/db/schema";
 
-export function useEnsureDashboard(dashboards: Dashboard[] | undefined) {
+type EnsureOptions = {
+  enabled?: boolean;
+};
+
+export function useEnsureDashboard(
+  dashboards: Dashboard[] | undefined,
+  options: EnsureOptions = {}
+) {
   const isCreatingRef = useRef(false);
   const [isCreating, setIsCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -14,6 +21,7 @@ export function useEnsureDashboard(dashboards: Dashboard[] | undefined) {
   }, []);
 
   useEffect(() => {
+    if (options.enabled === false) return;
     if (!dashboards) return;
     if (dashboards.length > 0) {
       setError(null);
@@ -26,13 +34,9 @@ export function useEnsureDashboard(dashboards: Dashboard[] | undefined) {
 
     void (async () => {
       try {
-        await db.transaction("rw", db.dashboards, async () => {
-          const count = await db.dashboards.count();
-          if (count > 0) return;
-          await createDashboard({
-            name: "My Dashboard",
-            ownerId: getOrCreateLocalProfileId(),
-          });
+        await ensureDefaultDashboard({
+          name: "My Dashboard",
+          ownerId: getOrCreateLocalProfileId(),
         });
       } catch (err) {
         const message =
@@ -45,7 +49,7 @@ export function useEnsureDashboard(dashboards: Dashboard[] | undefined) {
         setIsCreating(false);
       }
     })();
-  }, [dashboards, attempt]);
+  }, [dashboards, attempt, options.enabled]);
 
   return { isCreating, error, retry };
 }

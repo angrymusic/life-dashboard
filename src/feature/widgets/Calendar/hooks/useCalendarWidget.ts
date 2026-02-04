@@ -6,7 +6,13 @@ import type {
   Id,
   YMD,
 } from "@/shared/db/schema";
-import { db, newId, nowIso } from "@/shared/db/db";
+import {
+  addCalendarEvent,
+  deleteCalendarEvent,
+  newId,
+  nowIso,
+  updateCalendarEvent,
+} from "@/shared/db/db";
 import { useCalendarEvents, useWidget } from "@/shared/db/queries";
 import {
   DEFAULT_EVENT_COLOR,
@@ -486,17 +492,16 @@ export function useCalendarWidget(widgetId: Id) {
     };
 
     if (editingEventId) {
-      await db.calendarEvents.update(editingEventId, {
+      await updateCalendarEvent(editingEventId, {
         title: event.title,
         startAt: event.startAt,
         endAt: event.endAt,
         allDay: event.allDay,
         color: event.color,
         recurrence: event.recurrence,
-        updatedAt: now,
       });
     } else {
-      await db.calendarEvents.add(event);
+      await addCalendarEvent(event);
     }
 
     setDraftTitle("");
@@ -540,7 +545,7 @@ export function useCalendarWidget(widgetId: Id) {
     ) => {
       const baseEvent = eventsById.get(event.id);
       if (!event.recurrence || scope === "all" || !baseEvent || !baseEvent.recurrence) {
-        await db.calendarEvents.delete(event.id);
+        await deleteCalendarEvent(event.id);
         return;
       }
 
@@ -550,13 +555,13 @@ export function useCalendarWidget(widgetId: Id) {
         : fromYmd || toYmd(startOfDay(new Date()));
       const baseStart = new Date(baseEvent.startAt);
       if (Number.isNaN(baseStart.getTime())) {
-        await db.calendarEvents.delete(event.id);
+        await deleteCalendarEvent(event.id);
         return;
       }
       const baseStartYmd = toYmd(startOfDay(baseStart));
 
       if (occurrenceYmd <= baseStartYmd) {
-        await db.calendarEvents.delete(event.id);
+        await deleteCalendarEvent(event.id);
         return;
       }
 
@@ -564,10 +569,7 @@ export function useCalendarWidget(widgetId: Id) {
         ...baseEvent.recurrence,
         until: shiftYmd(occurrenceYmd, -1),
       };
-      await db.calendarEvents.update(event.id, {
-        recurrence: updatedRecurrence,
-        updatedAt: nowIso(),
-      });
+      await updateCalendarEvent(event.id, { recurrence: updatedRecurrence });
     },
     [eventsById]
   );

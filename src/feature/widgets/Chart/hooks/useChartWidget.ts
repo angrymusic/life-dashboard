@@ -1,5 +1,11 @@
 import { useCallback, useMemo, useState } from "react";
-import { db, newId, nowIso } from "@/shared/db/db";
+import {
+  addMetricEntry,
+  createMetric as createMetricRecord,
+  deleteMetricEntry,
+  updateMetric as updateMetricRecord,
+  updateMetricEntry,
+} from "@/shared/db/db";
 import type { Id, Metric, MetricEntry, YMD } from "@/shared/db/schema";
 import { useMetricEntries, useMetrics, useWidget } from "@/shared/db/queries";
 
@@ -48,10 +54,7 @@ export function useChartWidget(widgetId: Id) {
   const updateMetric = useCallback(
     async (updates: Partial<Metric>) => {
       if (!metric) return;
-      await db.metrics.update(metric.id, {
-        ...updates,
-        updatedAt: nowIso(),
-      });
+      await updateMetricRecord(metric, updates);
     },
     [metric]
   );
@@ -112,16 +115,11 @@ export function useChartWidget(widgetId: Id) {
 
   const createMetric = useCallback(async () => {
     if (!widget) return;
-    const now = nowIso();
-    await db.metrics.add({
-      id: newId(),
+    await createMetricRecord({
       widgetId,
       dashboardId: widget.dashboardId,
       name: "지표",
-      unit: undefined,
       chartType: "line",
-      createdAt: now,
-      updatedAt: now,
     });
   }, [widget, widgetId]);
 
@@ -131,25 +129,18 @@ export function useChartWidget(widgetId: Id) {
     const value = Number(newEntryValue);
     if (!Number.isFinite(value)) return;
 
-    const now = nowIso();
     const existingEntry = entries?.find(
       (entry) => entry.date === newEntryDate
     );
     if (existingEntry) {
-      await db.metricEntries.update(existingEntry.id, {
-        value,
-        updatedAt: now,
-      });
+      await updateMetricEntry(existingEntry, { date: existingEntry.date, value });
     } else {
-      await db.metricEntries.add({
-        id: newId(),
+      await addMetricEntry({
         widgetId: metric.widgetId,
         dashboardId: metric.dashboardId,
         metricId: metric.id,
         date: newEntryDate,
         value,
-        createdAt: now,
-        updatedAt: now,
       });
     }
     setNewEntryValue("");
@@ -164,7 +155,6 @@ export function useChartWidget(widgetId: Id) {
     const value = Number(editingValue);
     if (!Number.isFinite(value)) return;
 
-    const now = nowIso();
     const editingEntry = entries?.find(
       (entry) => entry.id === editingEntryId
     );
@@ -173,29 +163,22 @@ export function useChartWidget(widgetId: Id) {
     );
 
     if (existingEntry) {
-      await db.metricEntries.update(existingEntry.id, {
+      await updateMetricEntry(existingEntry, {
+        date: existingEntry.date,
         value,
-        updatedAt: now,
       });
       if (editingEntry) {
-        await db.metricEntries.delete(editingEntry.id);
+        await deleteMetricEntry(editingEntry.id);
       }
     } else if (editingEntry) {
-      await db.metricEntries.update(editingEntry.id, {
-        date: editingDate,
-        value,
-        updatedAt: now,
-      });
+      await updateMetricEntry(editingEntry, { date: editingDate, value });
     } else {
-      await db.metricEntries.add({
-        id: newId(),
+      await addMetricEntry({
         widgetId: metric.widgetId,
         dashboardId: metric.dashboardId,
         metricId: metric.id,
         date: editingDate,
         value,
-        createdAt: now,
-        updatedAt: now,
       });
     }
 
@@ -218,7 +201,7 @@ export function useChartWidget(widgetId: Id) {
 
   const deleteEntry = useCallback(
     async (entryId: Id) => {
-      await db.metricEntries.delete(entryId);
+      await deleteMetricEntry(entryId);
       if (editingEntryId === entryId) {
         setEditingEntryId(null);
         setEditingDate("");

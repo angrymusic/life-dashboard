@@ -1,5 +1,10 @@
 import { useCallback, useMemo } from "react";
-import { db, newId, nowIso } from "@/shared/db/db";
+import {
+  addDday,
+  deleteDdaysByIds,
+  deleteDdaysByWidget,
+  updateDday,
+} from "@/shared/db/db";
 import { useDdays, useWidget } from "@/shared/db/queries";
 import type { Dday, Id, YMD } from "@/shared/db/schema";
 
@@ -28,27 +33,21 @@ export function useDdayWidget(widgetId: Id) {
       const trimmed = input.title.trim();
       if (!trimmed || !input.date) return;
 
-      const now = nowIso();
       let keepId = dday?.id ?? null;
 
       if (dday) {
-        await db.ddays.update(dday.id, {
+        await updateDday(dday, {
           title: trimmed,
           date: input.date,
           color: input.color,
-          updatedAt: now,
         });
       } else {
-        keepId = newId();
-        await db.ddays.add({
-          id: keepId,
+        keepId = await addDday({
           widgetId,
           dashboardId: widget.dashboardId,
           title: trimmed,
           date: input.date,
           color: input.color,
-          createdAt: now,
-          updatedAt: now,
         });
       }
 
@@ -58,14 +57,14 @@ export function useDdayWidget(widgetId: Id) {
           : [];
 
       if (extraIds.length) {
-        await db.ddays.bulkDelete(extraIds);
+        await deleteDdaysByIds(extraIds);
       }
     },
     [widget, widgetId, dday, ddays]
   );
 
   const deleteDday = useCallback(async () => {
-    await db.ddays.where("widgetId").equals(widgetId).delete();
+    await deleteDdaysByWidget(widgetId);
   }, [widgetId]);
 
   return {

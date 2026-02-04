@@ -16,12 +16,19 @@ type Props = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onAdd: (type: WidgetType) => void;
+  disabled?: boolean;
 };
 
-export function AddWidgetDialog({ open, onOpenChange, onAdd }: Props) {
+export function AddWidgetDialog({
+  open,
+  onOpenChange,
+  onAdd,
+  disabled = false,
+}: Props) {
   const [selected, setSelected] = useState<WidgetType | null>(null);
   const optionRefs = useRef<Array<HTMLButtonElement | null>>([]);
   const handleAdd = (type: WidgetType) => {
+    if (disabled) return;
     onAdd(type);
     onOpenChange(false);
     setSelected(null);
@@ -76,6 +83,7 @@ export function AddWidgetDialog({ open, onOpenChange, onAdd }: Props) {
                 event.preventDefault();
                 handleAdd(option.type);
               }}
+              disabled={disabled}
               ref={(node) => {
                 optionRefs.current[index] = node;
               }}
@@ -92,6 +100,7 @@ export function AddWidgetDialog({ open, onOpenChange, onAdd }: Props) {
               }
               className={[
                 "text-left rounded-lg border p-3 transition",
+                disabled ? "opacity-60 cursor-not-allowed" : "",
                 selected === option.type
                   ? "border-gray-900 dark:border-gray-100"
                   : "border-gray-200 dark:border-gray-700",
@@ -108,7 +117,7 @@ export function AddWidgetDialog({ open, onOpenChange, onAdd }: Props) {
             취소
           </Button>
           <Button
-            disabled={!selected}
+            disabled={disabled || !selected}
             onClick={() => {
               if (!selected) return;
               handleAdd(selected);

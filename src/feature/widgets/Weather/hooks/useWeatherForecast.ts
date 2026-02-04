@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { db, nowIso } from "@/shared/db/db";
+import { nowIso, upsertWeatherCache } from "@/shared/db/db";
 import { useWeatherCache, useWidget } from "@/shared/db/queries";
 import type { Id } from "@/shared/db/schema";
 import {
@@ -88,7 +88,7 @@ export function useWeatherForecast(
         const payload = (await response.json()) as unknown;
         const now = nowIso();
 
-        await db.weatherCache.put({
+        await upsertWeatherCache({
           id: widgetId,
           widgetId,
           dashboardId: widget.dashboardId,
