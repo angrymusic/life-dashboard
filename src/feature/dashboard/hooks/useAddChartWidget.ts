@@ -8,7 +8,8 @@ const MIN_H = 8;
 
 export function useAddChartWidget(
   dashboardId: Id | undefined,
-  widgets: Widget[] | undefined
+  widgets: Widget[] | undefined,
+  createdBy?: Id
 ) {
   return useCallback(async () => {
     if (!dashboardId) return;
@@ -22,11 +23,12 @@ export function useAddChartWidget(
         minW: MIN_W,
         minH: MIN_H,
       }),
+      createdBy,
       settings: { isConfigured: false },
       payload: {
         type: "chart",
         data: { name: "지표", unit: undefined, chartType: "line" },
       },
     });
-  }, [dashboardId, widgets]);
+  }, [dashboardId, widgets, createdBy]);
 }

@@ -25,13 +25,13 @@ import {
 type Props = {
   widgets: Widget[];
   onLayoutCommit: (next: Widget[]) => void;
-  canEdit?: boolean;
+  canEditWidget?: (widget: Widget) => boolean;
 };
 
 export default function GridLayout({
   widgets,
   onLayoutCommit,
-  canEdit = true,
+  canEditWidget,
 }: Props) {
   const { width, containerRef, mounted } = useContainerWidth();
   const compactor = useMemo(
@@ -39,15 +39,35 @@ export default function GridLayout({
     []
   );
 
-  const layout = useMemo(() => toGridLayout(widgets), [widgets]);
+  const editableById = useMemo(() => {
+    return new Map(
+      widgets.map((widget) => [
+        widget.id,
+        canEditWidget ? canEditWidget(widget) : true,
+      ])
+    );
+  }, [widgets, canEditWidget]);
+  const canEditAny = useMemo(() => {
+    if (!canEditWidget) return true;
+    return widgets.some((widget) => canEditWidget(widget));
+  }, [widgets, canEditWidget]);
+  const layout = useMemo(() => {
+    return toGridLayout(widgets).map((item) => {
+      const canEdit = editableById.get(item.i) ?? true;
+      return { ...item, static: Boolean(item.static) || !canEdit };
+    });
+  }, [widgets, editableById]);
   const handleLayoutCommit = useCallback(
     (nextLayout: Layout) => {
-      if (!canEdit) return;
+      if (!canEditAny) return;
       const updates = getLayoutUpdates(widgets, nextLayout);
-      if (updates.length === 0) return;
-      onLayoutCommit(updates);
+      const allowedUpdates = updates.filter(
+        (widget) => editableById.get(widget.id) ?? false
+      );
+      if (allowedUpdates.length === 0) return;
+      onLayoutCommit(allowedUpdates);
     },
-    [canEdit, onLayoutCommit, widgets]
+    [canEditAny, onLayoutCommit, widgets, editableById]
   );
 
   return (
@@ -60,40 +80,43 @@ export default function GridLayout({
           compactor={compactor}
           dragConfig={{
             cancel: "textarea, input, button, select, a",
-            enabled: canEdit,
+            enabled: canEditAny,
           }}
-          resizeConfig={{ enabled: canEdit }}
+          resizeConfig={{ enabled: canEditAny }}
           onDragStop={handleLayoutCommit}
           onResizeStop={handleLayoutCommit}
         >
-          {widgets.map((w) => (
-            <div key={w.id} className="h-full">
-              {w.type === "memo" ? (
-                <MemoWidget widgetId={w.id} canEdit={canEdit} />
-              ) : null}
-              {w.type === "todo" ? (
-                <TodoWidget widgetId={w.id} canEdit={canEdit} />
-              ) : null}
-              {w.type === "dday" ? (
-                <DdayWidget widgetId={w.id} canEdit={canEdit} />
-              ) : null}
-              {w.type === "mood" ? (
-                <MoodWidget widgetId={w.id} canEdit={canEdit} />
-              ) : null}
-              {w.type === "photo" ? (
-                <PhotoWidget widgetId={w.id} canEdit={canEdit} />
-              ) : null}
-              {w.type === "chart" ? (
-                <ChartWidget widgetId={w.id} canEdit={canEdit} />
-              ) : null}
-              {w.type === "calendar" ? (
-                <CalendarWidget widgetId={w.id} canEdit={canEdit} />
-              ) : null}
-              {w.type === "weather" ? (
-                <WeatherWidget widgetId={w.id} canEdit={canEdit} />
-              ) : null}
-            </div>
-          ))}
+          {widgets.map((w) => {
+            const canEdit = editableById.get(w.id) ?? true;
+            return (
+              <div key={w.id} className="h-full">
+                {w.type === "memo" ? (
+                  <MemoWidget widgetId={w.id} canEdit={canEdit} />
+                ) : null}
+                {w.type === "todo" ? (
+                  <TodoWidget widgetId={w.id} canEdit={canEdit} />
+                ) : null}
+                {w.type === "dday" ? (
+                  <DdayWidget widgetId={w.id} canEdit={canEdit} />
+                ) : null}
+                {w.type === "mood" ? (
+                  <MoodWidget widgetId={w.id} canEdit={canEdit} />
+                ) : null}
+                {w.type === "photo" ? (
+                  <PhotoWidget widgetId={w.id} canEdit={canEdit} />
+                ) : null}
+                {w.type === "chart" ? (
+                  <ChartWidget widgetId={w.id} canEdit={canEdit} />
+                ) : null}
+                {w.type === "calendar" ? (
+                  <CalendarWidget widgetId={w.id} canEdit={canEdit} />
+                ) : null}
+                {w.type === "weather" ? (
+                  <WeatherWidget widgetId={w.id} canEdit={canEdit} />
+                ) : null}
+              </div>
+            );
+          })}
         </ReactGridLayout>
       )}
     </div>

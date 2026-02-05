@@ -77,6 +77,13 @@ function parseOptionalDate(value: unknown) {
   return parseDate(value as string);
 }
 
+const adminRoles = new Set(["parent", "admin"]);
+
+function isAdminRole(role: string | null | undefined) {
+  if (!role) return false;
+  return adminRoles.has(role);
+}
+
 function parseEvents(body: unknown): SyncEvent[] | null {
   if (!isRecord(body)) return null;
   const rawEvents = body.events;
@@ -130,8 +137,15 @@ export async function POST(request: Request) {
     });
   }
 
-  const dashboardCache = new Map<string, { id: string; ownerId: string | null; groupId: string | null } | null>();
-  const groupAccessCache = new Map<string, boolean>();
+  const dashboardCache = new Map<
+    string,
+    { id: string; ownerId: string | null; groupId: string | null } | null
+  >();
+  const groupMemberCache = new Map<string, { id: string; role: string } | null>();
+  const widgetCache = new Map<
+    string,
+    { id: string; dashboardId: string; createdBy: string | null } | null
+  >();
 
   const getDashboard = async (dashboardId: string) => {
     if (dashboardCache.has(dashboardId)) {
@@ -145,29 +159,62 @@ export async function POST(request: Request) {
     return dashboard ?? null;
   };
 
-  const hasGroupAccess = async (groupId: string) => {
-    if (groupAccessCache.has(groupId)) {
-      return groupAccessCache.get(groupId) ?? false;
+  const getGroupMember = async (groupId: string) => {
+    if (groupMemberCache.has(groupId)) {
+      return groupMemberCache.get(groupId) ?? null;
     }
     const member = await prisma.groupMember.findFirst({
       where: { groupId, userId },
-      select: { id: true },
+      select: { id: true, role: true },
     });
-    const allowed = Boolean(member);
-    groupAccessCache.set(groupId, allowed);
-    return allowed;
+    groupMemberCache.set(groupId, member ?? null);
+    return member ?? null;
+  };
+
+  const hasGroupAccess = async (groupId: string) => {
+    const member = await getGroupMember(groupId);
+    return Boolean(member);
+  };
+
+  const getWidget = async (widgetId: string) => {
+    if (widgetCache.has(widgetId)) {
+      return widgetCache.get(widgetId) ?? null;
+    }
+    const widget = await prisma.widget.findUnique({
+      where: { id: widgetId },
+      select: { id: true, dashboardId: true, createdBy: true },
+    });
+    if (widget) {
+      widgetCache.set(widgetId, widget);
+    }
+    return widget ?? null;
   };
 
   const ensureAccessForDashboard = async (dashboardId: string) => {
     const dashboard = await getDashboard(dashboardId);
     if (!dashboard) throw new Error("Dashboard not found");
     if (dashboard.groupId) {
-      const allowed = await hasGroupAccess(dashboard.groupId);
-      if (!allowed) throw new Error("Forbidden");
-    } else if (dashboard.ownerId && dashboard.ownerId !== userId) {
+      const member = await getGroupMember(dashboard.groupId);
+      if (!member) throw new Error("Forbidden");
+      return { dashboard, role: member.role };
+    }
+    if (dashboard.ownerId && dashboard.ownerId !== userId) {
       throw new Error("Forbidden");
     }
-    return dashboard;
+    return { dashboard, role: "parent" };
+  };
+
+  const ensureWidgetEditAccess = async (widgetId: string, dashboardId?: string) => {
+    const widget = await getWidget(widgetId);
+    if (!widget) throw new Error("Widget not found");
+    if (dashboardId && widget.dashboardId !== dashboardId) {
+      throw new Error("Dashboard mismatch");
+    }
+    const { role } = await ensureAccessForDashboard(widget.dashboardId);
+    if (isAdminRole(role)) return;
+    if (widget.createdBy !== userId) {
+      throw new Error("Forbidden");
+    }
   };
 
   const appliedIds: string[] = [];
@@ -191,37 +238,47 @@ export async function POST(request: Request) {
           }
           await prisma.dashboard.deleteMany({ where: { id: event.entityId } });
         } else if (event.entityType === "widget") {
-          await ensureAccessForDashboard(event.dashboardId ?? "");
+          await ensureWidgetEditAccess(event.entityId, event.dashboardId);
           await prisma.widget.deleteMany({ where: { id: event.entityId } });
         } else if (event.entityType === "memo") {
-          await ensureAccessForDashboard(event.dashboardId ?? "");
+          if (!event.widgetId) throw new Error("Missing widgetId");
+          await ensureWidgetEditAccess(event.widgetId, event.dashboardId);
           await prisma.memo.deleteMany({ where: { id: event.entityId } });
         } else if (event.entityType === "todo") {
-          await ensureAccessForDashboard(event.dashboardId ?? "");
+          if (!event.widgetId) throw new Error("Missing widgetId");
+          await ensureWidgetEditAccess(event.widgetId, event.dashboardId);
           await prisma.todo.deleteMany({ where: { id: event.entityId } });
         } else if (event.entityType === "dday") {
-          await ensureAccessForDashboard(event.dashboardId ?? "");
+          if (!event.widgetId) throw new Error("Missing widgetId");
+          await ensureWidgetEditAccess(event.widgetId, event.dashboardId);
           await prisma.dday.deleteMany({ where: { id: event.entityId } });
         } else if (event.entityType === "photo") {
-          await ensureAccessForDashboard(event.dashboardId ?? "");
+          if (!event.widgetId) throw new Error("Missing widgetId");
+          await ensureWidgetEditAccess(event.widgetId, event.dashboardId);
           await prisma.photo.deleteMany({ where: { id: event.entityId } });
         } else if (event.entityType === "mood") {
-          await ensureAccessForDashboard(event.dashboardId ?? "");
+          if (!event.widgetId) throw new Error("Missing widgetId");
+          await ensureWidgetEditAccess(event.widgetId, event.dashboardId);
           await prisma.mood.deleteMany({ where: { id: event.entityId } });
         } else if (event.entityType === "notice") {
-          await ensureAccessForDashboard(event.dashboardId ?? "");
+          if (!event.widgetId) throw new Error("Missing widgetId");
+          await ensureWidgetEditAccess(event.widgetId, event.dashboardId);
           await prisma.notice.deleteMany({ where: { id: event.entityId } });
         } else if (event.entityType === "metric") {
-          await ensureAccessForDashboard(event.dashboardId ?? "");
+          if (!event.widgetId) throw new Error("Missing widgetId");
+          await ensureWidgetEditAccess(event.widgetId, event.dashboardId);
           await prisma.metric.deleteMany({ where: { id: event.entityId } });
         } else if (event.entityType === "metricEntry") {
-          await ensureAccessForDashboard(event.dashboardId ?? "");
+          if (!event.widgetId) throw new Error("Missing widgetId");
+          await ensureWidgetEditAccess(event.widgetId, event.dashboardId);
           await prisma.metricEntry.deleteMany({ where: { id: event.entityId } });
         } else if (event.entityType === "calendarEvent") {
-          await ensureAccessForDashboard(event.dashboardId ?? "");
+          if (!event.widgetId) throw new Error("Missing widgetId");
+          await ensureWidgetEditAccess(event.widgetId, event.dashboardId);
           await prisma.calendarEvent.deleteMany({ where: { id: event.entityId } });
         } else if (event.entityType === "weatherCache") {
-          await ensureAccessForDashboard(event.dashboardId ?? "");
+          if (!event.widgetId) throw new Error("Missing widgetId");
+          await ensureWidgetEditAccess(event.widgetId, event.dashboardId);
           await prisma.weatherCache.deleteMany({ where: { id: event.entityId } });
         }
 
@@ -266,7 +323,12 @@ export async function POST(request: Request) {
       } else if (event.entityType === "widget") {
         const id = requireString(payload, "id", event.entityId);
         const dashboardId = requireString(payload, "dashboardId", event.dashboardId);
-        await ensureAccessForDashboard(dashboardId);
+        const existingWidget = await getWidget(id);
+        if (existingWidget) {
+          await ensureWidgetEditAccess(id, dashboardId);
+        } else {
+          await ensureAccessForDashboard(dashboardId);
+        }
         const type = requireString(payload, "type");
         const layout = payload.layout ?? {};
         const settings = payload.settings ?? undefined;
@@ -296,8 +358,8 @@ export async function POST(request: Request) {
       } else if (event.entityType === "memo") {
         const id = requireString(payload, "id", event.entityId);
         const dashboardId = requireString(payload, "dashboardId", event.dashboardId);
-        await ensureAccessForDashboard(dashboardId);
         const widgetId = requireString(payload, "widgetId", event.widgetId);
+        await ensureWidgetEditAccess(widgetId, dashboardId);
         const text = requireString(payload, "text");
         const color = optionalString(payload, "color");
         const createdAt = parseDate(payload.createdAt ?? event.createdAt);
@@ -325,8 +387,8 @@ export async function POST(request: Request) {
       } else if (event.entityType === "todo") {
         const id = requireString(payload, "id", event.entityId);
         const dashboardId = requireString(payload, "dashboardId", event.dashboardId);
-        await ensureAccessForDashboard(dashboardId);
         const widgetId = requireString(payload, "widgetId", event.widgetId);
+        await ensureWidgetEditAccess(widgetId, dashboardId);
         const date = requireString(payload, "date");
         const title = requireString(payload, "title");
         const done = Boolean(payload.done);
@@ -360,8 +422,8 @@ export async function POST(request: Request) {
       } else if (event.entityType === "dday") {
         const id = requireString(payload, "id", event.entityId);
         const dashboardId = requireString(payload, "dashboardId", event.dashboardId);
-        await ensureAccessForDashboard(dashboardId);
         const widgetId = requireString(payload, "widgetId", event.widgetId);
+        await ensureWidgetEditAccess(widgetId, dashboardId);
         const title = requireString(payload, "title");
         const date = requireString(payload, "date");
         const color = optionalString(payload, "color");
@@ -392,8 +454,8 @@ export async function POST(request: Request) {
       } else if (event.entityType === "photo") {
         const id = requireString(payload, "id", event.entityId);
         const dashboardId = requireString(payload, "dashboardId", event.dashboardId);
-        await ensureAccessForDashboard(dashboardId);
         const widgetId = requireString(payload, "widgetId", event.widgetId);
+        await ensureWidgetEditAccess(widgetId, dashboardId);
         const storagePath = requireString(payload, "storagePath");
         const mimeType = requireString(payload, "mimeType");
         const caption = optionalString(payload, "caption");
@@ -427,8 +489,8 @@ export async function POST(request: Request) {
       } else if (event.entityType === "mood") {
         const id = requireString(payload, "id", event.entityId);
         const dashboardId = requireString(payload, "dashboardId", event.dashboardId);
-        await ensureAccessForDashboard(dashboardId);
         const widgetId = requireString(payload, "widgetId", event.widgetId);
+        await ensureWidgetEditAccess(widgetId, dashboardId);
         const date = requireString(payload, "date");
         const mood = requireString(payload, "mood");
         const note = optionalString(payload, "note");
@@ -459,8 +521,8 @@ export async function POST(request: Request) {
       } else if (event.entityType === "notice") {
         const id = requireString(payload, "id", event.entityId);
         const dashboardId = requireString(payload, "dashboardId", event.dashboardId);
-        await ensureAccessForDashboard(dashboardId);
         const widgetId = requireString(payload, "widgetId", event.widgetId);
+        await ensureWidgetEditAccess(widgetId, dashboardId);
         const title = requireString(payload, "title");
         const bodyText = requireString(payload, "body");
         const pinned = typeof payload.pinned === "boolean" ? payload.pinned : undefined;
@@ -491,8 +553,8 @@ export async function POST(request: Request) {
       } else if (event.entityType === "metric") {
         const id = requireString(payload, "id", event.entityId);
         const dashboardId = requireString(payload, "dashboardId", event.dashboardId);
-        await ensureAccessForDashboard(dashboardId);
         const widgetId = requireString(payload, "widgetId", event.widgetId);
+        await ensureWidgetEditAccess(widgetId, dashboardId);
         const name = requireString(payload, "name");
         const unit = optionalString(payload, "unit");
         const chartType = optionalString(payload, "chartType");
@@ -523,8 +585,8 @@ export async function POST(request: Request) {
       } else if (event.entityType === "metricEntry") {
         const id = requireString(payload, "id", event.entityId);
         const dashboardId = requireString(payload, "dashboardId", event.dashboardId);
-        await ensureAccessForDashboard(dashboardId);
         const widgetId = requireString(payload, "widgetId", event.widgetId);
+        await ensureWidgetEditAccess(widgetId, dashboardId);
         const metricId = requireString(payload, "metricId");
         const date = requireString(payload, "date");
         const value = Number(payload.value);
@@ -556,8 +618,8 @@ export async function POST(request: Request) {
       } else if (event.entityType === "calendarEvent") {
         const id = requireString(payload, "id", event.entityId);
         const dashboardId = requireString(payload, "dashboardId", event.dashboardId);
-        await ensureAccessForDashboard(dashboardId);
         const widgetId = requireString(payload, "widgetId", event.widgetId);
+        await ensureWidgetEditAccess(widgetId, dashboardId);
         const title = requireString(payload, "title");
         const startAt = parseDate(payload.startAt);
         const endAt = parseOptionalDate(payload.endAt);
@@ -603,8 +665,8 @@ export async function POST(request: Request) {
       } else if (event.entityType === "weatherCache") {
         const id = requireString(payload, "id", event.entityId);
         const dashboardId = requireString(payload, "dashboardId", event.dashboardId);
-        await ensureAccessForDashboard(dashboardId);
         const widgetId = requireString(payload, "widgetId", event.widgetId);
+        await ensureWidgetEditAccess(widgetId, dashboardId);
         const locationKey = requireString(payload, "locationKey");
         const fetchedAt = parseDate(payload.fetchedAt);
         const payloadValue = payload.payload ?? {};

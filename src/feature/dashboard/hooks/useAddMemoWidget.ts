@@ -7,7 +7,8 @@ const MIN_W = 3;
 const MIN_H = 4;
 export function useAddMemoWidget(
   dashboardId: Id | undefined,
-  widgets: Widget[] | undefined
+  widgets: Widget[] | undefined,
+  createdBy?: Id
 ) {
   return useCallback(async () => {
     if (!dashboardId) return;
@@ -21,7 +22,8 @@ export function useAddMemoWidget(
         minW: MIN_W,
         minH: MIN_H,
       }),
+      createdBy,
       payload: { type: "memo", data: { text: "", color: undefined } },
     });
-  }, [dashboardId, widgets]);
+  }, [dashboardId, widgets, createdBy]);
 }

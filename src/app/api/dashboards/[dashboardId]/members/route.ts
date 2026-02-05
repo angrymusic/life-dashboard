@@ -9,6 +9,16 @@ export const dynamic = "force-dynamic";
 type AddMemberInput = {
   email: string;
   dashboardName?: string;
+  role: "parent" | "child";
+};
+
+type UpdateMemberRoleInput = {
+  memberId: string;
+  role: "parent" | "child";
+};
+
+type RemoveMemberInput = {
+  memberId: string;
 };
 
 function jsonError(status: number, error: string, details?: Record<string, unknown>) {
@@ -20,6 +30,22 @@ function jsonError(status: number, error: string, details?: Record<string, unkno
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
+}
+
+const adminRoles = new Set(["parent", "admin"]);
+const memberRoles = new Set(["child", "member", "user"]);
+
+function normalizeRoleInput(value: unknown): "parent" | "child" | null {
+  if (typeof value !== "string") return null;
+  const normalized = value.trim().toLowerCase();
+  if (adminRoles.has(normalized)) return "parent";
+  if (memberRoles.has(normalized)) return "child";
+  return null;
+}
+
+function isAdminRole(role: string | null | undefined) {
+  if (!role) return false;
+  return adminRoles.has(role);
 }
 
 function parseAddMemberBody(body: unknown): AddMemberInput | null {
@@ -42,7 +68,36 @@ function parseAddMemberBody(body: unknown): AddMemberInput | null {
     }
   }
 
-  return { email, dashboardName };
+  let role: "parent" | "child" = "child";
+  if ("role" in body) {
+    const normalizedRole = normalizeRoleInput(body.role);
+    if (!normalizedRole) return null;
+    role = normalizedRole;
+  }
+
+  return { email, dashboardName, role };
+}
+
+function parseUpdateMemberRoleBody(body: unknown): UpdateMemberRoleInput | null {
+  if (!isRecord(body)) return null;
+  const memberIdValue = body.memberId;
+  if (typeof memberIdValue !== "string") return null;
+  const memberId = memberIdValue.trim();
+  if (!memberId) return null;
+
+  const normalizedRole = normalizeRoleInput(body.role);
+  if (!normalizedRole) return null;
+
+  return { memberId, role: normalizedRole };
+}
+
+function parseRemoveMemberBody(body: unknown): RemoveMemberInput | null {
+  if (!isRecord(body)) return null;
+  const memberIdValue = body.memberId;
+  if (typeof memberIdValue !== "string") return null;
+  const memberId = memberIdValue.trim();
+  if (!memberId) return null;
+  return { memberId };
 }
 
 function normalizeEmail(email: string) {
@@ -124,19 +179,18 @@ export async function POST(
     });
   }
 
-  if (dashboard.ownerId && dashboard.ownerId !== requester.id) {
-    if (!dashboard.groupId) {
-      return jsonError(403, "Forbidden");
-    }
+  if (dashboard.groupId) {
     const member = await prisma.groupMember.findFirst({
       where: {
         groupId: dashboard.groupId,
         userId: requester.id,
       },
     });
-    if (!member || member.role !== "parent") {
+    if (!member || !isAdminRole(member.role)) {
       return jsonError(403, "Forbidden");
     }
+  } else if (dashboard.ownerId && dashboard.ownerId !== requester.id) {
+    return jsonError(403, "Forbidden");
   }
 
   const normalizedEmail = normalizeEmail(parsed.email);
@@ -202,7 +256,7 @@ export async function POST(
     },
     update: {
       userId: targetUser.id,
-      role: "child",
+      role: parsed.role,
       displayName: targetUser.name ?? targetUser.email,
       avatarUrl: targetUser.image,
     },
@@ -210,7 +264,7 @@ export async function POST(
       groupId,
       userId: targetUser.id,
       email: targetUser.email,
-      role: "child",
+      role: parsed.role,
       displayName: targetUser.name ?? targetUser.email,
       avatarUrl: targetUser.image,
     },
@@ -228,6 +282,183 @@ export async function POST(
       groupId,
       updatedAt: dashboard.updatedAt.toISOString(),
     },
+    members: members.map(mapMember),
+  });
+}
+
+export async function PATCH(
+  request: Request,
+  { params }: { params: Promise<{ dashboardId: string }> }
+) {
+  const session = await getServerSession(authOptions);
+  const sessionEmail = session?.user?.email ?? null;
+  if (!sessionEmail) {
+    return jsonError(401, "Unauthorized");
+  }
+
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return jsonError(400, "Invalid JSON body");
+  }
+
+  const parsed = parseUpdateMemberRoleBody(body);
+  if (!parsed) {
+    return jsonError(400, "Invalid request body", {
+      hint: "Send { memberId, role }",
+    });
+  }
+
+  const { dashboardId } = await params;
+  const requester = await prisma.user.findUnique({
+    where: { email: sessionEmail },
+  });
+  if (!requester) {
+    return jsonError(401, "Unauthorized");
+  }
+
+  const dashboard = await prisma.dashboard.findUnique({
+    where: { id: dashboardId },
+  });
+  if (!dashboard) {
+    return jsonError(404, "Dashboard not found");
+  }
+  if (!dashboard.groupId) {
+    return jsonError(400, "Dashboard is not shared");
+  }
+
+  const requesterMember = await prisma.groupMember.findFirst({
+    where: {
+      groupId: dashboard.groupId,
+      userId: requester.id,
+    },
+  });
+  if (!requesterMember || !isAdminRole(requesterMember.role)) {
+    return jsonError(403, "Forbidden");
+  }
+
+  const targetMember = await prisma.groupMember.findFirst({
+    where: {
+      id: parsed.memberId,
+      groupId: dashboard.groupId,
+    },
+  });
+  if (!targetMember) {
+    return jsonError(404, "Member not found");
+  }
+
+  const firstMember = await prisma.groupMember.findFirst({
+    where: { groupId: dashboard.groupId },
+    orderBy: { createdAt: "asc" },
+    select: { id: true },
+  });
+  if (firstMember?.id === targetMember.id && parsed.role !== "parent") {
+    return jsonError(400, "첫 생성자의 권한은 변경할 수 없어요.");
+  }
+
+  await prisma.groupMember.update({
+    where: { id: targetMember.id },
+    data: { role: parsed.role },
+  });
+
+  const members = await prisma.groupMember.findMany({
+    where: { groupId: dashboard.groupId },
+    orderBy: { createdAt: "asc" },
+  });
+
+  return NextResponse.json({
+    ok: true,
+    members: members.map(mapMember),
+  });
+}
+
+export async function DELETE(
+  request: Request,
+  { params }: { params: Promise<{ dashboardId: string }> }
+) {
+  const session = await getServerSession(authOptions);
+  const sessionEmail = session?.user?.email ?? null;
+  if (!sessionEmail) {
+    return jsonError(401, "Unauthorized");
+  }
+
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return jsonError(400, "Invalid JSON body");
+  }
+
+  const parsed = parseRemoveMemberBody(body);
+  if (!parsed) {
+    return jsonError(400, "Invalid request body", {
+      hint: "Send { memberId }",
+    });
+  }
+
+  const { dashboardId } = await params;
+  const requester = await prisma.user.findUnique({
+    where: { email: sessionEmail },
+  });
+  if (!requester) {
+    return jsonError(401, "Unauthorized");
+  }
+
+  const dashboard = await prisma.dashboard.findUnique({
+    where: { id: dashboardId },
+  });
+  if (!dashboard) {
+    return jsonError(404, "Dashboard not found");
+  }
+  if (!dashboard.groupId) {
+    return jsonError(400, "Dashboard is not shared");
+  }
+
+  const requesterMember = await prisma.groupMember.findFirst({
+    where: {
+      groupId: dashboard.groupId,
+      userId: requester.id,
+    },
+  });
+  if (!requesterMember || !isAdminRole(requesterMember.role)) {
+    return jsonError(403, "Forbidden");
+  }
+
+  const targetMember = await prisma.groupMember.findFirst({
+    where: {
+      id: parsed.memberId,
+      groupId: dashboard.groupId,
+    },
+  });
+  if (!targetMember) {
+    return jsonError(404, "Member not found");
+  }
+
+  if (targetMember.userId && targetMember.userId === requester.id) {
+    return jsonError(400, "본인은 퇴출할 수 없어요.");
+  }
+
+  const firstMember = await prisma.groupMember.findFirst({
+    where: { groupId: dashboard.groupId },
+    orderBy: { createdAt: "asc" },
+    select: { id: true },
+  });
+  if (firstMember?.id === targetMember.id) {
+    return jsonError(400, "첫 생성자는 퇴출할 수 없어요.");
+  }
+
+  await prisma.groupMember.delete({
+    where: { id: targetMember.id },
+  });
+
+  const members = await prisma.groupMember.findMany({
+    where: { groupId: dashboard.groupId },
+    orderBy: { createdAt: "asc" },
+  });
+
+  return NextResponse.json({
+    ok: true,
     members: members.map(mapMember),
   });
 }
