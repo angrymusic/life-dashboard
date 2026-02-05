@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Header from "./Header";
 import Footer from "./Footer";
 import GridLayout from "./GridLayout";
@@ -12,11 +12,12 @@ import {
   deleteDashboardCascade,
   flushOutbox,
   getOrCreateLocalProfileId,
+  removeSharedDashboardLocally,
   updateDashboardName,
   syncDashboardsFromServer,
 } from "@/shared/db/db";
-import { useDashboards, useDashboardWidgets, useOutboxCount } from "@/shared/db/queries";
-import type { Dashboard, Id } from "@/shared/db/schema";
+import { useDashboards, useDashboardWidgets, useMembers, useOutboxCount } from "@/shared/db/queries";
+import type { Dashboard, Id, Widget } from "@/shared/db/schema";
 import { useEnsureDashboard } from "@/feature/dashboard/hooks/useEnsureDashboard";
 import { useAddCalendarWidget } from "@/feature/dashboard/hooks/useAddCalendarWidget";
 import { useAddChartWidget } from "@/feature/dashboard/hooks/useAddChartWidget";
@@ -68,6 +69,7 @@ export default function Dashboard() {
   const userSelectedRef = useRef(false);
   const pendingRestoreRef = useRef<string | null>(null);
   const outboxCount = useOutboxCount();
+  const members = useMembers();
   const flushRef = useRef(false);
 
   const setActiveDashboardIdByUser = (nextId?: Id) => {
@@ -170,18 +172,73 @@ export default function Dashboard() {
   const activeDashboard = dashboards?.find(
     (dashboard) => dashboard.id === dashboardId
   );
-  const canEdit = !activeDashboard?.groupId || isSignedIn;
+  const currentMember = useMemo(() => {
+    if (!activeDashboard?.groupId || !members || !authEmail) return undefined;
+    return members.find(
+      (member) =>
+        member.groupId === activeDashboard.groupId &&
+        member.email?.trim().toLowerCase() === authEmail
+    );
+  }, [activeDashboard?.groupId, members, authEmail]);
+  const isAdmin = !activeDashboard?.groupId || currentMember?.role === "parent";
+  const currentUserId = currentMember?.userId ?? undefined;
+  const canCreateWidget = !activeDashboard?.groupId
+    ? true
+    : Boolean(isSignedIn && currentMember);
+  const canEditWidget = useCallback(
+    (widget: Widget) => {
+      if (!activeDashboard?.groupId) return true;
+      if (!isSignedIn) return false;
+      if (isAdmin) return true;
+      if (!currentUserId) return false;
+      return widget.createdBy === currentUserId;
+    },
+    [activeDashboard?.groupId, isSignedIn, isAdmin, currentUserId]
+  );
 
   const widgets = useDashboardWidgets(dashboardId);
 
-  const addCalendarWidget = useAddCalendarWidget(dashboardId, widgets);
-  const addChartWidget = useAddChartWidget(dashboardId, widgets);
-  const addDdayWidget = useAddDdayWidget(dashboardId, widgets);
-  const addMoodWidget = useAddMoodWidget(dashboardId, widgets);
-  const addMemoWidget = useAddMemoWidget(dashboardId, widgets);
-  const addPhotoWidget = useAddPhotoWidget(dashboardId, widgets);
-  const addTodoWidget = useAddTodoWidget(dashboardId, widgets);
-  const addWeatherWidget = useAddWeatherWidget(dashboardId, widgets);
+  const widgetCreatorId = activeDashboard?.groupId ? currentUserId : undefined;
+  const addCalendarWidget = useAddCalendarWidget(
+    dashboardId,
+    widgets,
+    widgetCreatorId
+  );
+  const addChartWidget = useAddChartWidget(
+    dashboardId,
+    widgets,
+    widgetCreatorId
+  );
+  const addDdayWidget = useAddDdayWidget(
+    dashboardId,
+    widgets,
+    widgetCreatorId
+  );
+  const addMoodWidget = useAddMoodWidget(
+    dashboardId,
+    widgets,
+    widgetCreatorId
+  );
+  const addMemoWidget = useAddMemoWidget(
+    dashboardId,
+    widgets,
+    widgetCreatorId
+  );
+  const addPhotoWidget = useAddPhotoWidget(
+    dashboardId,
+    widgets,
+    widgetCreatorId
+  );
+  const addTodoWidget = useAddTodoWidget(
+    dashboardId,
+    widgets,
+    widgetCreatorId
+  );
+  const addWeatherWidget = useAddWeatherWidget(
+    dashboardId,
+    widgets,
+    widgetCreatorId
+  );
   const commitWidgetLayout = useCommitWidgetLayout();
 
   useEffect(() => {
@@ -210,6 +267,13 @@ export default function Dashboard() {
         members?: unknown[];
       }>(response);
       if (cancelled) return;
+      if (response.status === 403 || response.status === 404) {
+        await removeSharedDashboardLocally(
+          activeDashboard.id,
+          activeDashboard.groupId
+        );
+        return;
+      }
       if (!response.ok || !payload?.ok || !payload.dashboard) return;
 
       const snapshot = {
@@ -360,11 +424,11 @@ export default function Dashboard() {
         <GridLayout
           widgets={widgets}
           onLayoutCommit={commitWidgetLayout}
-          canEdit={canEdit}
+          canEditWidget={canEditWidget}
         />
       )}
 
-      <Footer onAddClick={() => setDialogOpen(true)} canEdit={canEdit} />
+      <Footer onAddClick={() => setDialogOpen(true)} canEdit={canCreateWidget} />
 
       <AddWidgetDialog
         open={dialogOpen}
@@ -379,7 +443,7 @@ export default function Dashboard() {
           if (type === "todo") void addTodoWidget();
           if (type === "weather") void addWeatherWidget();
         }}
-        disabled={!canEdit}
+        disabled={!canCreateWidget}
       />
     </div>
   );

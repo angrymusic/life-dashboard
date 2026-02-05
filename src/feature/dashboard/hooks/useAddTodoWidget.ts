@@ -8,7 +8,8 @@ const MIN_H = 6;
 
 export function useAddTodoWidget(
   dashboardId: Id | undefined,
-  widgets: Widget[] | undefined
+  widgets: Widget[] | undefined,
+  createdBy?: Id
 ) {
   return useCallback(async () => {
     if (!dashboardId) return;
@@ -22,6 +23,7 @@ export function useAddTodoWidget(
         minW: MIN_W,
         minH: MIN_H,
       }),
+      createdBy,
     });
-  }, [dashboardId, widgets]);
+  }, [dashboardId, widgets, createdBy]);
 }

@@ -1847,10 +1847,42 @@ export async function syncMembersFromServer(
 }
 
 export async function syncDashboardsFromServer(dashboards: Dashboard[]) {
-  if (!dashboards.length) return;
-  await db.transaction("rw", db.dashboards, async () => {
-    await db.dashboards.bulkPut(dashboards);
-  });
+  const serverIds = new Set(dashboards.map((dashboard) => dashboard.id));
+  const localDashboards = await db.dashboards.toArray();
+  const missingShared = localDashboards.filter(
+    (dashboard) => dashboard.groupId && !serverIds.has(dashboard.id)
+  );
+
+  if (dashboards.length) {
+    await db.transaction("rw", db.dashboards, async () => {
+      await db.dashboards.bulkPut(dashboards);
+    });
+  }
+
+  if (missingShared.length) {
+    for (const dashboard of missingShared) {
+      await removeSharedDashboardLocally(dashboard.id, dashboard.groupId);
+    }
+  }
+}
+
+export async function removeSharedDashboardLocally(
+  dashboardId: Id,
+  groupId?: Id
+) {
+  const resolvedGroupId =
+    groupId ?? (await db.dashboards.get(dashboardId))?.groupId;
+  if (!resolvedGroupId) return;
+
+  await deleteDashboardCascade(dashboardId, { skipOutbox: true });
+
+  const remaining = await db.dashboards
+    .where("groupId")
+    .equals(resolvedGroupId)
+    .count();
+  if (remaining === 0) {
+    await db.members.where("groupId").equals(resolvedGroupId).delete();
+  }
 }
 
 export async function clearOutboxForDashboard(dashboardId: Id) {

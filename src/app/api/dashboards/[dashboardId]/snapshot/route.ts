@@ -17,6 +17,13 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
+const adminRoles = new Set(["parent", "admin"]);
+
+function isAdminRole(role: string | null | undefined) {
+  if (!role) return false;
+  return adminRoles.has(role);
+}
+
 function parseDate(value: unknown) {
   if (typeof value !== "string") return new Date();
   const parsed = new Date(value);
@@ -241,9 +248,11 @@ export async function POST(
     if (existing.groupId) {
       const member = await prisma.groupMember.findFirst({
         where: { groupId: existing.groupId, userId },
-        select: { id: true },
+        select: { id: true, role: true },
       });
-      if (!member) return jsonError(403, "Forbidden");
+      if (!member || !isAdminRole(member.role)) {
+        return jsonError(403, "Forbidden");
+      }
     } else if (existing.ownerId && existing.ownerId !== userId) {
       return jsonError(403, "Forbidden");
     }

@@ -5,6 +5,7 @@ import { LayoutDashboard, User, Users } from "lucide-react";
 import Image from "next/image";
 import { Button } from "@/shared/ui/button";
 import { cn } from "@/shared/lib/utils";
+import { getLocalMembersGroupId } from "@/shared/db/db";
 import type { Dashboard, Id } from "@/shared/db/schema";
 import { useMembers } from "@/shared/db/queries";
 import { useSession } from "next-auth/react";
@@ -62,6 +63,28 @@ export default function Header({
   const isSignedIn = authStatus === "authenticated";
   const authDisplayName = authUser?.name ?? authUser?.email ?? "사용자";
   const authAvatarFallback = authDisplayName.trim().slice(0, 1) || "?";
+  const activeMembers = useMemo(() => {
+    if (!members) return [];
+    const dashboardId = activeDashboard?.id;
+    const groupId =
+      activeDashboard?.groupId ??
+      (dashboardId ? getLocalMembersGroupId(dashboardId) : undefined);
+    if (!groupId) return [];
+    return members
+      .filter((member) => member.groupId === groupId)
+      .slice()
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+  }, [members, activeDashboard?.groupId, activeDashboard?.id]);
+  const memberTitle = useMemo(() => {
+    if (!activeMembers.length) return "";
+    return activeMembers
+      .map((member) =>
+        [member.displayName, member.email].filter(Boolean).join(" · ")
+      )
+      .join(", ");
+  }, [activeMembers]);
+  const visibleMembers = activeMembers.slice(0, 4);
+  const extraCount = Math.max(0, activeMembers.length - visibleMembers.length);
 
   return (
     <header className="sticky top-0 z-50 grid grid-cols-[1fr_auto_1fr] items-center p-4 pointer-events-none">
@@ -94,6 +117,51 @@ export default function Header({
       </div>
 
       <div className="flex items-center justify-end gap-2 pointer-events-auto">
+        {activeMembers.length ? (
+          <div
+            className="flex items-center gap-2"
+            title={`구성원 ${activeMembers.length}명: ${memberTitle}`}
+          >
+            <div className="flex items-center">
+              {visibleMembers.map((member, index) => {
+                const fallback =
+                  member.displayName?.trim().slice(0, 1) ||
+                  member.email?.trim().slice(0, 1) ||
+                  "?";
+                return (
+                  <div
+                    key={member.id}
+                    className={cn(
+                      "relative flex h-7 w-7 items-center justify-center overflow-hidden rounded-full border border-white/80 bg-gray-100 text-[10px] font-semibold text-gray-700 shadow-sm dark:border-gray-900/60 dark:bg-gray-800 dark:text-gray-200",
+                      index === 0 ? "" : "-ml-3"
+                    )}
+                  >
+                    {member.avatarUrl ? (
+                      <Image
+                        src={member.avatarUrl}
+                        alt={member.displayName || "구성원"}
+                        fill
+                        sizes="28px"
+                        className="rounded-full object-cover"
+                        referrerPolicy="no-referrer"
+                      />
+                    ) : (
+                      <span>{fallback}</span>
+                    )}
+                  </div>
+                );
+              })}
+              {extraCount > 0 ? (
+                <div className="relative -ml-3 flex h-7 w-7 items-center justify-center rounded-full border border-white/80 bg-gray-900 text-[10px] font-semibold text-white shadow-sm dark:border-gray-900/60">
+                  +{extraCount}
+                </div>
+              ) : null}
+            </div>
+            <span className="text-[10px] text-gray-500">
+              {activeMembers.length}명
+            </span>
+          </div>
+        ) : null}
         <Button
           variant="outline"
           size="icon-lg"

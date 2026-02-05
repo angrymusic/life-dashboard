@@ -8,7 +8,8 @@ const MIN_H = 12;
 
 export function useAddCalendarWidget(
   dashboardId: Id | undefined,
-  widgets: Widget[] | undefined
+  widgets: Widget[] | undefined,
+  createdBy?: Id
 ) {
   return useCallback(async () => {
     if (!dashboardId) return;
@@ -22,6 +23,7 @@ export function useAddCalendarWidget(
         minW: MIN_W,
         minH: MIN_H,
       }),
+      createdBy,
     });
-  }, [dashboardId, widgets]);
+  }, [dashboardId, widgets, createdBy]);
 }
