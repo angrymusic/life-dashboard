@@ -4,6 +4,7 @@ import type { Dashboard } from "@/shared/db/schema";
 
 type EnsureOptions = {
   enabled?: boolean;
+  shouldCreate?: boolean;
 };
 
 export function useEnsureDashboard(
@@ -27,6 +28,7 @@ export function useEnsureDashboard(
       setError(null);
       return;
     }
+    if (options.shouldCreate === false) return;
     if (isCreatingRef.current) return;
 
     isCreatingRef.current = true;
@@ -49,7 +51,7 @@ export function useEnsureDashboard(
         setIsCreating(false);
       }
     })();
-  }, [dashboards, attempt, options.enabled]);
+  }, [dashboards, attempt, options.enabled, options.shouldCreate]);
 
   return { isCreating, error, retry };
 }
