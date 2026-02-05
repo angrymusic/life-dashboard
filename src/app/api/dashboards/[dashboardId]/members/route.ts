@@ -139,6 +139,24 @@ export async function POST(
     }
   }
 
+  const normalizedEmail = normalizeEmail(parsed.email);
+  const normalizedRequester = normalizeEmail(sessionEmail);
+  if (normalizedEmail === normalizedRequester) {
+    return jsonError(400, "Cannot add yourself");
+  }
+
+  const targetUser = await prisma.user.findFirst({
+    where: {
+      email: {
+        equals: normalizedEmail,
+        mode: "insensitive",
+      },
+    },
+  });
+  if (!targetUser || !targetUser.email) {
+    return jsonError(404, "User not found", { email: parsed.email });
+  }
+
   let groupId = dashboard.groupId;
   if (!groupId) {
     const group = await prisma.group.create({
@@ -173,24 +191,6 @@ export async function POST(
         avatarUrl: requester.image,
       },
     });
-  }
-
-  const normalizedEmail = normalizeEmail(parsed.email);
-  const normalizedRequester = normalizeEmail(sessionEmail);
-  if (normalizedEmail === normalizedRequester) {
-    return jsonError(400, "Cannot add yourself");
-  }
-
-  const targetUser = await prisma.user.findFirst({
-    where: {
-      email: {
-        equals: normalizedEmail,
-        mode: "insensitive",
-      },
-    },
-  });
-  if (!targetUser || !targetUser.email) {
-    return jsonError(404, "User not found", { email: parsed.email });
   }
 
   await prisma.groupMember.upsert({

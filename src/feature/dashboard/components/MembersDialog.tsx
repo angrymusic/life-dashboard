@@ -13,6 +13,7 @@ import {
 import type { Dashboard, Member } from "@/shared/db/schema";
 import {
   clearOutboxForDashboard,
+  getLocalMembersGroupId,
   pushDashboardSnapshot,
   setDashboardGroupId,
   syncMembersFromServer,
@@ -39,9 +40,11 @@ export default function MembersDialog({
   const [isAddingMember, setIsAddingMember] = useState(false);
 
   const activeMembers = useMemo(() => {
-    if (!members || !activeDashboard?.groupId) return [];
-    return members.filter((member) => member.groupId === activeDashboard.groupId);
-  }, [members, activeDashboard?.groupId]);
+    if (!members || !activeDashboard) return [];
+    const groupId =
+      activeDashboard.groupId ?? getLocalMembersGroupId(activeDashboard.id);
+    return members.filter((member) => member.groupId === groupId);
+  }, [members, activeDashboard?.groupId, activeDashboard?.id]);
 
   useEffect(() => {
     if (open) return;

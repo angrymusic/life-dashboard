@@ -42,18 +42,39 @@ async function readJson<T>(response: Response): Promise<T | null> {
 
 export default function Dashboard() {
   const dashboards = useDashboards();
-  const { status: authStatus } = useSession();
+  const { data: session, status: authStatus } = useSession();
   const isSignedIn = authStatus === "authenticated";
   const isAuthLoading = authStatus === "loading";
   const [serverDashboardsLoaded, setServerDashboardsLoaded] = useState(false);
+  const [serverDashboardCount, setServerDashboardCount] = useState<number | null>(
+    null
+  );
+  const authEmail = session?.user?.email?.trim().toLowerCase() ?? null;
+  const lastActiveDashboardKey =
+    typeof window === "undefined"
+      ? null
+      : authEmail
+        ? `lifedashboard.lastActiveDashboardId:${authEmail}`
+        : `lifedashboard.lastActiveDashboardId:local:${getOrCreateLocalProfileId()}`;
   const { error: dashboardError, isCreating, retry } = useEnsureDashboard(
     dashboards,
-    { enabled: !isAuthLoading && (!isSignedIn || serverDashboardsLoaded) }
+    {
+      enabled: !isAuthLoading && (!isSignedIn || serverDashboardsLoaded),
+      shouldCreate: !isSignedIn || serverDashboardCount === 0,
+    }
   );
   const [dialogOpen, setDialogOpen] = useState(false);
   const [activeDashboardId, setActiveDashboardId] = useState<Id | undefined>();
+  const userSelectedRef = useRef(false);
+  const pendingRestoreRef = useRef<string | null>(null);
   const outboxCount = useOutboxCount();
   const flushRef = useRef(false);
+
+  const setActiveDashboardIdByUser = (nextId?: Id) => {
+    userSelectedRef.current = true;
+    pendingRestoreRef.current = null;
+    setActiveDashboardId(nextId);
+  };
 
   useEffect(() => {
     if (!dashboards) return;
@@ -67,17 +88,60 @@ export default function Dashboard() {
     ) {
       return;
     }
-    setActiveDashboardId(dashboards[0].id);
-  }, [dashboards, activeDashboardId]);
+    let nextId: Id | undefined;
+    if (lastActiveDashboardKey) {
+      const storedId = localStorage.getItem(lastActiveDashboardKey);
+      if (storedId && dashboards.some((dashboard) => dashboard.id === storedId)) {
+        nextId = storedId;
+      }
+    }
+    setActiveDashboardId(nextId ?? dashboards[0].id);
+  }, [dashboards, activeDashboardId, lastActiveDashboardKey]);
+
+  useEffect(() => {
+    pendingRestoreRef.current = null;
+  }, [lastActiveDashboardKey]);
+
+  useEffect(() => {
+    if (!lastActiveDashboardKey) return;
+    if (!dashboards?.length) return;
+    if (userSelectedRef.current) return;
+
+    const storedId = localStorage.getItem(lastActiveDashboardKey);
+    if (!storedId) return;
+    if (!dashboards.some((dashboard) => dashboard.id === storedId)) return;
+    if (storedId === activeDashboardId) return;
+
+    pendingRestoreRef.current = storedId;
+    setActiveDashboardId(storedId);
+  }, [lastActiveDashboardKey, dashboards, activeDashboardId]);
+
+  useEffect(() => {
+    if (!lastActiveDashboardKey) return;
+    if (!activeDashboardId || !dashboards?.length) return;
+    if (!dashboards.some((dashboard) => dashboard.id === activeDashboardId)) {
+      return;
+    }
+    if (
+      pendingRestoreRef.current &&
+      pendingRestoreRef.current !== activeDashboardId
+    ) {
+      return;
+    }
+    localStorage.setItem(lastActiveDashboardKey, activeDashboardId);
+    pendingRestoreRef.current = null;
+  }, [activeDashboardId, dashboards, lastActiveDashboardKey]);
 
   useEffect(() => {
     if (isAuthLoading) return;
     if (!isSignedIn) {
       setServerDashboardsLoaded(true);
+      setServerDashboardCount(null);
       return;
     }
     let cancelled = false;
     setServerDashboardsLoaded(false);
+    setServerDashboardCount(null);
     void (async () => {
       try {
         const response = await fetch("/api/dashboards");
@@ -86,8 +150,11 @@ export default function Dashboard() {
           dashboards?: Dashboard[];
         }>(response);
         if (cancelled) return;
-        if (response.ok && payload?.ok && payload.dashboards) {
+        if (response.ok && payload?.ok && Array.isArray(payload.dashboards)) {
           await syncDashboardsFromServer(payload.dashboards);
+          if (!cancelled) {
+            setServerDashboardCount(payload.dashboards.length);
+          }
         }
       } finally {
         if (!cancelled) setServerDashboardsLoaded(true);
@@ -241,7 +308,7 @@ export default function Dashboard() {
       <Header
         dashboards={dashboards}
         activeDashboardId={dashboardId}
-        onSelectDashboard={setActiveDashboardId}
+        onSelectDashboard={setActiveDashboardIdByUser}
         onCreateDashboard={async (name) => {
           const trimmed = name.trim();
           if (!trimmed) return;
@@ -250,7 +317,7 @@ export default function Dashboard() {
             name: trimmed,
             ownerId,
           });
-          setActiveDashboardId(createdId);
+          setActiveDashboardIdByUser(createdId);
         }}
         onRenameDashboard={async (targetId, name) => {
           await updateDashboardName(targetId, name);
@@ -260,7 +327,7 @@ export default function Dashboard() {
           if (targetId !== activeDashboardId) return;
           const remaining =
             dashboards?.filter((dashboard) => dashboard.id !== targetId) ?? [];
-          setActiveDashboardId(remaining[0]?.id);
+          setActiveDashboardIdByUser(remaining[0]?.id);
         }}
       />
 

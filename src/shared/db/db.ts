@@ -45,6 +45,40 @@ export function getOrCreateLocalProfileId(): string {
   return v;
 }
 
+const LOCAL_MEMBERS_GROUP_PREFIX = "local:";
+
+export function getLocalMembersGroupId(dashboardId: Id) {
+  return `${LOCAL_MEMBERS_GROUP_PREFIX}${dashboardId}`;
+}
+
+type LocalOwnerProfile = {
+  displayName?: string;
+  email?: string;
+  avatarUrl?: string;
+  userId?: Id;
+};
+
+function buildLocalOwnerMember(
+  dashboardId: Id,
+  profile: LocalOwnerProfile,
+  now: ISODate
+): Member {
+  const email = profile.email?.trim() || undefined;
+  const displayName = profile.displayName?.trim() || email || "사용자";
+  const groupId = getLocalMembersGroupId(dashboardId);
+  return {
+    id: `${groupId}:owner`,
+    groupId,
+    role: "parent",
+    displayName,
+    avatarUrl: profile.avatarUrl ?? undefined,
+    email,
+    userId: profile.userId,
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+
 /** 위젯 생성 시 필요한 최소 payload 타입 */
 export type CreateWidgetPayload =
   | { type: "memo"; data: Pick<Memo, "text" | "color"> }
@@ -488,6 +522,7 @@ export async function createDashboard(params: {
   name: string;
   ownerId?: Id;
   groupId?: Id;
+  ownerProfile?: LocalOwnerProfile;
 }, options: WriteOptions = {}) {
   const now = nowIso();
   const dashboard: Dashboard = {
@@ -498,7 +533,7 @@ export async function createDashboard(params: {
     createdAt: now,
     updatedAt: now,
   };
-  await db.transaction("rw", [db.dashboards, db.outbox], async () => {
+  await db.transaction("rw", [db.dashboards, db.outbox, db.members], async () => {
     await db.dashboards.add(dashboard);
     await recordOutboxUpsert({
       entityType: "dashboard",
@@ -506,6 +541,16 @@ export async function createDashboard(params: {
       options,
       now,
     });
+    if (!params.groupId) {
+      const ownerProfile = params.ownerProfile ?? {};
+      await db.members.put(
+        buildLocalOwnerMember(
+          dashboard.id,
+          { ...ownerProfile, userId: ownerProfile.userId ?? params.ownerId },
+          now
+        )
+      );
+    }
   });
   return dashboard.id;
 }
@@ -513,9 +558,10 @@ export async function createDashboard(params: {
 export async function ensureDefaultDashboard(params: {
   name: string;
   ownerId?: Id;
+  ownerProfile?: LocalOwnerProfile;
 }) {
   let createdId: Id | null = null;
-  await db.transaction("rw", [db.dashboards, db.outbox], async () => {
+  await db.transaction("rw", [db.dashboards, db.outbox, db.members], async () => {
     const count = await db.dashboards.count();
     if (count > 0) return;
     const now = nowIso();
@@ -532,6 +578,14 @@ export async function ensureDefaultDashboard(params: {
       record: dashboard,
       now,
     });
+    const ownerProfile = params.ownerProfile ?? {};
+    await db.members.put(
+      buildLocalOwnerMember(
+        dashboard.id,
+        { ...ownerProfile, userId: ownerProfile.userId ?? params.ownerId },
+        now
+      )
+    );
     createdId = dashboard.id;
   });
   return createdId;
@@ -594,10 +648,15 @@ export async function deleteDashboardCascade(
       db.metricEntries,
       db.calendarEvents,
       db.weatherCache,
+      db.members,
       db.outbox,
     ],
     async () => {
       await db.outbox.where("dashboardId").equals(dashboardId).delete();
+      await db.members
+        .where("groupId")
+        .equals(getLocalMembersGroupId(dashboardId))
+        .delete();
       await Promise.all([
         db.widgets.where("dashboardId").equals(dashboardId).delete(),
         db.memos.where("dashboardId").equals(dashboardId).delete(),
