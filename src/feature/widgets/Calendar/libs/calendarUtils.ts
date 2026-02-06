@@ -19,6 +19,8 @@ const DAY_MS = 24 * 60 * 60 * 1000;
 
 export type CalendarEventInstance = CalendarEvent & {
   occurrenceKey?: string;
+  readOnly?: boolean;
+  source?: "holiday" | "anniversary" | "local";
 };
 
 export type CalendarEventSegment = {

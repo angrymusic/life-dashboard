@@ -32,6 +32,7 @@ import {
   toDateFromYmd,
   toYmd,
 } from "@/feature/widgets/Calendar/libs/calendarUtils";
+import { useSpecialDayEvents } from "@/feature/widgets/Calendar/hooks/useSpecialDayEvents";
 
 type RecurrenceType = "none" | "weekly" | "cycle" | "yearly";
 type DeleteScope = "all" | "future";
@@ -72,6 +73,57 @@ export function useCalendarWidget(widgetId: Id) {
   const todayYmd = useMemo(() => toYmd(new Date()), []);
   const viewDate = useMemo(() => startOfMonth(selectedDate), [selectedDate]);
   const viewRange = useMemo(() => getCalendarViewRange(viewDate), [viewDate]);
+  const { widgetSettings, showHoliday, showAnniversary } = useMemo(() => {
+    const settings =
+      widget?.settings &&
+      typeof widget.settings === "object" &&
+      !Array.isArray(widget.settings)
+        ? (widget.settings as Record<string, unknown>)
+        : {};
+    const holidayValue = settings.showHoliday;
+    const anniversaryValue = settings.showAnniversary;
+    return {
+      widgetSettings: settings,
+      showHoliday: typeof holidayValue === "boolean" ? holidayValue : true,
+      showAnniversary:
+        typeof anniversaryValue === "boolean" ? anniversaryValue : false,
+    };
+  }, [widget]);
+  const specialDays = useSpecialDayEvents({
+    widgetId,
+    dashboardId: widget?.dashboardId,
+    rangeStart: viewRange.start,
+    rangeEnd: viewRange.end,
+    enabled: showHoliday || showAnniversary,
+  });
+  const visibleSpecialEvents = useMemo(() => {
+    const events = specialDays.events ?? [];
+    if (showHoliday && showAnniversary) return events;
+    return events.filter((event) => {
+      if (event.source === "holiday") return showHoliday;
+      if (event.source === "anniversary") return showAnniversary;
+      return true;
+    });
+  }, [specialDays.events, showHoliday, showAnniversary]);
+  const specialDaysByYmd = useMemo(() => {
+    const map = new Map<
+      YMD,
+      { holidays: CalendarEventInstance[]; anniversaries: CalendarEventInstance[] }
+    >();
+    for (const event of visibleSpecialEvents) {
+      const date = new Date(event.startAt);
+      if (Number.isNaN(date.getTime())) continue;
+      const ymd = toYmd(date);
+      const existing = map.get(ymd) ?? { holidays: [], anniversaries: [] };
+      if (event.source === "holiday") {
+        existing.holidays.push(event);
+      } else if (event.source === "anniversary") {
+        existing.anniversaries.push(event);
+      }
+      map.set(ymd, existing);
+    }
+    return map;
+  }, [visibleSpecialEvents]);
   const eventsById = useMemo(() => {
     const map = new Map<Id, CalendarEvent>();
     for (const event of events ?? []) {
@@ -80,14 +132,14 @@ export function useCalendarWidget(widgetId: Id) {
     return map;
   }, [events]);
 
+  const mergedEvents = useMemo(
+    () => [...(events ?? []), ...visibleSpecialEvents],
+    [events, visibleSpecialEvents]
+  );
+
   const expandedEvents = useMemo(
-    () =>
-      expandCalendarEvents(
-        events ?? [],
-        viewRange.start,
-        viewRange.end
-      ),
-    [events, viewRange.start, viewRange.end]
+    () => expandCalendarEvents(mergedEvents, viewRange.start, viewRange.end),
+    [mergedEvents, viewRange.start, viewRange.end]
   );
 
   const eventsByDate = useMemo(() => {
@@ -270,7 +322,8 @@ export function useCalendarWidget(widgetId: Id) {
   }, [selectedYmd]);
 
   const startEdit = useCallback(
-    (event: CalendarEvent) => {
+    (event: CalendarEventInstance) => {
+      if (event.readOnly) return;
       const baseEvent = eventsById.get(event.id) ?? event;
       const start = new Date(baseEvent.startAt);
       if (Number.isNaN(start.getTime())) return;
@@ -543,6 +596,7 @@ export function useCalendarWidget(widgetId: Id) {
       scope: DeleteScope = "all",
       fromYmd?: YMD
     ) => {
+      if (event.readOnly) return;
       const baseEvent = eventsById.get(event.id);
       if (!event.recurrence || scope === "all" || !baseEvent || !baseEvent.recurrence) {
         await deleteCalendarEvent(event.id);
@@ -637,5 +691,11 @@ export function useCalendarWidget(widgetId: Id) {
     goToday,
     selectDate,
     canCreate: Boolean(widget?.dashboardId),
+    specialDayError: specialDays.error,
+    specialDayLoading: specialDays.isLoading,
+    specialDaysByYmd,
+    widgetSettings,
+    showHoliday,
+    showAnniversary,
   };
 }
