@@ -458,10 +458,11 @@ async function applyEventsToServer(events: OutboxEvent[]) {
   if (!response.ok && !payload.appliedIds) {
     throw new Error("Server sync failed");
   }
-  if (payload.dashboards?.length) {
+  const dashboards = payload.dashboards;
+  if (dashboards?.length) {
     await db.transaction("rw", db.dashboards, async () => {
       await Promise.all(
-        payload.dashboards.map((dashboard) =>
+        dashboards.map((dashboard) =>
           db.dashboards.update(dashboard.id, {
             updatedAt: dashboard.updatedAt,
           })

@@ -310,7 +310,7 @@ export default function Dashboard() {
 
       return true;
     },
-    [applyDashboardSnapshot, removeSharedDashboardLocally]
+    []
   );
 
   const handleApplyRemoteUpdate = useCallback(async () => {
@@ -386,19 +386,22 @@ export default function Dashboard() {
         }
         if (!response.ok || !payload?.ok || !payload.updatedAt) return;
 
+        const updatedAt = payload.updatedAt;
+        if (!updatedAt) return;
+
         const lastSeen = lastRemoteUpdatedAtRef.current;
         if (!lastSeen) {
-          setPendingRemoteUpdate(payload.updatedAt);
-          lastRemoteUpdatedAtRef.current = payload.updatedAt;
+          setPendingRemoteUpdate(updatedAt);
+          lastRemoteUpdatedAtRef.current = updatedAt;
           return;
         }
-        if (payload.updatedAt <= lastSeen) return;
+        if (updatedAt <= lastSeen) return;
 
         setPendingRemoteUpdate((current) => {
-          if (current && payload.updatedAt <= current) return current;
-          return payload.updatedAt;
+          if (current && updatedAt <= current) return current;
+          return updatedAt;
         });
-        lastRemoteUpdatedAtRef.current = payload.updatedAt;
+        lastRemoteUpdatedAtRef.current = updatedAt;
       } finally {
         if (!cancelled) schedule();
       }
