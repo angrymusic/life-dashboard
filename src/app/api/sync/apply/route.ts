@@ -23,6 +23,7 @@ type SyncEvent = {
 type ApplyResult = {
   ok: boolean;
   appliedIds: string[];
+  dashboards?: { id: string; updatedAt: string }[];
   errors?: { id: string; error: string }[];
 };
 
@@ -40,6 +41,7 @@ const allowedEntityTypes = new Set([
   "calendarEvent",
   "weatherCache",
 ]);
+const touchExcludedEntityTypes = new Set(["weatherCache"]);
 
 function jsonError(status: number, error: string, details?: Record<string, unknown>) {
   return NextResponse.json(
@@ -219,12 +221,29 @@ export async function POST(request: Request) {
 
   const appliedIds: string[] = [];
   const errors: { id: string; error: string }[] = [];
+  const touchedDashboards = new Map<string, Date>();
+  let touchedDashboardUpdates: { id: string; updatedAt: string }[] = [];
+
+  const markDashboardTouched = (
+    dashboardId: string | undefined | null,
+    touchedAt: Date
+  ) => {
+    if (!dashboardId) return;
+    const existing = touchedDashboards.get(dashboardId);
+    if (!existing || existing < touchedAt) {
+      touchedDashboards.set(dashboardId, touchedAt);
+    }
+  };
 
   for (const event of events) {
     if (!allowedEntityTypes.has(event.entityType)) {
       errors.push({ id: event.id, error: "Unsupported entity type" });
       continue;
     }
+
+    const touchDashboardId =
+      event.entityType === "dashboard" ? event.entityId : event.dashboardId;
+    const shouldTouchDashboard = !touchExcludedEntityTypes.has(event.entityType);
 
     try {
       if (event.operation === "delete") {
@@ -282,6 +301,9 @@ export async function POST(request: Request) {
           await prisma.weatherCache.deleteMany({ where: { id: event.entityId } });
         }
 
+        if (shouldTouchDashboard) {
+          markDashboardTouched(touchDashboardId, new Date());
+        }
         appliedIds.push(event.id);
         continue;
       }
@@ -696,6 +718,9 @@ export async function POST(request: Request) {
         });
       }
 
+      if (shouldTouchDashboard) {
+        markDashboardTouched(touchDashboardId, new Date());
+      }
       appliedIds.push(event.id);
     } catch (err) {
       const message = err instanceof Error ? err.message : "Unknown error";
@@ -703,9 +728,32 @@ export async function POST(request: Request) {
     }
   }
 
+  if (touchedDashboards.size) {
+    const entries = [...touchedDashboards.entries()];
+    try {
+      await Promise.all(
+        entries.map(([dashboardId, updatedAt]) =>
+          prisma.dashboard.updateMany({
+            where: { id: dashboardId },
+            data: { updatedAt },
+          })
+        )
+      );
+      touchedDashboardUpdates = entries.map(([dashboardId, updatedAt]) => ({
+        id: dashboardId,
+        updatedAt: updatedAt.toISOString(),
+      }));
+    } catch {
+      // Ignore timestamp update failures to avoid blocking sync responses.
+    }
+  }
+
   const result: ApplyResult = {
     ok: errors.length === 0,
     appliedIds,
+    ...(touchedDashboardUpdates.length
+      ? { dashboards: touchedDashboardUpdates }
+      : {}),
     ...(errors.length ? { errors } : {}),
   };
 
