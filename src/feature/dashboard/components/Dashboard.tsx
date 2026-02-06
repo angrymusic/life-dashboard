@@ -71,6 +71,10 @@ export default function Dashboard() {
   const outboxCount = useOutboxCount();
   const members = useMembers();
   const flushRef = useRef(false);
+  const [pendingRemoteUpdate, setPendingRemoteUpdate] = useState<string | null>(
+    null
+  );
+  const lastRemoteUpdatedAtRef = useRef<string | null>(null);
 
   const setActiveDashboardIdByUser = (nextId?: Id) => {
     userSelectedRef.current = true;
@@ -172,6 +176,17 @@ export default function Dashboard() {
   const activeDashboard = dashboards?.find(
     (dashboard) => dashboard.id === dashboardId
   );
+
+  useEffect(() => {
+    lastRemoteUpdatedAtRef.current = null;
+    setPendingRemoteUpdate(null);
+  }, [activeDashboard?.id, activeDashboard?.groupId]);
+
+  useEffect(() => {
+    if (!activeDashboard?.updatedAt) return;
+    lastRemoteUpdatedAtRef.current = activeDashboard.updatedAt;
+  }, [activeDashboard?.updatedAt]);
+
   const currentMember = useMemo(() => {
     if (!activeDashboard?.groupId || !members || !authEmail) return undefined;
     return members.find(
@@ -241,14 +256,10 @@ export default function Dashboard() {
   );
   const commitWidgetLayout = useCommitWidgetLayout();
 
-  useEffect(() => {
-    if (!activeDashboard?.groupId) return;
-    if (!isSignedIn) return;
-
-    let cancelled = false;
-    void (async () => {
+  const fetchAndApplySnapshot = useCallback(
+    async (targetDashboardId: Id, groupId?: string) => {
       const response = await fetch(
-        `/api/dashboards/${activeDashboard.id}/snapshot`
+        `/api/dashboards/${targetDashboardId}/snapshot`
       );
       const payload = await readJson<{
         ok?: boolean;
@@ -266,15 +277,13 @@ export default function Dashboard() {
         weatherCache?: unknown[];
         members?: unknown[];
       }>(response);
-      if (cancelled) return;
       if (response.status === 403 || response.status === 404) {
-        await removeSharedDashboardLocally(
-          activeDashboard.id,
-          activeDashboard.groupId
-        );
-        return;
+        if (groupId) {
+          await removeSharedDashboardLocally(targetDashboardId, groupId);
+        }
+        return false;
       }
-      if (!response.ok || !payload?.ok || !payload.dashboard) return;
+      if (!response.ok || !payload?.ok || !payload.dashboard) return false;
 
       const snapshot = {
         dashboard: payload.dashboard,
@@ -293,12 +302,42 @@ export default function Dashboard() {
       } as Parameters<typeof applyDashboardSnapshot>[0];
 
       await applyDashboardSnapshot(snapshot);
-    })();
 
-    return () => {
-      cancelled = true;
-    };
-  }, [activeDashboard?.id, activeDashboard?.groupId, isSignedIn]);
+      const updatedAt = (payload.dashboard as { updatedAt?: string })?.updatedAt;
+      if (typeof updatedAt === "string") {
+        lastRemoteUpdatedAtRef.current = updatedAt;
+      }
+
+      return true;
+    },
+    []
+  );
+
+  const handleApplyRemoteUpdate = useCallback(async () => {
+    if (!activeDashboard?.id || !activeDashboard.groupId) return;
+    const applied = await fetchAndApplySnapshot(
+      activeDashboard.id,
+      activeDashboard.groupId
+    );
+    if (applied) {
+      setPendingRemoteUpdate(null);
+    }
+  }, [activeDashboard?.groupId, activeDashboard?.id, fetchAndApplySnapshot]);
+
+  useEffect(() => {
+    if (!activeDashboard?.groupId) return;
+    if (!isSignedIn) return;
+
+    void (async () => {
+      const applied = await fetchAndApplySnapshot(
+        activeDashboard.id,
+        activeDashboard.groupId
+      );
+      if (applied) {
+        setPendingRemoteUpdate(null);
+      }
+    })();
+  }, [activeDashboard?.id, activeDashboard?.groupId, fetchAndApplySnapshot, isSignedIn]);
 
   useEffect(() => {
     if (!dashboardId) return;
@@ -306,51 +345,75 @@ export default function Dashboard() {
     if (!isSignedIn) return;
     if (widgets === undefined || widgets.length > 0) return;
 
-    let cancelled = false;
     void (async () => {
-      const response = await fetch(`/api/dashboards/${dashboardId}/snapshot`);
-      const payload = await readJson<{
-        ok?: boolean;
-        dashboard?: unknown;
-        widgets?: unknown[];
-        memos?: unknown[];
-        todos?: unknown[];
-        ddays?: unknown[];
-        photos?: unknown[];
-        moods?: unknown[];
-        notices?: unknown[];
-        metrics?: unknown[];
-        metricEntries?: unknown[];
-        calendarEvents?: unknown[];
-        weatherCache?: unknown[];
-        members?: unknown[];
-      }>(response);
-      if (cancelled) return;
-      if (!response.ok || !payload?.ok || !payload.dashboard) return;
-
-      const snapshot = {
-        dashboard: payload.dashboard,
-        widgets: payload.widgets ?? [],
-        memos: payload.memos ?? [],
-        todos: payload.todos ?? [],
-        ddays: payload.ddays ?? [],
-        photos: payload.photos ?? [],
-        moods: payload.moods ?? [],
-        notices: payload.notices ?? [],
-        metrics: payload.metrics ?? [],
-        metricEntries: payload.metricEntries ?? [],
-        calendarEvents: payload.calendarEvents ?? [],
-        weatherCache: payload.weatherCache ?? [],
-        members: payload.members ?? [],
-      } as Parameters<typeof applyDashboardSnapshot>[0];
-
-      await applyDashboardSnapshot(snapshot);
+      await fetchAndApplySnapshot(dashboardId);
     })();
+  }, [dashboardId, activeDashboard?.groupId, fetchAndApplySnapshot, isSignedIn, widgets]);
+
+  useEffect(() => {
+    if (!activeDashboard?.groupId) return;
+    if (!isSignedIn) return;
+
+    const dashboardId = activeDashboard.id;
+    const groupId = activeDashboard.groupId;
+    let cancelled = false;
+    let timeoutId: number | undefined;
+
+    const schedule = () => {
+      timeoutId = window.setTimeout(poll, 10000);
+    };
+
+    const poll = async () => {
+      if (cancelled) return;
+      if (document.visibilityState === "hidden") {
+        schedule();
+        return;
+      }
+      try {
+        const response = await fetch(
+          `/api/dashboards/${dashboardId}/updates`,
+          { cache: "no-store" }
+        );
+        const payload = await readJson<{
+          ok?: boolean;
+          updatedAt?: string;
+        }>(response);
+        if (cancelled) return;
+        if (response.status === 403 || response.status === 404) {
+          await removeSharedDashboardLocally(dashboardId, groupId);
+          cancelled = true;
+          return;
+        }
+        if (!response.ok || !payload?.ok || !payload.updatedAt) return;
+
+        const updatedAt = payload.updatedAt;
+        if (!updatedAt) return;
+
+        const lastSeen = lastRemoteUpdatedAtRef.current;
+        if (!lastSeen) {
+          setPendingRemoteUpdate(updatedAt);
+          lastRemoteUpdatedAtRef.current = updatedAt;
+          return;
+        }
+        if (updatedAt <= lastSeen) return;
+
+        setPendingRemoteUpdate((current) => {
+          if (current && updatedAt <= current) return current;
+          return updatedAt;
+        });
+        lastRemoteUpdatedAtRef.current = updatedAt;
+      } finally {
+        if (!cancelled) schedule();
+      }
+    };
+
+    schedule();
 
     return () => {
       cancelled = true;
+      if (timeoutId) window.clearTimeout(timeoutId);
     };
-  }, [dashboardId, activeDashboard?.groupId, isSignedIn, widgets]);
+  }, [activeDashboard?.groupId, activeDashboard?.id, isSignedIn]);
 
   useEffect(() => {
     if (!isSignedIn) return;
@@ -394,6 +457,22 @@ export default function Dashboard() {
           setActiveDashboardIdByUser(remaining[0]?.id);
         }}
       />
+
+      {activeDashboard?.groupId && isSignedIn && pendingRemoteUpdate ? (
+        <div className="pointer-events-none fixed left-1/2 top-20 z-50 w-[calc(100%-2rem)] max-w-sm -translate-x-1/2 sm:max-w-md">
+          <div className="pointer-events-auto flex items-center justify-between gap-3 rounded-full border border-primary/20 bg-accent/40 px-4 py-2 text-xs text-accent-foreground shadow-lg backdrop-blur-sm">
+            <span>새로운 변경사항이 있어요.</span>
+            <Button
+              variant="outline"
+              size="sm"
+              className="rounded-full border-primary/30 bg-white/70 text-primary shadow-none hover:bg-white hover:text-primary"
+              onClick={() => void handleApplyRemoteUpdate()}
+            >
+              새로고침
+            </Button>
+          </div>
+        </div>
+      ) : null}
 
       {activeDashboard?.groupId && !isSignedIn ? (
         <div className="mx-4 mt-3 rounded-lg border border-amber-200/70 bg-amber-50 px-4 py-3 text-xs text-amber-700">
