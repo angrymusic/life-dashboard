@@ -25,6 +25,7 @@ export default function Dashboard() {
     setActiveDashboardIdByUser,
     dashboardError,
     isCreating,
+    isServerBootstrapReady,
     retry,
   } = useDashboardBootstrapping({
     dashboards,
@@ -52,6 +53,7 @@ export default function Dashboard() {
     dashboardId,
     widgets,
     isSignedIn,
+    isServerBootstrapReady,
   });
 
   const {

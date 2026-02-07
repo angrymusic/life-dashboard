@@ -82,7 +82,9 @@ export async function ensureDefaultDashboard(params: {
   name: string;
   ownerId?: Id;
   ownerProfile?: LocalOwnerProfile;
-}) {
+},
+options: WriteOptions = {}
+) {
   let createdId: Id | null = null;
   await db.transaction("rw", [db.dashboards, db.outbox, db.members], async () => {
     const count = await db.dashboards.count();
@@ -99,6 +101,7 @@ export async function ensureDefaultDashboard(params: {
     await recordOutboxUpsert({
       entityType: "dashboard",
       record: dashboard,
+      options,
       now,
     });
     const ownerProfile = params.ownerProfile ?? {};
@@ -253,6 +256,45 @@ export async function syncMembersFromServer(members: Member[], groupId?: Id) {
       await db.members.bulkPut(members);
     }
   });
+}
+
+export async function removeDefaultDraftDashboardForSignedInUser(params: {
+  ownerId: Id;
+  serverDashboards: Dashboard[];
+}) {
+  if (params.serverDashboards.length === 0) return;
+
+  const serverDashboardIds = new Set(
+    params.serverDashboards.map((dashboard) => dashboard.id)
+  );
+  const localDashboards = await db.dashboards
+    .where("ownerId")
+    .equals(params.ownerId)
+    .toArray();
+  const candidates = localDashboards.filter(
+    (dashboard) =>
+      !dashboard.groupId &&
+      dashboard.name === "My Dashboard" &&
+      !serverDashboardIds.has(dashboard.id)
+  );
+
+  for (const dashboard of candidates) {
+    const [widgetCount, outboxEvents] = await Promise.all([
+      db.widgets.where("dashboardId").equals(dashboard.id).count(),
+      db.outbox.where("dashboardId").equals(dashboard.id).toArray(),
+    ]);
+    if (widgetCount > 0) continue;
+
+    const hasOnlyCreateEvent = outboxEvents.every(
+      (event) =>
+        event.entityType === "dashboard" &&
+        event.operation === "upsert" &&
+        event.entityId === dashboard.id
+    );
+    if (!hasOnlyCreateEvent) continue;
+
+    await deleteDashboardCascade(dashboard.id, { skipOutbox: true });
+  }
 }
 
 export async function syncDashboardsFromServer(dashboards: Dashboard[]) {

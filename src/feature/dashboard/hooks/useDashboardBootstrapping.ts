@@ -1,5 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { getOrCreateLocalProfileId, syncDashboardsFromServer } from "@/shared/db/db";
+import {
+  getOrCreateLocalProfileId,
+  removeDefaultDraftDashboardForSignedInUser,
+  syncDashboardsFromServer,
+} from "@/shared/db/db";
 import type { Dashboard, Id } from "@/shared/db/schema";
 import { useEnsureDashboard } from "@/feature/dashboard/hooks/useEnsureDashboard";
 import { readJson } from "@/feature/dashboard/libs/readJson";
@@ -16,6 +20,7 @@ type BootstrappingResult = {
   setActiveDashboardIdByUser: (nextId?: Id) => void;
   dashboardError: string | null;
   isCreating: boolean;
+  isServerBootstrapReady: boolean;
   retry: () => void;
 };
 
@@ -121,6 +126,10 @@ export function useDashboardBootstrapping({
         }>(response);
         if (cancelled) return;
         if (response.ok && payload?.ok && Array.isArray(payload.dashboards)) {
+          await removeDefaultDraftDashboardForSignedInUser({
+            ownerId: getOrCreateLocalProfileId(),
+            serverDashboards: payload.dashboards,
+          });
           await syncDashboardsFromServer(payload.dashboards);
           if (!cancelled) {
             setServerDashboardCount(payload.dashboards.length);
@@ -141,14 +150,18 @@ export function useDashboardBootstrapping({
     {
       enabled: !isAuthLoading && (!isSignedIn || serverDashboardsLoaded),
       shouldCreate: !isSignedIn || serverDashboardCount === 0,
+      skipOutbox: !isSignedIn,
     }
   );
+
+  const isServerBootstrapReady = !isSignedIn || serverDashboardsLoaded;
 
   return {
     activeDashboardId,
     setActiveDashboardIdByUser,
     dashboardError,
     isCreating,
+    isServerBootstrapReady,
     retry,
   };
 }

@@ -13,6 +13,7 @@ type SyncParams = {
   dashboardId?: Id;
   widgets?: Widget[];
   isSignedIn: boolean;
+  isServerBootstrapReady: boolean;
 };
 
 type SyncResult = {
@@ -25,6 +26,7 @@ export function useDashboardSync({
   dashboardId,
   widgets,
   isSignedIn,
+  isServerBootstrapReady,
 }: SyncParams): SyncResult {
   const [pendingRemoteUpdate, setPendingRemoteUpdate] = useState<string | null>(
     null
@@ -203,6 +205,7 @@ export function useDashboardSync({
   }, [activeDashboard?.groupId, activeDashboard?.id, isSignedIn]);
 
   useEffect(() => {
+    if (!isServerBootstrapReady) return;
     if (!isSignedIn) return;
     if (typeof outboxCount !== "number" || outboxCount === 0) return;
     if (flushRef.current) return;
@@ -215,7 +218,7 @@ export function useDashboardSync({
         flushRef.current = false;
       }
     })();
-  }, [isSignedIn, outboxCount]);
+  }, [isSignedIn, isServerBootstrapReady, outboxCount]);
 
   return { pendingRemoteUpdate, applyRemoteUpdate };
 }
