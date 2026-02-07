@@ -1,6 +1,6 @@
 import type { WidgetOption } from "@/feature/dashboard/types/widget";
 
-export const widgetOptions: WidgetOption[] = [
+export const widgetOptions = [
   {
     type: "calendar",
     title: "달력",
@@ -41,4 +41,6 @@ export const widgetOptions: WidgetOption[] = [
     title: "날씨",
     description: "이번 주 날씨를 확인해요",
   },
-];
+] as const satisfies WidgetOption[];
+
+export type AddableWidgetType = (typeof widgetOptions)[number]["type"];

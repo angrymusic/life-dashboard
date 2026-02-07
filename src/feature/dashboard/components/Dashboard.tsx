@@ -19,14 +19,7 @@ import {
 import { useDashboards, useDashboardWidgets, useMembers, useOutboxCount } from "@/shared/db/queries";
 import type { Dashboard, Id, Widget } from "@/shared/db/schema";
 import { useEnsureDashboard } from "@/feature/dashboard/hooks/useEnsureDashboard";
-import { useAddCalendarWidget } from "@/feature/dashboard/hooks/useAddCalendarWidget";
-import { useAddChartWidget } from "@/feature/dashboard/hooks/useAddChartWidget";
-import { useAddDdayWidget } from "@/feature/dashboard/hooks/useAddDdayWidget";
-import { useAddMoodWidget } from "@/feature/dashboard/hooks/useAddMoodWidget";
-import { useAddMemoWidget } from "@/feature/dashboard/hooks/useAddMemoWidget";
-import { useAddPhotoWidget } from "@/feature/dashboard/hooks/useAddPhotoWidget";
-import { useAddTodoWidget } from "@/feature/dashboard/hooks/useAddTodoWidget";
-import { useAddWeatherWidget } from "@/feature/dashboard/hooks/useAddWeatherWidget";
+import { useAddWidget } from "@/feature/dashboard/hooks/useAddWidget";
 import { useCommitWidgetLayout } from "@/feature/dashboard/hooks/useCommitWidgetLayout";
 import { Button } from "@/shared/ui/button";
 import { useSession } from "next-auth/react";
@@ -214,46 +207,7 @@ export default function Dashboard() {
   const widgets = useDashboardWidgets(dashboardId);
 
   const widgetCreatorId = activeDashboard?.groupId ? currentUserId : undefined;
-  const addCalendarWidget = useAddCalendarWidget(
-    dashboardId,
-    widgets,
-    widgetCreatorId
-  );
-  const addChartWidget = useAddChartWidget(
-    dashboardId,
-    widgets,
-    widgetCreatorId
-  );
-  const addDdayWidget = useAddDdayWidget(
-    dashboardId,
-    widgets,
-    widgetCreatorId
-  );
-  const addMoodWidget = useAddMoodWidget(
-    dashboardId,
-    widgets,
-    widgetCreatorId
-  );
-  const addMemoWidget = useAddMemoWidget(
-    dashboardId,
-    widgets,
-    widgetCreatorId
-  );
-  const addPhotoWidget = useAddPhotoWidget(
-    dashboardId,
-    widgets,
-    widgetCreatorId
-  );
-  const addTodoWidget = useAddTodoWidget(
-    dashboardId,
-    widgets,
-    widgetCreatorId
-  );
-  const addWeatherWidget = useAddWeatherWidget(
-    dashboardId,
-    widgets,
-    widgetCreatorId
-  );
+  const addWidget = useAddWidget(dashboardId, widgets, widgetCreatorId);
   const commitWidgetLayout = useCommitWidgetLayout();
 
   const fetchAndApplySnapshot = useCallback(
@@ -512,16 +466,7 @@ export default function Dashboard() {
       <AddWidgetDialog
         open={dialogOpen}
         onOpenChange={setDialogOpen}
-        onAdd={(type) => {
-          if (type === "calendar") void addCalendarWidget();
-          if (type === "chart") void addChartWidget();
-          if (type === "dday") void addDdayWidget();
-          if (type === "mood") void addMoodWidget();
-          if (type === "memo") void addMemoWidget();
-          if (type === "photo") void addPhotoWidget();
-          if (type === "todo") void addTodoWidget();
-          if (type === "weather") void addWeatherWidget();
-        }}
+        onAdd={(type) => void addWidget(type)}
         disabled={!canCreateWidget}
       />
     </div>
