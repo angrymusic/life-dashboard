@@ -2,6 +2,11 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/server/auth";
 import prisma from "@/server/prisma";
+import {
+  persistSnapshot,
+  serializeSnapshot,
+  validateSnapshotPayload,
+} from "./snapshot-pipeline";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -13,27 +18,11 @@ function jsonError(status: number, error: string, details?: Record<string, unkno
   );
 }
 
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null;
-}
-
 const adminRoles = new Set(["parent", "admin"]);
 
 function isAdminRole(role: string | null | undefined) {
   if (!role) return false;
   return adminRoles.has(role);
-}
-
-function parseDate(value: unknown) {
-  if (typeof value !== "string") return new Date();
-  const parsed = new Date(value);
-  if (Number.isNaN(parsed.getTime())) return new Date();
-  return parsed;
-}
-
-function parseOptionalDate(value: unknown) {
-  if (value === null || value === undefined) return undefined;
-  return parseDate(value as string);
 }
 
 function toIso(value: Date | null | undefined) {
@@ -72,28 +61,6 @@ async function ensureAccess(dashboardId: string, userId: string) {
   }
   return dashboard;
 }
-
-type SnapshotPayload = {
-  dashboard: {
-    id: string;
-    name: string;
-    ownerId?: string;
-    groupId?: string;
-    createdAt?: string;
-    updatedAt?: string;
-  };
-  widgets?: Record<string, unknown>[];
-  memos?: Record<string, unknown>[];
-  todos?: Record<string, unknown>[];
-  ddays?: Record<string, unknown>[];
-  photos?: Record<string, unknown>[];
-  moods?: Record<string, unknown>[];
-  notices?: Record<string, unknown>[];
-  metrics?: Record<string, unknown>[];
-  metricEntries?: Record<string, unknown>[];
-  calendarEvents?: Record<string, unknown>[];
-  weatherCache?: Record<string, unknown>[];
-};
 
 export async function GET(
   _request: Request,
@@ -229,15 +196,12 @@ export async function POST(
     return jsonError(400, "Invalid JSON body");
   }
 
-  if (!isRecord(body) || !isRecord(body.dashboard)) {
-    return jsonError(400, "Invalid snapshot payload");
-  }
-
-  const snapshot = body as SnapshotPayload;
   const { dashboardId } = await params;
-  if (snapshot.dashboard.id && snapshot.dashboard.id !== dashboardId) {
-    return jsonError(400, "Dashboard ID mismatch");
+  const validation = validateSnapshotPayload(body, dashboardId);
+  if (!validation.ok) {
+    return jsonError(validation.status, validation.error);
   }
+  const snapshot = validation.snapshot;
 
   const existing = await prisma.dashboard.findUnique({
     where: { id: dashboardId },
@@ -258,219 +222,10 @@ export async function POST(
     }
   }
 
-  const dashboardName = snapshot.dashboard.name?.trim() || "Dashboard";
-  const groupId = existing?.groupId ?? snapshot.dashboard.groupId ?? null;
-
-  const widgets = snapshot.widgets ?? [];
-  const memos = snapshot.memos ?? [];
-  const todos = snapshot.todos ?? [];
-  const ddays = snapshot.ddays ?? [];
-  const photos = snapshot.photos ?? [];
-  const moods = snapshot.moods ?? [];
-  const notices = snapshot.notices ?? [];
-  const metrics = snapshot.metrics ?? [];
-  const metricEntries = snapshot.metricEntries ?? [];
-  const calendarEvents = snapshot.calendarEvents ?? [];
-  const weatherCache = snapshot.weatherCache ?? [];
+  const serialized = serializeSnapshot(snapshot, dashboardId);
 
   await prisma.$transaction(async (tx) => {
-    await tx.metricEntry.deleteMany({ where: { dashboardId } });
-    await tx.metric.deleteMany({ where: { dashboardId } });
-    await tx.memo.deleteMany({ where: { dashboardId } });
-    await tx.todo.deleteMany({ where: { dashboardId } });
-    await tx.dday.deleteMany({ where: { dashboardId } });
-    await tx.photo.deleteMany({ where: { dashboardId } });
-    await tx.mood.deleteMany({ where: { dashboardId } });
-    await tx.notice.deleteMany({ where: { dashboardId } });
-    await tx.calendarEvent.deleteMany({ where: { dashboardId } });
-    await tx.weatherCache.deleteMany({ where: { dashboardId } });
-    await tx.widget.deleteMany({ where: { dashboardId } });
-
-    await tx.dashboard.upsert({
-      where: { id: dashboardId },
-      update: {
-        name: dashboardName,
-        ownerId: existing?.ownerId ?? userId,
-        groupId: groupId ?? undefined,
-      },
-      create: {
-        id: dashboardId,
-        name: dashboardName,
-        ownerId: userId,
-        groupId: groupId ?? undefined,
-      },
-    });
-
-    if (widgets.length) {
-      await tx.widget.createMany({
-        data: widgets.map((item) => ({
-          id: String(item.id),
-          dashboardId,
-          type: String(item.type),
-          layout: item.layout ?? {},
-          settings: item.settings ?? undefined,
-          createdBy: item.createdBy ? String(item.createdBy) : undefined,
-          createdAt: parseDate(item.createdAt),
-          updatedAt: parseDate(item.updatedAt),
-        })),
-      });
-    }
-
-    if (memos.length) {
-      await tx.memo.createMany({
-        data: memos.map((item) => ({
-          id: String(item.id),
-          widgetId: String(item.widgetId),
-          dashboardId,
-          text: String(item.text ?? ""),
-          color: item.color ? String(item.color) : undefined,
-          createdAt: parseDate(item.createdAt),
-          updatedAt: parseDate(item.updatedAt),
-        })),
-      });
-    }
-
-    if (todos.length) {
-      await tx.todo.createMany({
-        data: todos.map((item) => ({
-          id: String(item.id),
-          widgetId: String(item.widgetId),
-          dashboardId,
-          date: String(item.date ?? ""),
-          title: String(item.title ?? ""),
-          done: Boolean(item.done),
-          order: typeof item.order === "number" ? item.order : undefined,
-          createdAt: parseDate(item.createdAt),
-          updatedAt: parseDate(item.updatedAt),
-        })),
-      });
-    }
-
-    if (ddays.length) {
-      await tx.dday.createMany({
-        data: ddays.map((item) => ({
-          id: String(item.id),
-          widgetId: String(item.widgetId),
-          dashboardId,
-          title: String(item.title ?? ""),
-          date: String(item.date ?? ""),
-          color: item.color ? String(item.color) : undefined,
-          createdAt: parseDate(item.createdAt),
-          updatedAt: parseDate(item.updatedAt),
-        })),
-      });
-    }
-
-    if (photos.length) {
-      await tx.photo.createMany({
-        data: photos.map((item) => ({
-          id: String(item.id),
-          widgetId: String(item.widgetId),
-          dashboardId,
-          storagePath: String(item.storagePath ?? ""),
-          mimeType: String(item.mimeType ?? ""),
-          caption: item.caption ? String(item.caption) : undefined,
-          takenAt: parseOptionalDate(item.takenAt),
-          createdAt: parseDate(item.createdAt),
-          updatedAt: parseDate(item.updatedAt),
-        })),
-      });
-    }
-
-    if (moods.length) {
-      await tx.mood.createMany({
-        data: moods.map((item) => ({
-          id: String(item.id),
-          widgetId: String(item.widgetId),
-          dashboardId,
-          date: String(item.date ?? ""),
-          mood: String(item.mood ?? ""),
-          note: item.note ? String(item.note) : undefined,
-          createdAt: parseDate(item.createdAt),
-          updatedAt: parseDate(item.updatedAt),
-        })),
-      });
-    }
-
-    if (notices.length) {
-      await tx.notice.createMany({
-        data: notices.map((item) => ({
-          id: String(item.id),
-          widgetId: String(item.widgetId),
-          dashboardId,
-          title: String(item.title ?? ""),
-          body: String(item.body ?? ""),
-          pinned: typeof item.pinned === "boolean" ? item.pinned : undefined,
-          createdAt: parseDate(item.createdAt),
-          updatedAt: parseDate(item.updatedAt),
-        })),
-      });
-    }
-
-    if (metrics.length) {
-      await tx.metric.createMany({
-        data: metrics.map((item) => ({
-          id: String(item.id),
-          widgetId: String(item.widgetId),
-          dashboardId,
-          name: String(item.name ?? ""),
-          unit: item.unit ? String(item.unit) : undefined,
-          chartType: item.chartType ? String(item.chartType) : undefined,
-          createdAt: parseDate(item.createdAt),
-          updatedAt: parseDate(item.updatedAt),
-        })),
-      });
-    }
-
-    if (metricEntries.length) {
-      await tx.metricEntry.createMany({
-        data: metricEntries.map((item) => ({
-          id: String(item.id),
-          widgetId: String(item.widgetId),
-          dashboardId,
-          metricId: String(item.metricId ?? ""),
-          date: String(item.date ?? ""),
-          value: Number(item.value ?? 0),
-          createdAt: parseDate(item.createdAt),
-          updatedAt: parseDate(item.updatedAt),
-        })),
-      });
-    }
-
-    if (calendarEvents.length) {
-      await tx.calendarEvent.createMany({
-        data: calendarEvents.map((item) => ({
-          id: String(item.id),
-          widgetId: String(item.widgetId),
-          dashboardId,
-          title: String(item.title ?? ""),
-          startAt: parseDate(item.startAt),
-          endAt: parseOptionalDate(item.endAt),
-          allDay: typeof item.allDay === "boolean" ? item.allDay : undefined,
-          location: item.location ? String(item.location) : undefined,
-          description: item.description ? String(item.description) : undefined,
-          color: item.color ? String(item.color) : undefined,
-          recurrence: item.recurrence ?? undefined,
-          createdAt: parseDate(item.createdAt),
-          updatedAt: parseDate(item.updatedAt),
-        })),
-      });
-    }
-
-    if (weatherCache.length) {
-      await tx.weatherCache.createMany({
-        data: weatherCache.map((item) => ({
-          id: String(item.id),
-          widgetId: String(item.widgetId),
-          dashboardId,
-          locationKey: String(item.locationKey ?? ""),
-          payload: item.payload ?? {},
-          fetchedAt: parseDate(item.fetchedAt),
-          createdAt: parseDate(item.createdAt),
-          updatedAt: parseDate(item.updatedAt),
-        })),
-      });
-    }
+    await persistSnapshot(tx, serialized, { userId, existing });
   });
 
   return NextResponse.json({ ok: true });
