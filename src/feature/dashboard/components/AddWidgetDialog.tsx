@@ -9,13 +9,15 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/shared/ui/dialog";
-import type { WidgetType } from "@/shared/db/schema";
-import { widgetOptions } from "@/feature/dashboard/libs/widgetOptions";
+import {
+  widgetOptions,
+  type AddableWidgetType,
+} from "@/feature/dashboard/libs/widgetRegistry";
 
 type Props = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onAdd: (type: WidgetType) => void;
+  onAdd: (type: AddableWidgetType) => void;
   disabled?: boolean;
 };
 
@@ -25,9 +27,9 @@ export function AddWidgetDialog({
   onAdd,
   disabled = false,
 }: Props) {
-  const [selected, setSelected] = useState<WidgetType | null>(null);
+  const [selected, setSelected] = useState<AddableWidgetType | null>(null);
   const optionRefs = useRef<Array<HTMLButtonElement | null>>([]);
-  const handleAdd = (type: WidgetType) => {
+  const handleAdd = (type: AddableWidgetType) => {
     if (disabled) return;
     onAdd(type);
     onOpenChange(false);

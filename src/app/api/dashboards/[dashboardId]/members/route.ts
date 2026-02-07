@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/server/auth";
 import prisma from "@/server/prisma";
+import { jsonError, parseJson } from "@/server/api-response";
+import { isAdminRole, requireUser } from "@/server/api-auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -21,31 +21,18 @@ type RemoveMemberInput = {
   memberId: string;
 };
 
-function jsonError(status: number, error: string, details?: Record<string, unknown>) {
-  return NextResponse.json(
-    { ok: false, error, ...(details ? { details } : {}) },
-    { status }
-  );
-}
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
-const adminRoles = new Set(["parent", "admin"]);
 const memberRoles = new Set(["child", "member", "user"]);
 
 function normalizeRoleInput(value: unknown): "parent" | "child" | null {
   if (typeof value !== "string") return null;
   const normalized = value.trim().toLowerCase();
-  if (adminRoles.has(normalized)) return "parent";
+  if (isAdminRole(normalized)) return "parent";
   if (memberRoles.has(normalized)) return "child";
   return null;
-}
-
-function isAdminRole(role: string | null | undefined) {
-  if (!role) return false;
-  return adminRoles.has(role);
 }
 
 function parseAddMemberBody(body: unknown): AddMemberInput | null {
@@ -132,18 +119,13 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ dashboardId: string }> }
 ) {
-  const session = await getServerSession(authOptions);
-  const sessionEmail = session?.user?.email ?? null;
-  if (!sessionEmail) {
-    return jsonError(401, "Unauthorized");
-  }
+  const userResult = await requireUser();
+  if (!userResult.ok) return userResult.response;
+  const { user: requester, email: sessionEmail } = userResult.context;
 
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    return jsonError(400, "Invalid JSON body");
-  }
+  const parsedBody = await parseJson(request);
+  if (!parsedBody.ok) return parsedBody.response;
+  const body = parsedBody.body;
 
   const parsed = parseAddMemberBody(body);
   if (!parsed) {
@@ -153,13 +135,6 @@ export async function POST(
   }
 
   const { dashboardId } = await params;
-  const requester = await prisma.user.findUnique({
-    where: { email: sessionEmail },
-  });
-  if (!requester) {
-    return jsonError(401, "Unauthorized");
-  }
-
   let dashboard = await prisma.dashboard.findUnique({
     where: { id: dashboardId },
   });
@@ -290,18 +265,13 @@ export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ dashboardId: string }> }
 ) {
-  const session = await getServerSession(authOptions);
-  const sessionEmail = session?.user?.email ?? null;
-  if (!sessionEmail) {
-    return jsonError(401, "Unauthorized");
-  }
+  const userResult = await requireUser();
+  if (!userResult.ok) return userResult.response;
+  const { user: requester } = userResult.context;
 
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    return jsonError(400, "Invalid JSON body");
-  }
+  const parsedBody = await parseJson(request);
+  if (!parsedBody.ok) return parsedBody.response;
+  const body = parsedBody.body;
 
   const parsed = parseUpdateMemberRoleBody(body);
   if (!parsed) {
@@ -311,13 +281,6 @@ export async function PATCH(
   }
 
   const { dashboardId } = await params;
-  const requester = await prisma.user.findUnique({
-    where: { email: sessionEmail },
-  });
-  if (!requester) {
-    return jsonError(401, "Unauthorized");
-  }
-
   const dashboard = await prisma.dashboard.findUnique({
     where: { id: dashboardId },
   });
@@ -377,18 +340,13 @@ export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ dashboardId: string }> }
 ) {
-  const session = await getServerSession(authOptions);
-  const sessionEmail = session?.user?.email ?? null;
-  if (!sessionEmail) {
-    return jsonError(401, "Unauthorized");
-  }
+  const userResult = await requireUser();
+  if (!userResult.ok) return userResult.response;
+  const { user: requester } = userResult.context;
 
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    return jsonError(400, "Invalid JSON body");
-  }
+  const parsedBody = await parseJson(request);
+  if (!parsedBody.ok) return parsedBody.response;
+  const body = parsedBody.body;
 
   const parsed = parseRemoveMemberBody(body);
   if (!parsed) {
@@ -398,12 +356,6 @@ export async function DELETE(
   }
 
   const { dashboardId } = await params;
-  const requester = await prisma.user.findUnique({
-    where: { email: sessionEmail },
-  });
-  if (!requester) {
-    return jsonError(401, "Unauthorized");
-  }
 
   const dashboard = await prisma.dashboard.findUnique({
     where: { id: dashboardId },

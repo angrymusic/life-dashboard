@@ -1,5 +1,6 @@
 // app/api/migrate/import/route.ts
 import { NextResponse } from "next/server";
+import { jsonError, parseJson } from "@/server/api-response";
 import path from "path";
 import fs from "fs/promises";
 
@@ -445,13 +446,6 @@ function parseImportBody(body: unknown, headerUserId?: string | null): ParsedImp
   return null;
 }
 
-/** =========
- *  IO helpers
- *  ========= */
-function jsonError(status: number, error: string, details?: Record<string, unknown>) {
-  return NextResponse.json({ ok: false, error, ...(details ? { details } : {}) }, { status });
-}
-
 async function ensureDir(dirPath: string) {
   await fs.mkdir(dirPath, { recursive: true });
 }
@@ -477,12 +471,9 @@ async function stageSnapshotToDisk(params: { userId: string; snapshot: SnapshotW
 export async function POST(request: Request) {
   const headerUserId = request.headers.get("x-user-id");
 
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    return jsonError(400, "Invalid JSON body");
-  }
+  const parsedBody = await parseJson(request);
+  if (!parsedBody.ok) return parsedBody.response;
+  const body = parsedBody.body;
 
   const parsed = parseImportBody(body, headerUserId);
   if (!parsed) {

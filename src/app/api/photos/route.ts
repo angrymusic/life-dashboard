@@ -1,13 +1,10 @@
 import { NextResponse } from "next/server";
+import { jsonError } from "@/server/api-response";
 import path from "path";
 import fs from "fs/promises";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-function jsonError(status: number, error: string) {
-  return NextResponse.json({ ok: false, error }, { status });
-}
 
 function contentTypeFromExt(ext: string) {
   switch (ext.toLowerCase()) {

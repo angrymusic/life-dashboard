@@ -1,25 +1,10 @@
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/server/auth";
 import prisma from "@/server/prisma";
+import { jsonError } from "@/server/api-response";
+import { requireUser } from "@/server/api-auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-function jsonError(status: number, error: string, details?: Record<string, unknown>) {
-  return NextResponse.json(
-    { ok: false, error, ...(details ? { details } : {}) },
-    { status }
-  );
-}
-
-async function getUserIdFromSession() {
-  const session = await getServerSession(authOptions);
-  const email = session?.user?.email ?? null;
-  if (!email) return null;
-  const user = await prisma.user.findUnique({ where: { email } });
-  return user?.id ?? null;
-}
 
 async function ensureAccess(dashboardId: string, userId: string) {
   const dashboard = await prisma.dashboard.findUnique({
@@ -43,8 +28,9 @@ export async function GET(
   _request: Request,
   { params }: { params: Promise<{ dashboardId: string }> }
 ) {
-  const userId = await getUserIdFromSession();
-  if (!userId) return jsonError(401, "Unauthorized");
+  const userResult = await requireUser();
+  if (!userResult.ok) return userResult.response;
+  const userId = userResult.context.userId;
 
   const { dashboardId } = await params;
   const dashboard = await ensureAccess(dashboardId, userId);
