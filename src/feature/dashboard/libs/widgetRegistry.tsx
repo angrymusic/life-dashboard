@@ -102,7 +102,7 @@ const widgetRegistryEntries = [
     title: "차트",
     description: "목표 진행을 시간 순으로 기록해요",
     create: createWithLayout(
-      { w: 5, h: 8, minW: 5, minH: 8 },
+      { w: 6, h: 9, minW: 5, minH: 8 },
       {
         settings: { isConfigured: false },
         payload: {

@@ -335,7 +335,7 @@ export function CalendarWidget({
                 type="button"
                 onClick={() => selectDate(day.date)}
                 className={cn(
-                  "flex h-[56px] flex-col rounded-md border border-transparent p-0.5 text-left transition @[360px]:h-[72px]",
+                  "flex h-[60px] flex-col rounded-md border border-transparent p-0.5 text-left transition @[360px]:h-[72px]",
                   day.inMonth
                     ? "text-gray-900 dark:text-gray-100"
                     : "text-gray-400",
@@ -383,13 +383,13 @@ export function CalendarWidget({
                     ) : null}
                   </div>
                 </div>
-                <div className="mt-0.5 space-y-0.5 hidden @[360px]:block">
+                <div className="mt-0.5 space-y-0.5">
                   {segments.map((segment, index) => {
                     if (!segment) {
                       return (
                         <div
                           key={`${day.ymd}-empty-${index}`}
-                          className="h-3"
+                          className="h-2.5 @[360px]:h-3"
                           aria-hidden="true"
                         />
                       );
@@ -411,7 +411,7 @@ export function CalendarWidget({
                         key={`${segment.event.id}-${day.ymd}`}
                         title={segment.event.title}
                         className={cn(
-                          "pointer-events-none flex h-3 items-center truncate px-1 text-[10px] font-medium leading-none",
+                          "pointer-events-none flex h-2.5 items-center truncate px-1 text-[9px] font-medium leading-none @[360px]:h-3 @[360px]:text-[10px]",
                           segment.isStart ? "rounded-l-sm" : "",
                           segment.isEnd ? "rounded-r-sm" : "",
                           segment.isStart ? "" : "-ml-2",

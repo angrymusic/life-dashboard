@@ -146,7 +146,10 @@ export function WeatherWidget({ widgetId, canEdit = true }: WeatherWidgetProps) 
           </div>
         ) : null}
 
-        <div className="mt-3 flex-1 min-h-0 overflow-auto">
+        <div
+          className="mt-3 flex-1 min-h-0 overflow-y-auto overflow-x-hidden pr-1 touch-pan-y overscroll-y-contain"
+          style={{ WebkitOverflowScrolling: "touch" }}
+        >
           {!forecast && isLoading ? (
             <div className="text-sm text-gray-400">날씨 불러오는 중...</div>
           ) : null}
@@ -154,13 +157,16 @@ export function WeatherWidget({ widgetId, canEdit = true }: WeatherWidgetProps) 
             <div className="text-sm text-red-500">{error}</div>
           ) : null}
           {forecast ? (
-            <div className="mb-3">
+            <div className="mb-3 min-w-0">
               <div className="mb-2 text-xs text-gray-500">이번 주</div>
-              <div className="flex gap-2 overflow-x-auto pb-1">
+              <div
+                className="flex gap-2 overflow-x-auto overflow-y-hidden pb-1 touch-pan-x overscroll-x-contain"
+                style={{ WebkitOverflowScrolling: "touch" }}
+              >
                 {days.map((day, index) => (
                   <div
                     key={day.ymd}
-                    className="flex min-w-[100px] items-center justify-between rounded-md border border-gray-200/70 dark:border-gray-700 px-2 py-1.5 text-[11px]"
+                    className="flex min-w-[100px] shrink-0 items-center justify-between rounded-md border border-gray-200/70 dark:border-gray-700 px-2 py-1.5 text-[11px]"
                   >
                     <div className="flex items-center gap-2">
                       <span className="w-7 font-medium">
