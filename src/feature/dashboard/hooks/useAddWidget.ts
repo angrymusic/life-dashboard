@@ -1,8 +1,10 @@
 import { useCallback } from "react";
 import { addWidget } from "@/shared/db/db";
 import type { Id, Widget } from "@/shared/db/schema";
-import { WidgetRegistry } from "@/feature/dashboard/libs/widgetRegistry";
-import type { AddableWidgetType } from "@/feature/dashboard/libs/widgetOptions";
+import {
+  WidgetRegistry,
+  type AddableWidgetType,
+} from "@/feature/dashboard/libs/widgetRegistry";
 
 export function useAddWidget(
   dashboardId: Id | undefined,

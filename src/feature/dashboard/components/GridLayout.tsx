@@ -9,18 +9,14 @@ import ReactGridLayout, {
 } from "react-grid-layout";
 import type { Layout } from "react-grid-layout";
 import type { Widget } from "@/shared/db/schema";
-import { CalendarWidget } from "@/feature/widgets/Calendar/components/CalendarWidget";
-import { ChartWidget } from "@/feature/widgets/Chart/components/ChartWidget";
-import { DdayWidget } from "@/feature/widgets/Dday/components/DdayWidget";
-import { MoodWidget } from "@/feature/widgets/Mood/components/MoodWidget";
-import { MemoWidget } from "@/feature/widgets/Memo/components/MemoWidget";
-import { PhotoWidget } from "@/feature/widgets/Photo/components/PhotoWidget";
-import { TodoWidget } from "@/feature/widgets/Todo/components/TodoWidget";
-import { WeatherWidget } from "@/feature/widgets/Weather/components/WeatherWidget";
 import {
   getLayoutUpdates,
   toGridLayout,
 } from "@/feature/dashboard/libs/layout";
+import {
+  WidgetRegistry,
+  isAddableWidgetType,
+} from "@/feature/dashboard/libs/widgetRegistry";
 
 type Props = {
   widgets: Widget[];
@@ -88,32 +84,12 @@ export default function GridLayout({
         >
           {widgets.map((w) => {
             const canEdit = editableById.get(w.id) ?? true;
+            const entry = isAddableWidgetType(w.type)
+              ? WidgetRegistry[w.type]
+              : null;
             return (
               <div key={w.id} className="h-full">
-                {w.type === "memo" ? (
-                  <MemoWidget widgetId={w.id} canEdit={canEdit} />
-                ) : null}
-                {w.type === "todo" ? (
-                  <TodoWidget widgetId={w.id} canEdit={canEdit} />
-                ) : null}
-                {w.type === "dday" ? (
-                  <DdayWidget widgetId={w.id} canEdit={canEdit} />
-                ) : null}
-                {w.type === "mood" ? (
-                  <MoodWidget widgetId={w.id} canEdit={canEdit} />
-                ) : null}
-                {w.type === "photo" ? (
-                  <PhotoWidget widgetId={w.id} canEdit={canEdit} />
-                ) : null}
-                {w.type === "chart" ? (
-                  <ChartWidget widgetId={w.id} canEdit={canEdit} />
-                ) : null}
-                {w.type === "calendar" ? (
-                  <CalendarWidget widgetId={w.id} canEdit={canEdit} />
-                ) : null}
-                {w.type === "weather" ? (
-                  <WeatherWidget widgetId={w.id} canEdit={canEdit} />
-                ) : null}
+                {entry ? entry.render({ widgetId: w.id, canEdit }) : null}
               </div>
             );
           })}

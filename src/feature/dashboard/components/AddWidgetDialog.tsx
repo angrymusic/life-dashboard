@@ -12,7 +12,7 @@ import {
 import {
   widgetOptions,
   type AddableWidgetType,
-} from "@/feature/dashboard/libs/widgetOptions";
+} from "@/feature/dashboard/libs/widgetRegistry";
 
 type Props = {
   open: boolean;
