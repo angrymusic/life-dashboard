@@ -1,14 +1,11 @@
 // app/api/migrate/upload-photo/route.ts
 import { NextResponse } from "next/server";
+import { jsonError } from "@/server/api-response";
 import path from "path";
 import fs from "fs/promises";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-function jsonError(status: number, error: string, details?: Record<string, unknown>) {
-  return NextResponse.json({ ok: false, error, ...(details ? { details } : {}) }, { status });
-}
 
 async function ensureDir(dirPath: string) {
   await fs.mkdir(dirPath, { recursive: true });

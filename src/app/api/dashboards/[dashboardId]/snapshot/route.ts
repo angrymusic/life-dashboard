@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/server/auth";
 import prisma from "@/server/prisma";
+import { jsonError, parseJson } from "@/server/api-response";
+import { isAdminRole, requireUser } from "@/server/api-auth";
 import {
   persistSnapshot,
   serializeSnapshot,
@@ -11,30 +11,8 @@ import {
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-function jsonError(status: number, error: string, details?: Record<string, unknown>) {
-  return NextResponse.json(
-    { ok: false, error, ...(details ? { details } : {}) },
-    { status }
-  );
-}
-
-const adminRoles = new Set(["parent", "admin"]);
-
-function isAdminRole(role: string | null | undefined) {
-  if (!role) return false;
-  return adminRoles.has(role);
-}
-
 function toIso(value: Date | null | undefined) {
   return value ? value.toISOString() : undefined;
-}
-
-async function getUserIdFromSession() {
-  const session = await getServerSession(authOptions);
-  const email = session?.user?.email ?? null;
-  if (!email) return null;
-  const user = await prisma.user.findUnique({ where: { email } });
-  return user?.id ?? null;
 }
 
 async function ensureAccess(dashboardId: string, userId: string) {
@@ -66,8 +44,9 @@ export async function GET(
   _request: Request,
   { params }: { params: Promise<{ dashboardId: string }> }
 ) {
-  const userId = await getUserIdFromSession();
-  if (!userId) return jsonError(401, "Unauthorized");
+  const userResult = await requireUser();
+  if (!userResult.ok) return userResult.response;
+  const userId = userResult.context.userId;
 
   const { dashboardId } = await params;
   const dashboard = await ensureAccess(dashboardId, userId);
@@ -186,15 +165,13 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ dashboardId: string }> }
 ) {
-  const userId = await getUserIdFromSession();
-  if (!userId) return jsonError(401, "Unauthorized");
+  const userResult = await requireUser();
+  if (!userResult.ok) return userResult.response;
+  const userId = userResult.context.userId;
 
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    return jsonError(400, "Invalid JSON body");
-  }
+  const parsedBody = await parseJson(request);
+  if (!parsedBody.ok) return parsedBody.response;
+  const body = parsedBody.body;
 
   const { dashboardId } = await params;
   const validation = validateSnapshotPayload(body, dashboardId);

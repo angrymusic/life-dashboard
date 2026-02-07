@@ -1,22 +1,14 @@
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/server/auth";
 import prisma from "@/server/prisma";
+import { requireUser } from "@/server/api-auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-function jsonError(status: number, error: string) {
-  return NextResponse.json({ ok: false, error }, { status });
-}
-
 export async function GET() {
-  const session = await getServerSession(authOptions);
-  const email = session?.user?.email ?? null;
-  if (!email) return jsonError(401, "Unauthorized");
-
-  const user = await prisma.user.findUnique({ where: { email } });
-  if (!user) return jsonError(401, "Unauthorized");
+  const userResult = await requireUser();
+  if (!userResult.ok) return userResult.response;
+  const { user } = userResult.context;
 
   const memberships = await prisma.groupMember.findMany({
     where: { userId: user.id },
@@ -31,18 +23,21 @@ export async function GET() {
       : Promise.resolve([]),
   ]);
 
-  const dashboards = [...owned, ...shared].reduce<
-    Array<{
+  const dashboardsMap = new Map<
+    string,
+    {
       id: string;
       name: string;
       ownerId: string | null;
       groupId: string | null;
       createdAt: string;
       updatedAt: string;
-    }>
-  >((acc, dashboard) => {
-    if (acc.some((item) => item.id === dashboard.id)) return acc;
-    acc.push({
+    }
+  >();
+
+  for (const dashboard of [...owned, ...shared]) {
+    if (dashboardsMap.has(dashboard.id)) continue;
+    dashboardsMap.set(dashboard.id, {
       id: dashboard.id,
       name: dashboard.name,
       ownerId: dashboard.ownerId,
@@ -50,8 +45,9 @@ export async function GET() {
       createdAt: dashboard.createdAt.toISOString(),
       updatedAt: dashboard.updatedAt.toISOString(),
     });
-    return acc;
-  }, []);
+  }
+
+  const dashboards = Array.from(dashboardsMap.values());
 
   return NextResponse.json({ ok: true, dashboards });
 }

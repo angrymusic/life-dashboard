@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/server/auth";
 import prisma from "@/server/prisma";
+import { jsonError, parseJson } from "@/server/api-response";
+import { isAdminRole, requireUser } from "@/server/api-auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -43,13 +43,6 @@ const allowedEntityTypes = new Set([
 ]);
 const touchExcludedEntityTypes = new Set(["weatherCache"]);
 
-function jsonError(status: number, error: string, details?: Record<string, unknown>) {
-  return NextResponse.json(
-    { ok: false, error, ...(details ? { details } : {}) },
-    { status }
-  );
-}
-
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
@@ -77,13 +70,6 @@ function parseDate(value: unknown, fallback?: Date) {
 function parseOptionalDate(value: unknown) {
   if (value === null || value === undefined) return undefined;
   return parseDate(value as string);
-}
-
-const adminRoles = new Set(["parent", "admin"]);
-
-function isAdminRole(role: string | null | undefined) {
-  if (!role) return false;
-  return adminRoles.has(role);
 }
 
 function parseEvents(body: unknown): SyncEvent[] | null {
@@ -117,20 +103,13 @@ function parseEvents(body: unknown): SyncEvent[] | null {
 }
 
 export async function POST(request: Request) {
-  const session = await getServerSession(authOptions);
-  const userId = session?.user?.email
-    ? (await prisma.user.findUnique({ where: { email: session.user.email } }))?.id
-    : null;
-  if (!userId) {
-    return jsonError(401, "Unauthorized");
-  }
+  const userResult = await requireUser();
+  if (!userResult.ok) return userResult.response;
+  const userId = userResult.context.userId;
 
-  let body: unknown;
-  try {
-    body = await request.json();
-  } catch {
-    return jsonError(400, "Invalid JSON body");
-  }
+  const parsedBody = await parseJson(request);
+  if (!parsedBody.ok) return parsedBody.response;
+  const body = parsedBody.body;
 
   const events = parseEvents(body);
   if (!events) {
