@@ -44,7 +44,7 @@ const widgetRegistryEntries = [
     type: "calendar",
     title: "달력",
     description: "월간 일정과 이벤트를 확인해요",
-    create: createWithLayout({ w: 5, h: 12, minW: 5, minH: 12 }),
+    create: createWithLayout({ w: 5, h: 13, minW: 5, minH: 12 }),
     render: ({ widgetId, canEdit }) => (
       <CalendarWidget widgetId={widgetId} canEdit={canEdit} />
     ),

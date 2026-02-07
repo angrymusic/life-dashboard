@@ -87,8 +87,8 @@ export default function Header({
   const extraCount = Math.max(0, activeMembers.length - visibleMembers.length);
 
   return (
-    <header className="sticky top-0 z-50 grid grid-cols-[1fr_auto_1fr] items-center p-4 pointer-events-none">
-      <div className="flex items-center gap-2 pointer-events-auto">
+    <header className="pointer-events-none sticky top-0 z-50 grid grid-cols-[1fr_auto_1fr] items-center p-3 sm:p-4">
+      <div className="pointer-events-auto flex items-center gap-2">
         <Button
           variant="outline"
           size="icon-lg"
@@ -100,12 +100,12 @@ export default function Header({
         </Button>
       </div>
 
-      <div className="border bg-white/60 backdrop-blur-[2px] hover:bg-white/80 shadow-sm px-6 py-2 rounded-full font-medium text-sm pointer-events-auto flex min-w-0 items-center gap-2 max-w-[60vw] justify-self-center">
+      <div className="pointer-events-auto flex min-w-0 max-w-[calc(100vw-9rem)] items-center gap-2 justify-self-center rounded-full border bg-white/60 px-4 py-2 text-sm font-medium shadow-sm backdrop-blur-[2px] hover:bg-white/80 sm:max-w-[60vw] sm:px-6">
         <span className="truncate">{headerTitle}</span>
         {activeDashboard ? (
           <span
             className={cn(
-              "shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-medium",
+              "shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-medium whitespace-nowrap",
               activeMemberCount > 0
                 ? "border-amber-200/70 bg-amber-50 text-amber-700"
                 : "border-gray-200/70 bg-gray-100 text-gray-500"
@@ -116,10 +116,10 @@ export default function Header({
         ) : null}
       </div>
 
-      <div className="flex items-center justify-end gap-2 pointer-events-auto">
+      <div className="pointer-events-auto flex items-center justify-end gap-1.5 sm:gap-2">
         {activeMembers.length ? (
           <div
-            className="flex items-center gap-2"
+            className="hidden items-center gap-2 sm:flex"
             title={`구성원 ${activeMembers.length}명: ${memberTitle}`}
           >
             <div className="flex items-center">
@@ -162,16 +162,23 @@ export default function Header({
             </span>
           </div>
         ) : null}
-        <Button
-          variant="outline"
-          size="icon-lg"
-          aria-label="구성원 설정"
-          className="rounded-full bg-white/60 backdrop-blur-[2px] hover:bg-white/80"
-          onClick={() => setMembersDialogOpen(true)}
-          disabled={!activeDashboard}
-        >
-          <Users className="h-5 w-5" />
-        </Button>
+        <div className="relative">
+          <Button
+            variant="outline"
+            size="icon-lg"
+            aria-label="구성원 설정"
+            className="rounded-full bg-white/60 backdrop-blur-[2px] hover:bg-white/80"
+            onClick={() => setMembersDialogOpen(true)}
+            disabled={!activeDashboard}
+          >
+            <Users className="h-5 w-5" />
+          </Button>
+          {activeMembers.length ? (
+            <span className="absolute -top-1 -right-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-amber-500 px-1 text-[9px] font-semibold leading-none text-white sm:hidden">
+              {activeMembers.length}
+            </span>
+          ) : null}
+        </div>
         <Button
           variant="outline"
           size="icon-lg"

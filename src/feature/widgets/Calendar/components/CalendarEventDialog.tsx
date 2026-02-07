@@ -179,9 +179,9 @@ export function CalendarEventDialog({
             onChange={(event) => setDraftTitle(event.target.value)}
             autoFocus
           />
-          <div className="flex items-center justify-between text-sm text-gray-500">
+          <div className="flex flex-col gap-2 text-sm text-gray-500 sm:flex-row sm:items-center sm:justify-between">
             <span>일정 종류</span>
-            <div className="inline-flex items-center gap-1 rounded-full border border-gray-200 p-1 dark:border-gray-700">
+            <div className="inline-flex flex-wrap items-center gap-1 rounded-2xl border border-gray-200 p-1 dark:border-gray-700">
               {[
                 { value: "single", label: "당일 일정" },
                 { value: "range", label: "기간 일정" },
@@ -194,7 +194,7 @@ export function CalendarEventDialog({
                     key={option.value}
                     type="button"
                     className={cn(
-                      "rounded-full px-2.5 py-1 text-xs font-medium transition",
+                      "rounded-full px-2.5 py-1 text-xs font-medium whitespace-nowrap transition",
                       isActive
                         ? "bg-primary/10 text-primary"
                         : "text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800/40"
@@ -290,11 +290,11 @@ export function CalendarEventDialog({
             </>
           )}
           {scheduleMode === "recurrence" ? (
-            <div className="flex items-center justify-between text-sm text-gray-500">
+            <div className="flex flex-col gap-2 text-sm text-gray-500 sm:flex-row sm:items-center sm:justify-between">
               <span>반복 유형</span>
               <select
                 aria-label="Recurrence type"
-                className="rounded-md border border-gray-300 dark:border-gray-700 bg-transparent px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-blue-500"
+                className="w-full rounded-md border border-gray-300 dark:border-gray-700 bg-transparent px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-blue-500 sm:w-auto"
                 value={recurrenceType}
                 onChange={(event) =>
                   setRecurrenceType(event.target.value as RecurrenceType)
@@ -357,7 +357,7 @@ export function CalendarEventDialog({
           ) : null}
           {scheduleMode === "recurrence" && isCycle ? (
             <>
-              <div className="flex items-center justify-between text-xs text-gray-500">
+              <div className="flex flex-col gap-2 text-xs text-gray-500 sm:flex-row sm:items-center sm:justify-between">
                 <span>교대 패턴</span>
                 <button
                   type="button"
@@ -371,9 +371,9 @@ export function CalendarEventDialog({
                 {cyclePattern.map((item, index) => (
                   <div
                     key={`cycle-${index}`}
-                    className="grid grid-cols-[1.4fr_0.6fr_auto_auto] items-center gap-2"
+                    className="grid gap-2 rounded-md border border-gray-200/70 p-2 dark:border-gray-700 sm:grid-cols-[minmax(0,1.4fr)_minmax(0,0.6fr)_auto_auto] sm:items-center"
                   >
-                    <div className="flex flex-col gap-1">
+                    <div className="flex min-w-0 flex-col gap-1">
                       <label className="flex items-center gap-1 text-[10px] text-gray-400">
                         <input
                           type="checkbox"
@@ -418,8 +418,8 @@ export function CalendarEventDialog({
                         });
                       }}
                     />
-                    <div className="flex items-center justify-between gap-2">
-                      <div className="flex items-center gap-1">
+                    <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="flex flex-wrap items-center gap-1">
                         {COLOR_PRESETS.map((color) => (
                           <button
                             key={`${index}-${color}`}
@@ -462,7 +462,7 @@ export function CalendarEventDialog({
                     </div>
                     <button
                       type="button"
-                      className="text-xs font-medium text-gray-400 transition hover:text-red-500"
+                      className="justify-self-start text-xs font-medium text-gray-400 transition hover:text-red-500 sm:justify-self-auto"
                       onClick={() => removeCyclePatternItem(index)}
                     >
                       삭제
@@ -478,10 +478,10 @@ export function CalendarEventDialog({
             </>
           ) : null}
           {!isCycle ? (
-            <div className="flex items-center justify-between text-sm text-gray-500">
-              <div className="flex items-center gap-2">
+            <div className="flex flex-col gap-2 text-sm text-gray-500 sm:flex-row sm:items-center sm:justify-between">
+              <div className="flex min-w-0 items-center gap-2">
                 <span>색상</span>
-                <div className="flex items-center gap-2">
+                <div className="flex min-w-0 items-center gap-2">
                   <input
                     type="color"
                     aria-label="Event color"
@@ -491,7 +491,7 @@ export function CalendarEventDialog({
                       setDraftColor(event.target.value || DEFAULT_EVENT_COLOR)
                     }
                   />
-                  <span className="text-xs font-mono text-gray-400">
+                  <span className="truncate text-xs font-mono text-gray-400">
                     {draftColor}
                   </span>
                 </div>
