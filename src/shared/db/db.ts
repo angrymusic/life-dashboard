@@ -6,6 +6,7 @@ export {
   createDashboard,
   deleteDashboardCascade,
   ensureDefaultDashboard,
+  removeDefaultDraftDashboardForSignedInUser,
   removeSharedDashboardLocally,
   setDashboardGroupId,
   syncDashboardsFromServer,

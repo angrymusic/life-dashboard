@@ -37,16 +37,36 @@ export default function AccountDialog({
 }: AccountDialogProps) {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [isDeletingLocal, setIsDeletingLocal] = useState(false);
+  const [isSigningOut, setIsSigningOut] = useState(false);
+
+  const clearLocalData = async () => {
+    await deleteLocalDatabase();
+    const keysToRemove = Object.keys(localStorage).filter((key) =>
+      key.startsWith("lifedashboard.")
+    );
+    keysToRemove.forEach((key) => localStorage.removeItem(key));
+  };
 
   const handleDeleteLocalData = async () => {
     if (isDeletingLocal) return;
     setIsDeletingLocal(true);
     try {
-      await deleteLocalDatabase();
+      await clearLocalData();
       window.location.reload();
     } finally {
       setIsDeletingLocal(false);
     }
+  };
+
+  const handleSignOut = async () => {
+    if (isSigningOut) return;
+    setIsSigningOut(true);
+    try {
+      await clearLocalData();
+    } catch {
+      // 로그아웃은 항상 진행한다.
+    }
+    await signOut({ callbackUrl: "/" });
   };
 
   return (
@@ -103,16 +123,18 @@ export default function AccountDialog({
                   variant="outline"
                   className="text-destructive hover:text-destructive"
                   onClick={() => setDeleteDialogOpen(true)}
+                  disabled={isSigningOut}
                 >
                   로컬 데이터 삭제
                 </Button>
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => signOut({ callbackUrl: "/" })}
+                  onClick={() => void handleSignOut()}
+                  disabled={isSigningOut || isDeletingLocal}
                 >
                   <LogOut className="size-4" />
-                  로그아웃
+                  {isSigningOut ? "로그아웃 중..." : "로그아웃"}
                 </Button>
               </>
             ) : (
@@ -122,6 +144,7 @@ export default function AccountDialog({
                   variant="outline"
                   className="text-destructive hover:text-destructive"
                   onClick={() => setDeleteDialogOpen(true)}
+                  disabled={isSigningOut}
                 >
                   로컬 데이터 삭제
                 </Button>
@@ -151,7 +174,7 @@ export default function AccountDialog({
               type="button"
               variant="outline"
               onClick={() => setDeleteDialogOpen(false)}
-              disabled={isDeletingLocal}
+              disabled={isDeletingLocal || isSigningOut}
             >
               취소
             </Button>
@@ -159,7 +182,7 @@ export default function AccountDialog({
               type="button"
               variant="destructive"
               onClick={handleDeleteLocalData}
-              disabled={isDeletingLocal}
+              disabled={isDeletingLocal || isSigningOut}
             >
               {isDeletingLocal ? "삭제 중..." : "삭제"}
             </Button>

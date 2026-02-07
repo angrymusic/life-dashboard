@@ -5,6 +5,7 @@ import type { Dashboard } from "@/shared/db/schema";
 type EnsureOptions = {
   enabled?: boolean;
   shouldCreate?: boolean;
+  skipOutbox?: boolean;
 };
 
 export function useEnsureDashboard(
@@ -39,6 +40,8 @@ export function useEnsureDashboard(
         await ensureDefaultDashboard({
           name: "My Dashboard",
           ownerId: getOrCreateLocalProfileId(),
+        }, {
+          skipOutbox: options.skipOutbox,
         });
       } catch (err) {
         const message =
@@ -51,7 +54,7 @@ export function useEnsureDashboard(
         setIsCreating(false);
       }
     })();
-  }, [dashboards, attempt, options.enabled, options.shouldCreate]);
+  }, [dashboards, attempt, options.enabled, options.shouldCreate, options.skipOutbox]);
 
   return { isCreating, error, retry };
 }
