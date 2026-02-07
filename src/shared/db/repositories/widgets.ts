@@ -86,7 +86,10 @@ export async function addWidget(
     updatedAt: now,
   };
 
-  const createdRecords: { entityType: OutboxEntityType; record: Record<string, unknown> }[] = [];
+  const createdRecords: {
+    entityType: OutboxEntityType;
+    record: { id?: unknown; dashboardId?: unknown; widgetId?: unknown };
+  }[] = [];
 
   await db.transaction(
     "rw",
