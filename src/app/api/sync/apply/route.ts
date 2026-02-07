@@ -27,7 +27,7 @@ type ApplyResult = {
   errors?: { id: string; error: string }[];
 };
 
-const allowedEntityTypes = new Set([
+const entityTypes = [
   "dashboard",
   "widget",
   "memo",
@@ -40,8 +40,16 @@ const allowedEntityTypes = new Set([
   "metricEntry",
   "calendarEvent",
   "weatherCache",
-]);
-const touchExcludedEntityTypes = new Set(["weatherCache"]);
+] as const;
+
+type EntityType = (typeof entityTypes)[number];
+
+const allowedEntityTypes = new Set<EntityType>(entityTypes);
+const touchExcludedEntityTypes = new Set<EntityType>(["weatherCache"]);
+
+function isEntityType(value: string): value is EntityType {
+  return allowedEntityTypes.has(value as EntityType);
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -101,6 +109,11 @@ function parseEvents(body: unknown): SyncEvent[] | null {
   }
   return events;
 }
+
+type EntityHandler = {
+  delete: (event: SyncEvent) => Promise<void>;
+  upsert: (event: SyncEvent, payload: Record<string, unknown>) => Promise<void>;
+};
 
 export async function POST(request: Request) {
   const userResult = await requireUser();
@@ -198,98 +211,24 @@ export async function POST(request: Request) {
     }
   };
 
-  const appliedIds: string[] = [];
-  const errors: { id: string; error: string }[] = [];
-  const touchedDashboards = new Map<string, Date>();
-  let touchedDashboardUpdates: { id: string; updatedAt: string }[] = [];
-
-  const markDashboardTouched = (
-    dashboardId: string | undefined | null,
-    touchedAt: Date
-  ) => {
-    if (!dashboardId) return;
-    const existing = touchedDashboards.get(dashboardId);
-    if (!existing || existing < touchedAt) {
-      touchedDashboards.set(dashboardId, touchedAt);
-    }
+  const ensureEventWidgetAccess = async (event: SyncEvent) => {
+    if (!event.widgetId) throw new Error("Missing widgetId");
+    await ensureWidgetEditAccess(event.widgetId, event.dashboardId);
   };
 
-  for (const event of events) {
-    if (!allowedEntityTypes.has(event.entityType)) {
-      errors.push({ id: event.id, error: "Unsupported entity type" });
-      continue;
-    }
-
-    const touchDashboardId =
-      event.entityType === "dashboard" ? event.entityId : event.dashboardId;
-    const shouldTouchDashboard = !touchExcludedEntityTypes.has(event.entityType);
-
-    try {
-      if (event.operation === "delete") {
-        if (event.entityType === "dashboard") {
-          const dashboard = await getDashboard(event.entityId);
-          if (dashboard?.groupId) {
-            const allowed = await hasGroupAccess(dashboard.groupId);
-            if (!allowed) throw new Error("Forbidden");
-          } else if (dashboard?.ownerId && dashboard.ownerId !== userId) {
-            throw new Error("Forbidden");
-          }
-          await prisma.dashboard.deleteMany({ where: { id: event.entityId } });
-        } else if (event.entityType === "widget") {
-          await ensureWidgetEditAccess(event.entityId, event.dashboardId);
-          await prisma.widget.deleteMany({ where: { id: event.entityId } });
-        } else if (event.entityType === "memo") {
-          if (!event.widgetId) throw new Error("Missing widgetId");
-          await ensureWidgetEditAccess(event.widgetId, event.dashboardId);
-          await prisma.memo.deleteMany({ where: { id: event.entityId } });
-        } else if (event.entityType === "todo") {
-          if (!event.widgetId) throw new Error("Missing widgetId");
-          await ensureWidgetEditAccess(event.widgetId, event.dashboardId);
-          await prisma.todo.deleteMany({ where: { id: event.entityId } });
-        } else if (event.entityType === "dday") {
-          if (!event.widgetId) throw new Error("Missing widgetId");
-          await ensureWidgetEditAccess(event.widgetId, event.dashboardId);
-          await prisma.dday.deleteMany({ where: { id: event.entityId } });
-        } else if (event.entityType === "photo") {
-          if (!event.widgetId) throw new Error("Missing widgetId");
-          await ensureWidgetEditAccess(event.widgetId, event.dashboardId);
-          await prisma.photo.deleteMany({ where: { id: event.entityId } });
-        } else if (event.entityType === "mood") {
-          if (!event.widgetId) throw new Error("Missing widgetId");
-          await ensureWidgetEditAccess(event.widgetId, event.dashboardId);
-          await prisma.mood.deleteMany({ where: { id: event.entityId } });
-        } else if (event.entityType === "notice") {
-          if (!event.widgetId) throw new Error("Missing widgetId");
-          await ensureWidgetEditAccess(event.widgetId, event.dashboardId);
-          await prisma.notice.deleteMany({ where: { id: event.entityId } });
-        } else if (event.entityType === "metric") {
-          if (!event.widgetId) throw new Error("Missing widgetId");
-          await ensureWidgetEditAccess(event.widgetId, event.dashboardId);
-          await prisma.metric.deleteMany({ where: { id: event.entityId } });
-        } else if (event.entityType === "metricEntry") {
-          if (!event.widgetId) throw new Error("Missing widgetId");
-          await ensureWidgetEditAccess(event.widgetId, event.dashboardId);
-          await prisma.metricEntry.deleteMany({ where: { id: event.entityId } });
-        } else if (event.entityType === "calendarEvent") {
-          if (!event.widgetId) throw new Error("Missing widgetId");
-          await ensureWidgetEditAccess(event.widgetId, event.dashboardId);
-          await prisma.calendarEvent.deleteMany({ where: { id: event.entityId } });
-        } else if (event.entityType === "weatherCache") {
-          if (!event.widgetId) throw new Error("Missing widgetId");
-          await ensureWidgetEditAccess(event.widgetId, event.dashboardId);
-          await prisma.weatherCache.deleteMany({ where: { id: event.entityId } });
+  const handlers: Record<EntityType, EntityHandler> = {
+    dashboard: {
+      delete: async (event) => {
+        const dashboard = await getDashboard(event.entityId);
+        if (dashboard?.groupId) {
+          const allowed = await hasGroupAccess(dashboard.groupId);
+          if (!allowed) throw new Error("Forbidden");
+        } else if (dashboard?.ownerId && dashboard.ownerId !== userId) {
+          throw new Error("Forbidden");
         }
-
-        if (shouldTouchDashboard) {
-          markDashboardTouched(touchDashboardId, new Date());
-        }
-        appliedIds.push(event.id);
-        continue;
-      }
-
-      const payload = event.payload ?? {};
-
-      if (event.entityType === "dashboard") {
+        await prisma.dashboard.deleteMany({ where: { id: event.entityId } });
+      },
+      upsert: async (event, payload) => {
         const id = requireString(payload, "id", event.entityId);
         const name = requireString(payload, "name", "Dashboard");
         const groupId = optionalString(payload, "groupId");
@@ -321,7 +260,14 @@ export async function POST(request: Request) {
             updatedAt,
           },
         });
-      } else if (event.entityType === "widget") {
+      },
+    },
+    widget: {
+      delete: async (event) => {
+        await ensureWidgetEditAccess(event.entityId, event.dashboardId);
+        await prisma.widget.deleteMany({ where: { id: event.entityId } });
+      },
+      upsert: async (event, payload) => {
         const id = requireString(payload, "id", event.entityId);
         const dashboardId = requireString(payload, "dashboardId", event.dashboardId);
         const existingWidget = await getWidget(id);
@@ -356,7 +302,14 @@ export async function POST(request: Request) {
             updatedAt,
           },
         });
-      } else if (event.entityType === "memo") {
+      },
+    },
+    memo: {
+      delete: async (event) => {
+        await ensureEventWidgetAccess(event);
+        await prisma.memo.deleteMany({ where: { id: event.entityId } });
+      },
+      upsert: async (event, payload) => {
         const id = requireString(payload, "id", event.entityId);
         const dashboardId = requireString(payload, "dashboardId", event.dashboardId);
         const widgetId = requireString(payload, "widgetId", event.widgetId);
@@ -385,7 +338,14 @@ export async function POST(request: Request) {
             updatedAt,
           },
         });
-      } else if (event.entityType === "todo") {
+      },
+    },
+    todo: {
+      delete: async (event) => {
+        await ensureEventWidgetAccess(event);
+        await prisma.todo.deleteMany({ where: { id: event.entityId } });
+      },
+      upsert: async (event, payload) => {
         const id = requireString(payload, "id", event.entityId);
         const dashboardId = requireString(payload, "dashboardId", event.dashboardId);
         const widgetId = requireString(payload, "widgetId", event.widgetId);
@@ -420,7 +380,14 @@ export async function POST(request: Request) {
             updatedAt,
           },
         });
-      } else if (event.entityType === "dday") {
+      },
+    },
+    dday: {
+      delete: async (event) => {
+        await ensureEventWidgetAccess(event);
+        await prisma.dday.deleteMany({ where: { id: event.entityId } });
+      },
+      upsert: async (event, payload) => {
         const id = requireString(payload, "id", event.entityId);
         const dashboardId = requireString(payload, "dashboardId", event.dashboardId);
         const widgetId = requireString(payload, "widgetId", event.widgetId);
@@ -452,7 +419,14 @@ export async function POST(request: Request) {
             updatedAt,
           },
         });
-      } else if (event.entityType === "photo") {
+      },
+    },
+    photo: {
+      delete: async (event) => {
+        await ensureEventWidgetAccess(event);
+        await prisma.photo.deleteMany({ where: { id: event.entityId } });
+      },
+      upsert: async (event, payload) => {
         const id = requireString(payload, "id", event.entityId);
         const dashboardId = requireString(payload, "dashboardId", event.dashboardId);
         const widgetId = requireString(payload, "widgetId", event.widgetId);
@@ -487,7 +461,14 @@ export async function POST(request: Request) {
             updatedAt,
           },
         });
-      } else if (event.entityType === "mood") {
+      },
+    },
+    mood: {
+      delete: async (event) => {
+        await ensureEventWidgetAccess(event);
+        await prisma.mood.deleteMany({ where: { id: event.entityId } });
+      },
+      upsert: async (event, payload) => {
         const id = requireString(payload, "id", event.entityId);
         const dashboardId = requireString(payload, "dashboardId", event.dashboardId);
         const widgetId = requireString(payload, "widgetId", event.widgetId);
@@ -519,7 +500,14 @@ export async function POST(request: Request) {
             updatedAt,
           },
         });
-      } else if (event.entityType === "notice") {
+      },
+    },
+    notice: {
+      delete: async (event) => {
+        await ensureEventWidgetAccess(event);
+        await prisma.notice.deleteMany({ where: { id: event.entityId } });
+      },
+      upsert: async (event, payload) => {
         const id = requireString(payload, "id", event.entityId);
         const dashboardId = requireString(payload, "dashboardId", event.dashboardId);
         const widgetId = requireString(payload, "widgetId", event.widgetId);
@@ -551,7 +539,14 @@ export async function POST(request: Request) {
             updatedAt,
           },
         });
-      } else if (event.entityType === "metric") {
+      },
+    },
+    metric: {
+      delete: async (event) => {
+        await ensureEventWidgetAccess(event);
+        await prisma.metric.deleteMany({ where: { id: event.entityId } });
+      },
+      upsert: async (event, payload) => {
         const id = requireString(payload, "id", event.entityId);
         const dashboardId = requireString(payload, "dashboardId", event.dashboardId);
         const widgetId = requireString(payload, "widgetId", event.widgetId);
@@ -583,7 +578,14 @@ export async function POST(request: Request) {
             updatedAt,
           },
         });
-      } else if (event.entityType === "metricEntry") {
+      },
+    },
+    metricEntry: {
+      delete: async (event) => {
+        await ensureEventWidgetAccess(event);
+        await prisma.metricEntry.deleteMany({ where: { id: event.entityId } });
+      },
+      upsert: async (event, payload) => {
         const id = requireString(payload, "id", event.entityId);
         const dashboardId = requireString(payload, "dashboardId", event.dashboardId);
         const widgetId = requireString(payload, "widgetId", event.widgetId);
@@ -616,7 +618,14 @@ export async function POST(request: Request) {
             updatedAt,
           },
         });
-      } else if (event.entityType === "calendarEvent") {
+      },
+    },
+    calendarEvent: {
+      delete: async (event) => {
+        await ensureEventWidgetAccess(event);
+        await prisma.calendarEvent.deleteMany({ where: { id: event.entityId } });
+      },
+      upsert: async (event, payload) => {
         const id = requireString(payload, "id", event.entityId);
         const dashboardId = requireString(payload, "dashboardId", event.dashboardId);
         const widgetId = requireString(payload, "widgetId", event.widgetId);
@@ -663,7 +672,14 @@ export async function POST(request: Request) {
             updatedAt,
           },
         });
-      } else if (event.entityType === "weatherCache") {
+      },
+    },
+    weatherCache: {
+      delete: async (event) => {
+        await ensureEventWidgetAccess(event);
+        await prisma.weatherCache.deleteMany({ where: { id: event.entityId } });
+      },
+      upsert: async (event, payload) => {
         const id = requireString(payload, "id", event.entityId);
         const dashboardId = requireString(payload, "dashboardId", event.dashboardId);
         const widgetId = requireString(payload, "widgetId", event.widgetId);
@@ -695,6 +711,43 @@ export async function POST(request: Request) {
             updatedAt,
           },
         });
+      },
+    },
+  };
+
+  const appliedIds: string[] = [];
+  const errors: { id: string; error: string }[] = [];
+  const touchedDashboards = new Map<string, Date>();
+  let touchedDashboardUpdates: { id: string; updatedAt: string }[] = [];
+
+  const markDashboardTouched = (
+    dashboardId: string | undefined | null,
+    touchedAt: Date
+  ) => {
+    if (!dashboardId) return;
+    const existing = touchedDashboards.get(dashboardId);
+    if (!existing || existing < touchedAt) {
+      touchedDashboards.set(dashboardId, touchedAt);
+    }
+  };
+
+  for (const event of events) {
+    if (!isEntityType(event.entityType)) {
+      errors.push({ id: event.id, error: "Unsupported entity type" });
+      continue;
+    }
+
+    const touchDashboardId =
+      event.entityType === "dashboard" ? event.entityId : event.dashboardId;
+    const shouldTouchDashboard = !touchExcludedEntityTypes.has(event.entityType);
+    const handler = handlers[event.entityType];
+
+    try {
+      if (event.operation === "delete") {
+        await handler.delete(event);
+      } else {
+        const payload = (event.payload ?? {}) as Record<string, unknown>;
+        await handler.upsert(event, payload);
       }
 
       if (shouldTouchDashboard) {
