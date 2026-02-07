@@ -189,7 +189,7 @@ export default function DashboardManagerDialog({
                       <div
                         key={dashboard.id}
                         className={cn(
-                          "flex items-center gap-2 rounded-lg border px-3 py-2 transition",
+                          "flex flex-wrap items-center gap-2 rounded-lg border px-3 py-2 transition sm:flex-nowrap",
                           isActive
                             ? "border-primary/40 bg-primary/10"
                             : "border-gray-200 bg-white/70 hover:bg-white/90 dark:border-gray-700/70 dark:bg-gray-900/20"
@@ -198,7 +198,7 @@ export default function DashboardManagerDialog({
                         {isEditing ? (
                           <form
                             onSubmit={handleRenameSubmit}
-                            className="flex min-w-0 flex-1 items-center gap-2"
+                            className="flex min-w-0 flex-1 flex-wrap items-center gap-2 sm:flex-nowrap"
                           >
                             <div className="min-w-0 flex-1">
                               <input
@@ -337,11 +337,11 @@ export default function DashboardManagerDialog({
                           disabled={isCreating}
                         />
                       </div>
-                      <div className="flex items-center justify-between">
-                        <span className="text-[11px] text-gray-400">
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                        <span className="min-w-0 text-[11px] text-gray-400">
                           나중에 언제든 이름을 바꿀 수 있어요.
                         </span>
-                        <div className="flex gap-2">
+                        <div className="flex w-full justify-end gap-2 sm:w-auto">
                           <Button
                             type="button"
                             variant="outline"
@@ -367,7 +367,7 @@ export default function DashboardManagerDialog({
                   </div>
                 ) : (
                   <div className="rounded-md border border-dashed border-gray-200/70 bg-white/40 px-3 py-2 text-sm text-gray-600 dark:border-gray-700/70 dark:bg-gray-900/20">
-                    <div className="flex items-center justify-between gap-3">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
                       <div className="min-w-0">
                         <div className="font-medium text-gray-700 dark:text-gray-200">
                           새 보드를 추가하세요
@@ -379,7 +379,7 @@ export default function DashboardManagerDialog({
                       <Button
                         type="button"
                         size="sm"
-                        className="gap-1"
+                        className="w-full gap-1 sm:w-auto"
                         onClick={() => setIsCreateFormOpen(true)}
                         disabled={isCreating || dashboards === undefined}
                       >

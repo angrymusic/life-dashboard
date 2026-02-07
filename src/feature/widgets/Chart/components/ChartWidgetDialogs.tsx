@@ -123,14 +123,14 @@ export function RecordManagementDialog({
               {entries.map((entry) => (
                 <div
                   key={entry.id}
-                  className="flex items-center justify-between gap-3 rounded-md border border-gray-200/70 dark:border-gray-700 px-2 py-1 text-sm"
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-gray-200/70 px-2 py-1 text-sm dark:border-gray-700"
                 >
                   {editingEntryId === entry.id ? (
                     <>
-                      <div className="flex min-w-0 items-center gap-2 pr-2">
+                      <div className="flex min-w-0 w-full flex-wrap items-center gap-2 sm:w-auto sm:flex-nowrap sm:pr-2">
                         <input
                           type="date"
-                          className="w-[140px] min-w-0 rounded-md border border-gray-300 dark:border-gray-700 bg-transparent px-2 py-1 text-xs outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-60"
+                          className="w-full min-w-0 rounded-md border border-gray-300 bg-transparent px-2 py-1 text-xs outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-60 dark:border-gray-700 sm:w-[140px]"
                           value={editingDate}
                           onChange={(event) => {
                             setEditingDate(event.target.value as YMD);
@@ -140,7 +140,7 @@ export function RecordManagementDialog({
                         <input
                           type="number"
                           step="0.1"
-                          className="w-[120px] min-w-0 rounded-md border border-gray-300 dark:border-gray-700 bg-transparent px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-60"
+                          className="w-full min-w-0 rounded-md border border-gray-300 bg-transparent px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-60 dark:border-gray-700 sm:w-[120px]"
                           value={editingValue}
                           onChange={(event) =>
                             setEditingValue(event.target.value)
@@ -154,7 +154,7 @@ export function RecordManagementDialog({
                         ) : null}
                       </div>
                       {canEdit ? (
-                        <div className="flex items-center gap-1">
+                        <div className="ml-auto flex items-center gap-1">
                           <Button
                             type="button"
                             size="icon-sm"
