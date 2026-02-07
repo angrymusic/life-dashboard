@@ -50,7 +50,7 @@ export function AddWidgetDialog({
         </DialogHeader>
 
         <div
-          className="grid gap-2"
+          className="grid max-h-[min(56svh,24rem)] gap-2 overflow-y-auto pr-1"
           role="radiogroup"
           aria-label="위젯 종류"
           onKeyDown={(event) => {
@@ -114,7 +114,7 @@ export function AddWidgetDialog({
           ))}
         </div>
 
-        <DialogFooter>
+        <DialogFooter className="pt-1">
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             취소
           </Button>
