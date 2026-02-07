@@ -198,22 +198,39 @@ export async function POST(request: Request) {
     return { dashboard, role: "parent" };
   };
 
-  const ensureWidgetEditAccess = async (widgetId: string, dashboardId?: string) => {
+  const ensureWidgetAccess = async (
+    widgetId: string,
+    dashboardId?: string,
+    options?: { allowMissing?: boolean }
+  ) => {
     const widget = await getWidget(widgetId);
-    if (!widget) throw new Error("Widget not found");
+    if (!widget) {
+      if (options?.allowMissing) return null;
+      throw new Error("Widget not found");
+    }
     if (dashboardId && widget.dashboardId !== dashboardId) {
       throw new Error("Dashboard mismatch");
     }
     const { role } = await ensureAccessForDashboard(widget.dashboardId);
-    if (isAdminRole(role)) return;
+    if (isAdminRole(role)) return widget;
     if (widget.createdBy !== userId) {
       throw new Error("Forbidden");
     }
+    return widget;
+  };
+
+  const ensureWidgetEditAccess = async (widgetId: string, dashboardId?: string) => {
+    await ensureWidgetAccess(widgetId, dashboardId);
   };
 
   const ensureEventWidgetAccess = async (event: SyncEvent) => {
     if (!event.widgetId) throw new Error("Missing widgetId");
     await ensureWidgetEditAccess(event.widgetId, event.dashboardId);
+  };
+
+  const ensureEventWidgetDeleteAccess = async (event: SyncEvent) => {
+    if (!event.widgetId) throw new Error("Missing widgetId");
+    await ensureWidgetAccess(event.widgetId, event.dashboardId, { allowMissing: true });
   };
 
   const handlers: Record<EntityType, EntityHandler> = {
@@ -264,7 +281,10 @@ export async function POST(request: Request) {
     },
     widget: {
       delete: async (event) => {
-        await ensureWidgetEditAccess(event.entityId, event.dashboardId);
+        const widget = await ensureWidgetAccess(event.entityId, event.dashboardId, {
+          allowMissing: true,
+        });
+        if (!widget) return;
         await prisma.widget.deleteMany({ where: { id: event.entityId } });
       },
       upsert: async (event, payload) => {
@@ -306,7 +326,7 @@ export async function POST(request: Request) {
     },
     memo: {
       delete: async (event) => {
-        await ensureEventWidgetAccess(event);
+        await ensureEventWidgetDeleteAccess(event);
         await prisma.memo.deleteMany({ where: { id: event.entityId } });
       },
       upsert: async (event, payload) => {
@@ -342,7 +362,7 @@ export async function POST(request: Request) {
     },
     todo: {
       delete: async (event) => {
-        await ensureEventWidgetAccess(event);
+        await ensureEventWidgetDeleteAccess(event);
         await prisma.todo.deleteMany({ where: { id: event.entityId } });
       },
       upsert: async (event, payload) => {
@@ -384,7 +404,7 @@ export async function POST(request: Request) {
     },
     dday: {
       delete: async (event) => {
-        await ensureEventWidgetAccess(event);
+        await ensureEventWidgetDeleteAccess(event);
         await prisma.dday.deleteMany({ where: { id: event.entityId } });
       },
       upsert: async (event, payload) => {
@@ -423,7 +443,7 @@ export async function POST(request: Request) {
     },
     photo: {
       delete: async (event) => {
-        await ensureEventWidgetAccess(event);
+        await ensureEventWidgetDeleteAccess(event);
         await prisma.photo.deleteMany({ where: { id: event.entityId } });
       },
       upsert: async (event, payload) => {
@@ -465,7 +485,7 @@ export async function POST(request: Request) {
     },
     mood: {
       delete: async (event) => {
-        await ensureEventWidgetAccess(event);
+        await ensureEventWidgetDeleteAccess(event);
         await prisma.mood.deleteMany({ where: { id: event.entityId } });
       },
       upsert: async (event, payload) => {
@@ -504,7 +524,7 @@ export async function POST(request: Request) {
     },
     notice: {
       delete: async (event) => {
-        await ensureEventWidgetAccess(event);
+        await ensureEventWidgetDeleteAccess(event);
         await prisma.notice.deleteMany({ where: { id: event.entityId } });
       },
       upsert: async (event, payload) => {
@@ -543,7 +563,7 @@ export async function POST(request: Request) {
     },
     metric: {
       delete: async (event) => {
-        await ensureEventWidgetAccess(event);
+        await ensureEventWidgetDeleteAccess(event);
         await prisma.metric.deleteMany({ where: { id: event.entityId } });
       },
       upsert: async (event, payload) => {
@@ -582,7 +602,7 @@ export async function POST(request: Request) {
     },
     metricEntry: {
       delete: async (event) => {
-        await ensureEventWidgetAccess(event);
+        await ensureEventWidgetDeleteAccess(event);
         await prisma.metricEntry.deleteMany({ where: { id: event.entityId } });
       },
       upsert: async (event, payload) => {
@@ -622,7 +642,7 @@ export async function POST(request: Request) {
     },
     calendarEvent: {
       delete: async (event) => {
-        await ensureEventWidgetAccess(event);
+        await ensureEventWidgetDeleteAccess(event);
         await prisma.calendarEvent.deleteMany({ where: { id: event.entityId } });
       },
       upsert: async (event, payload) => {
@@ -676,7 +696,7 @@ export async function POST(request: Request) {
     },
     weatherCache: {
       delete: async (event) => {
-        await ensureEventWidgetAccess(event);
+        await ensureEventWidgetDeleteAccess(event);
         await prisma.weatherCache.deleteMany({ where: { id: event.entityId } });
       },
       upsert: async (event, payload) => {
