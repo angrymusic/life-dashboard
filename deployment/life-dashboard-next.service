@@ -1,0 +1,28 @@
+# /etc/systemd/system/life-dashboard-next.service
+[Unit]
+Description=Life Dashboard Next.js (pnpm)
+After=network-online.target postgresql.service
+Wants=network-online.target
+
+StartLimitIntervalSec=60
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=angrymusic
+WorkingDirectory=/home/angrymusic/projects/life-dashboard
+
+EnvironmentFile=-/home/angrymusic/projects/life-dashboard/.env.production
+Environment=NODE_ENV=production
+
+Environment=PATH=/home/angrymusic/.nvm/versions/node/v22.14.0/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+
+ExecStart=/home/angrymusic/.nvm/versions/node/v22.14.0/bin/pnpm start
+
+Restart=always
+RestartSec=3
+KillSignal=SIGINT
+TimeoutStopSec=20
+
+[Install]
+WantedBy=multi-user.target
