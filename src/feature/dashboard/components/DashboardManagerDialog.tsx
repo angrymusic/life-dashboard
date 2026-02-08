@@ -24,7 +24,6 @@ type DashboardManagerDialogProps = {
   onCreateDashboard: (name: string) => Promise<void>;
   onRenameDashboard: (dashboardId: Id, name: string) => Promise<void>;
   onDeleteDashboard: (dashboardId: Id) => Promise<void>;
-  getMemberCount: (dashboard?: Dashboard) => number;
   isSignedIn: boolean;
 };
 
@@ -37,7 +36,6 @@ export default function DashboardManagerDialog({
   onCreateDashboard,
   onRenameDashboard,
   onDeleteDashboard,
-  getMemberCount,
   isSignedIn,
 }: DashboardManagerDialogProps) {
   const [draftName, setDraftName] = useState("");
@@ -181,7 +179,7 @@ export default function DashboardManagerDialog({
                 ) : (
                   dashboards.map((dashboard) => {
                     const isActive = dashboard.id === activeDashboardId;
-                    const isShared = getMemberCount(dashboard) > 0;
+                    const isShared = Boolean(dashboard.groupId);
                     const isEditing = editingDashboardId === dashboard.id;
                     const canRenameRow = canRenameDashboard(dashboard);
 
@@ -411,7 +409,7 @@ export default function DashboardManagerDialog({
                 {deleteTarget?.name}
               </div>
               <div>이 대시보드의 위젯과 기록이 모두 삭제됩니다.</div>
-              {deleteTarget && getMemberCount(deleteTarget) > 0 ? (
+              {deleteTarget?.groupId ? (
                 <div className="text-xs text-gray-400">
                   공유 대시보드는 멤버들과 공유된 데이터에도 영향을 줄 수
                   있어요.
