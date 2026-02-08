@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import Header from "./Header";
 import Footer from "./Footer";
 import GridLayout from "./GridLayout";
@@ -77,9 +77,11 @@ export default function Dashboard() {
   const [copyStatus, setCopyStatus] = useState<"idle" | "success" | "error">(
     "idle"
   );
-  const isInAppBrowser = useMemo(() => {
-    if (typeof navigator === "undefined") return false;
-    return detectInAppBrowser(navigator.userAgent);
+  const [isInAppBrowser, setIsInAppBrowser] = useState(false);
+
+  useEffect(() => {
+    if (typeof navigator === "undefined") return;
+    setIsInAppBrowser(detectInAppBrowser(navigator.userAgent));
   }, []);
 
   const handleCopyCurrentLink = async () => {
