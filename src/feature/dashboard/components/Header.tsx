@@ -36,28 +36,15 @@ export default function Header({
   const { data: session, status: authStatus } = useSession();
   const members = useMembers();
 
-  const groupMemberCounts = useMemo(() => {
-    const counts = new Map<Id, number>();
-    if (!members) return counts;
-    members.forEach((member) => {
-      counts.set(member.groupId, (counts.get(member.groupId) ?? 0) + 1);
-    });
-    return counts;
-  }, [members]);
-
   const activeDashboard = dashboards?.find(
     (dashboard) => dashboard.id === activeDashboardId
   );
-  const getMemberCount = (dashboard?: Dashboard) => {
-    if (!dashboard?.groupId) return 0;
-    return groupMemberCounts.get(dashboard.groupId) ?? 0;
-  };
   const headerTitle = activeDashboard
     ? activeDashboard.name
     : dashboards === undefined
       ? "대시보드 불러오는 중..."
       : "대시보드 없음";
-  const activeMemberCount = getMemberCount(activeDashboard);
+  const isActiveShared = Boolean(activeDashboard?.groupId);
   const authUser = session?.user ?? null;
   const isAuthLoading = authStatus === "loading";
   const isSignedIn = authStatus === "authenticated";
@@ -85,6 +72,7 @@ export default function Header({
   }, [activeMembers]);
   const visibleMembers = activeMembers.slice(0, 4);
   const extraCount = Math.max(0, activeMembers.length - visibleMembers.length);
+  const shouldShowMemberPreview = activeMembers.length > 1;
 
   return (
     <header className="pointer-events-none sticky top-0 z-50 grid grid-cols-[1fr_auto_1fr] items-center p-3 sm:p-4">
@@ -107,18 +95,18 @@ export default function Header({
           <span
             className={cn(
               "shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-medium whitespace-nowrap",
-              activeMemberCount > 0
+              isActiveShared
                 ? "border-amber-200/70 bg-amber-50 text-amber-700"
                 : "border-gray-200/70 bg-gray-100 text-gray-500"
             )}
           >
-            {activeMemberCount > 0 ? "공유" : "개인"}
+            {isActiveShared ? "공유" : "개인"}
           </span>
         ) : null}
       </div>
 
       <div className="pointer-events-auto flex items-center justify-end gap-1.5 sm:gap-2">
-        {activeMembers.length ? (
+        {shouldShowMemberPreview ? (
           <div
             className="hidden items-center gap-2 sm:flex"
             title={`구성원 ${activeMembers.length}명: ${memberTitle}`}
@@ -175,7 +163,7 @@ export default function Header({
           >
             <Users className="h-5 w-5" />
           </Button>
-          {activeMembers.length ? (
+          {shouldShowMemberPreview ? (
             <span className="absolute -top-1 -right-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-amber-500 px-1 text-[9px] font-semibold leading-none text-white sm:hidden">
               {activeMembers.length}
             </span>
@@ -227,7 +215,6 @@ export default function Header({
         onCreateDashboard={onCreateDashboard}
         onRenameDashboard={onRenameDashboard}
         onDeleteDashboard={onDeleteDashboard}
-        getMemberCount={getMemberCount}
         isSignedIn={isSignedIn}
       />
 
