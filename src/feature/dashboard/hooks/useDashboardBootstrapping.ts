@@ -150,7 +150,6 @@ export function useDashboardBootstrapping({
     {
       enabled: !isAuthLoading && (!isSignedIn || serverDashboardsLoaded),
       shouldCreate: !isSignedIn || serverDashboardCount === 0,
-      skipOutbox: !isSignedIn,
     }
   );
 
