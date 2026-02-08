@@ -93,6 +93,7 @@ export default function Header({
           variant="outline"
           size="icon-lg"
           aria-label="대시보드 관리"
+          data-tour-target="dashboard-manage"
           className="rounded-full bg-white/60 backdrop-blur-[2px] hover:bg-white/80"
           onClick={() => setDashboardDialogOpen(true)}
         >
@@ -167,6 +168,7 @@ export default function Header({
             variant="outline"
             size="icon-lg"
             aria-label="구성원 설정"
+            data-tour-target="member-manage"
             className="rounded-full bg-white/60 backdrop-blur-[2px] hover:bg-white/80"
             onClick={() => setMembersDialogOpen(true)}
             disabled={!activeDashboard}
@@ -183,6 +185,7 @@ export default function Header({
           variant="outline"
           size="icon-lg"
           aria-label="계정"
+          data-tour-target="account-manage"
           className="rounded-full bg-white/60 backdrop-blur-[2px] hover:bg-white/80"
           onClick={() => setAccountDialogOpen(true)}
         >

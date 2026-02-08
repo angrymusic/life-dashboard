@@ -13,6 +13,7 @@ export default function Footer({ onAddClick, canEdit = true }: FooterProps) {
         variant="outline"
         size="icon-lg"
         aria-label="Add"
+        data-tour-target="add-widget"
         className="rounded-full bg-white/60 backdrop-blur-[2px] hover:bg-white/80 pointer-events-auto"
         onClick={onAddClick}
         disabled={!canEdit}

@@ -5,6 +5,7 @@ import Header from "./Header";
 import Footer from "./Footer";
 import GridLayout from "./GridLayout";
 import { AddWidgetDialog } from "./AddWidgetDialog";
+import GuestOnboardingTutorial from "./GuestOnboardingTutorial";
 import { useDashboards, useDashboardWidgets } from "@/shared/db/queries";
 import { Button } from "@/shared/ui/button";
 import { useSession } from "next-auth/react";
@@ -141,6 +142,8 @@ export default function Dashboard() {
         onAdd={(type) => void addWidget(type)}
         disabled={!canCreateWidget}
       />
+
+      <GuestOnboardingTutorial enabled={!isAuthLoading && !isSignedIn} />
     </div>
   );
 }
