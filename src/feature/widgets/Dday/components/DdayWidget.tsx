@@ -171,10 +171,6 @@ export function DdayWidget({ widgetId, canEdit = true }: DdayWidgetProps) {
       <div className="flex h-full min-h-0 flex-col">
         <div className="flex-1 min-h-0">{content}</div>
 
-        <div className="mt-2 flex items-center justify-between text-xs text-gray-400 shrink-0">
-          {!canEdit && <span className="opacity-70">읽기 전용</span>}
-        </div>
-
         <Dialog
           open={dialogOpen}
           onOpenChange={(nextOpen) => {
