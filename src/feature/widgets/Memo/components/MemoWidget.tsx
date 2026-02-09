@@ -74,10 +74,6 @@ export function MemoWidget({ widgetId, canEdit = true }: MemoWidgetProps) {
           </div>
         )}
 
-        {/* 하단 안내 */}
-        <div className="mt-2 flex items-center justify-between text-xs text-gray-400 shrink-0">
-          {!canEdit && <span className="opacity-70">읽기 전용</span>}
-        </div>
         {canEdit ? (
           <WidgetDeleteDialog
             open={isDeleteDialogOpen}

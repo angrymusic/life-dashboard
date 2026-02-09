@@ -190,10 +190,6 @@ export function TodoWidget({ widgetId, canEdit = true }: TodoWidgetProps) {
           )}
         </div>
 
-        <div className="mt-2 flex items-center justify-between text-xs text-gray-400 shrink-0">
-          {!canEdit && <span className="opacity-70">읽기 전용</span>}
-        </div>
-
         {canEdit ? (
           <WidgetDeleteDialog
             open={isDeleteDialogOpen}

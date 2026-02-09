@@ -107,9 +107,7 @@ export function PhotoWidget({ widgetId, canEdit = true }: PhotoWidgetProps) {
               >
                 사진 업로드
               </Button>
-            ) : (
-              <span className="text-xs opacity-70">읽기 전용</span>
-            )}
+            ) : null}
           </div>
         )}
 

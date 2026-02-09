@@ -214,9 +214,6 @@ export function RecordManagementDialog({
           )}
         </div>
 
-        <div className="mt-2 flex items-center justify-between text-xs text-gray-400">
-          {!canEdit && <span className="opacity-70">읽기 전용</span>}
-        </div>
         <DialogFooter>
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
             닫기

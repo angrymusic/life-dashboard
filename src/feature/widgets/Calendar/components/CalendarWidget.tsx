@@ -623,7 +623,6 @@ export function CalendarWidget({
 
         <div className="mt-2 flex items-center justify-between text-sm text-gray-400 shrink-0">
           <div className="flex items-center gap-2">
-            {!canEdit && <span className="opacity-70">읽기 전용</span>}
             {specialDayLoading ? (
               <span className="text-xs">공휴일/기념일 불러오는 중...</span>
             ) : null}
