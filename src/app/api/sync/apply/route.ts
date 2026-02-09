@@ -198,6 +198,14 @@ export async function POST(request: Request) {
     return { dashboard, role: "parent" };
   };
 
+  const ensureDashboardAdminAccess = async (dashboardId: string) => {
+    const access = await ensureAccessForDashboard(dashboardId);
+    if (access.dashboard.groupId && !isAdminRole(access.role)) {
+      throw new Error("Forbidden");
+    }
+    return access.dashboard;
+  };
+
   const ensureWidgetAccess = async (
     widgetId: string,
     dashboardId?: string,
@@ -253,11 +261,13 @@ export async function POST(request: Request) {
         const updatedAt = parseDate(payload.updatedAt ?? event.updatedAt);
 
         const existing = await getDashboard(id);
-        if (existing?.groupId) {
-          const allowed = await hasGroupAccess(existing.groupId);
-          if (!allowed) throw new Error("Forbidden");
-        } else if (existing?.ownerId && existing.ownerId !== userId) {
-          throw new Error("Forbidden");
+        if (existing) {
+          await ensureDashboardAdminAccess(existing.id);
+        } else if (groupId) {
+          const member = await getGroupMember(groupId);
+          if (!member || !isAdminRole(member.role)) {
+            throw new Error("Forbidden");
+          }
         }
 
         await prisma.dashboard.upsert({

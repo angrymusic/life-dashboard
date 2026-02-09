@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
 import { Check, Pencil, Plus, Trash2, X } from "lucide-react";
 import { Button } from "@/shared/ui/button";
@@ -13,7 +13,9 @@ import {
   DialogTitle,
 } from "@/shared/ui/dialog";
 import { cn } from "@/shared/lib/utils";
+import { useMembers } from "@/shared/db/queries";
 import type { Dashboard, Id } from "@/shared/db/schema";
+import { useSession } from "next-auth/react";
 
 type DashboardManagerDialogProps = {
   open: boolean;
@@ -38,6 +40,8 @@ export default function DashboardManagerDialog({
   onDeleteDashboard,
   isSignedIn,
 }: DashboardManagerDialogProps) {
+  const { data: session } = useSession();
+  const members = useMembers();
   const [draftName, setDraftName] = useState("");
   const [renameDraft, setRenameDraft] = useState("");
   const [renameError, setRenameError] = useState<string | null>(null);
@@ -47,10 +51,30 @@ export default function DashboardManagerDialog({
   const [deleteTarget, setDeleteTarget] = useState<Dashboard | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [isCreateFormOpen, setIsCreateFormOpen] = useState(false);
+  const sessionEmail = session?.user?.email?.trim().toLowerCase() ?? null;
 
   const canDelete = (dashboards?.length ?? 0) > 1;
+  const roleByGroupId = useMemo(() => {
+    if (!members || !sessionEmail) return new Map<string, string>();
+    return members.reduce((acc, member) => {
+      if (member.email?.trim().toLowerCase() !== sessionEmail) {
+        return acc;
+      }
+      acc.set(member.groupId, member.role);
+      return acc;
+    }, new Map<string, string>());
+  }, [members, sessionEmail]);
+
   const canRenameDashboard = (dashboard?: Dashboard) =>
-    Boolean(dashboard && (!dashboard.groupId || isSignedIn));
+    Boolean(
+      dashboard &&
+        (!dashboard.groupId ||
+          (isSignedIn && roleByGroupId.get(dashboard.groupId) === "parent"))
+    );
+  const hasRenameRestriction =
+    dashboards?.some(
+      (dashboard) => Boolean(dashboard.groupId) && !canRenameDashboard(dashboard)
+    ) ?? false;
 
   useEffect(() => {
     if (!editingDashboardId) return;
@@ -157,16 +181,15 @@ export default function DashboardManagerDialog({
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>대시보드 관리</DialogTitle>
-            <DialogDescription>
-              대시보드를 전환하고 만들거나 삭제할 수 있어요.
-            </DialogDescription>
+            <DialogTitle>대시보드 목록</DialogTitle>
           </DialogHeader>
           <div className="grid gap-4">
             <div className="grid gap-2">
-              <div className="text-xs font-medium text-gray-500">
-                대시보드 목록
-              </div>
+              {hasRenameRestriction ? (
+                <div className="rounded-md border border-amber-200/70 bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:border-amber-400/30 dark:bg-amber-400/10 dark:text-amber-200">
+                  공유 대시보드 이름 변경은 관리자만 가능해요.
+                </div>
+              ) : null}
               <div className="grid gap-2">
                 {dashboards === undefined ? (
                   <div className="rounded-lg border border-dashed border-gray-200 px-3 py-4 text-sm text-gray-400 dark:border-gray-700">
@@ -337,7 +360,8 @@ export default function DashboardManagerDialog({
                       </div>
                       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                         <span className="min-w-0 text-[11px] text-gray-400">
-                          나중에 언제든 이름을 바꿀 수 있어요.
+                          개인 대시보드는 언제든 이름을 바꿀 수 있고, 공유
+                          대시보드는 관리자만 변경할 수 있어요.
                         </span>
                         <div className="flex w-full justify-end gap-2 sm:w-auto">
                           <Button
@@ -387,6 +411,7 @@ export default function DashboardManagerDialog({
                     </div>
                   </div>
                 )}
+
               </div>
             </div>
           </div>
