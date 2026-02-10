@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
-import { Check, Pencil, Plus, Trash2, X } from "lucide-react";
+import { Check, Pencil, Plus, RefreshCw, Trash2, X } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import {
   Dialog,
@@ -27,6 +27,8 @@ type DashboardManagerDialogProps = {
   onRenameDashboard: (dashboardId: Id, name: string) => Promise<void>;
   onDeleteDashboard: (dashboardId: Id) => Promise<void>;
   isSignedIn: boolean;
+  onRefreshDashboards?: () => Promise<void>;
+  isRefreshingDashboards?: boolean;
 };
 
 export default function DashboardManagerDialog({
@@ -39,12 +41,15 @@ export default function DashboardManagerDialog({
   onRenameDashboard,
   onDeleteDashboard,
   isSignedIn,
+  onRefreshDashboards,
+  isRefreshingDashboards,
 }: DashboardManagerDialogProps) {
   const { data: session } = useSession();
   const members = useMembers();
   const [draftName, setDraftName] = useState("");
   const [renameDraft, setRenameDraft] = useState("");
   const [renameError, setRenameError] = useState<string | null>(null);
+  const [refreshError, setRefreshError] = useState<string | null>(null);
   const [isRenaming, setIsRenaming] = useState(false);
   const [editingDashboardId, setEditingDashboardId] = useState<Id | null>(null);
   const renameInputRef = useRef<HTMLInputElement | null>(null);
@@ -97,9 +102,22 @@ export default function DashboardManagerDialog({
     setEditingDashboardId(null);
     setRenameDraft("");
     setRenameError(null);
+    setRefreshError(null);
     setIsCreating(false);
     setIsRenaming(false);
   }, [open]);
+
+  const handleRefreshDashboards = async () => {
+    if (!onRefreshDashboards || isRefreshingDashboards) return;
+    setRefreshError(null);
+    try {
+      await onRefreshDashboards();
+    } catch (err) {
+      const message =
+        err instanceof Error ? err.message : "목록 새로고침에 실패했어요.";
+      setRefreshError(message);
+    }
+  };
 
   const handleCreateSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -180,8 +198,36 @@ export default function DashboardManagerDialog({
     <>
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="max-w-lg">
-          <DialogHeader>
-            <DialogTitle>대시보드 목록</DialogTitle>
+          <DialogHeader className="gap-3 pr-8">
+            <div className="flex items-center justify-start gap-4">
+              <DialogTitle>대시보드 목록</DialogTitle>
+              {onRefreshDashboards ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  aria-label="대시보드 목록 새로고침"
+                  onClick={() => void handleRefreshDashboards()}
+                  disabled={
+                    Boolean(isRefreshingDashboards) ||
+                    Boolean(editingDashboardId) ||
+                    isRenaming
+                  }
+                  className="h-7 gap-1 px-2 text-xs text-gray-600 hover:text-gray-800"
+                >
+                  <span>새로고침</span>
+                  <RefreshCw
+                    className={cn(
+                      "size-3.5",
+                      isRefreshingDashboards ? "animate-spin" : ""
+                    )}
+                  />
+                </Button>
+              ) : null}
+            </div>
+            {refreshError ? (
+              <div className="text-xs text-red-500">{refreshError}</div>
+            ) : null}
           </DialogHeader>
           <div className="grid gap-4">
             <div className="grid gap-2">
