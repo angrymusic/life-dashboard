@@ -4,8 +4,8 @@ import "react-grid-layout/css/styles.css";
 import "react-resizable/css/styles.css";
 import { useCallback, useMemo } from "react";
 import ReactGridLayout, {
-  noCompactor,
   useContainerWidth,
+  verticalCompactor,
 } from "react-grid-layout";
 import type { Layout } from "react-grid-layout";
 import type { Widget } from "@/shared/db/schema";
@@ -66,10 +66,7 @@ export default function GridLayout({
 }: Props) {
   const { width, containerRef, mounted } = useContainerWidth();
   const isMobileViewport = mounted && width < MOBILE_BREAKPOINT;
-  const compactor = useMemo(
-    () => ({ ...noCompactor, preventCollision: true }),
-    []
-  );
+  const compactor = verticalCompactor;
 
   const editableById = useMemo(() => {
     return new Map(
