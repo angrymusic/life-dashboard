@@ -20,6 +20,8 @@ type HeaderProps = {
   onCreateDashboard: (name: string) => Promise<void>;
   onRenameDashboard: (dashboardId: Id, name: string) => Promise<void>;
   onDeleteDashboard: (dashboardId: Id) => Promise<void>;
+  onRefreshDashboards: () => Promise<void>;
+  isRefreshingDashboards: boolean;
 };
 
 export default function Header({
@@ -29,6 +31,8 @@ export default function Header({
   onCreateDashboard,
   onRenameDashboard,
   onDeleteDashboard,
+  onRefreshDashboards,
+  isRefreshingDashboards,
 }: HeaderProps) {
   const [accountDialogOpen, setAccountDialogOpen] = useState(false);
   const [dashboardDialogOpen, setDashboardDialogOpen] = useState(false);
@@ -216,6 +220,8 @@ export default function Header({
         onRenameDashboard={onRenameDashboard}
         onDeleteDashboard={onDeleteDashboard}
         isSignedIn={isSignedIn}
+        onRefreshDashboards={isSignedIn ? onRefreshDashboards : undefined}
+        isRefreshingDashboards={isRefreshingDashboards}
       />
 
       <MembersDialog

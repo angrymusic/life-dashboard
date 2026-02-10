@@ -29,6 +29,8 @@ export default function Dashboard() {
     isCreating,
     isServerBootstrapReady,
     retry,
+    refreshDashboards,
+    isRefreshingDashboards,
   } = useDashboardBootstrapping({
     dashboards,
     authEmail,
@@ -117,6 +119,8 @@ export default function Dashboard() {
         onCreateDashboard={createDashboard}
         onRenameDashboard={renameDashboard}
         onDeleteDashboard={deleteDashboard}
+        onRefreshDashboards={refreshDashboards}
+        isRefreshingDashboards={isRefreshingDashboards}
       />
 
       {isInAppBrowser && !isSignedIn ? (
