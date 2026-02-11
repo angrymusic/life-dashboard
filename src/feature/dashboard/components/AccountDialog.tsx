@@ -16,6 +16,7 @@ import { deleteLocalDatabase } from "@/shared/db/db";
 import {
   detectInAppBrowser,
 } from "@/shared/lib/inAppBrowser";
+import { useI18n } from "@/shared/i18n/client";
 import { signIn, signOut } from "next-auth/react";
 import type { Session } from "next-auth";
 
@@ -38,6 +39,7 @@ export default function AccountDialog({
   authDisplayName,
   authAvatarFallback,
 }: AccountDialogProps) {
+  const { language, setLanguage, t } = useI18n();
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [isDeletingLocal, setIsDeletingLocal] = useState(false);
   const [isSigningOut, setIsSigningOut] = useState(false);
@@ -81,7 +83,7 @@ export default function AccountDialog({
     try {
       await clearLocalData();
     } catch {
-      // 로그아웃은 항상 진행한다.
+      // Continue sign out even if local cleanup fails.
     }
     await signOut({ callbackUrl: "/" });
   };
@@ -116,14 +118,19 @@ export default function AccountDialog({
       <Dialog open={open} onOpenChange={onOpenChange}>
         <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>계정</DialogTitle>
+            <DialogTitle>{t("계정", "Account")}</DialogTitle>
             <DialogDescription>
-              Google 계정으로 로그인해서 서버에 데이터를 연결할 수 있어요.
+              {t(
+                "Google 계정으로 로그인해서 서버에 데이터를 연결할 수 있어요.",
+                "Sign in with Google to connect your data to the server."
+              )}
             </DialogDescription>
           </DialogHeader>
           <div className="grid gap-3">
             {isAuthLoading ? (
-              <div className="text-sm text-gray-500">로그인 상태 확인 중...</div>
+              <div className="text-sm text-gray-500">
+                {t("로그인 상태 확인 중...", "Checking sign-in status...")}
+              </div>
             ) : isSignedIn ? (
               <div className="flex items-center gap-3 rounded-lg border border-gray-200/80 bg-white/60 px-3 py-2 dark:border-gray-700/70 dark:bg-gray-900/20">
                 {authUser?.image ? (
@@ -154,13 +161,19 @@ export default function AccountDialog({
             ) : (
               <div className="grid gap-2">
                 <div className="text-sm text-gray-500">
-                  로그인하면 여러 기기에서 데이터를 이어서 사용할 수 있어요.
+                  {t(
+                    "로그인하면 여러 기기에서 데이터를 이어서 사용할 수 있어요.",
+                    "Sign in to continue your data across devices."
+                  )}
                 </div>
                 {isInAppBrowser ? (
                   <div className="rounded-lg border border-amber-200/80 bg-amber-50/80 px-3 py-2 text-xs text-amber-800 dark:border-amber-400/30 dark:bg-amber-950/30 dark:text-amber-200">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <span>
-                        인앱 브라우저 접속 중입니다. Google 로그인은 기본 브라우저로 연 뒤 진행해 주세요.
+                        {t(
+                          "인앱 브라우저 접속 중입니다. Google 로그인은 기본 브라우저로 연 뒤 진행해 주세요.",
+                          "You are in an in-app browser. Open this page in your default browser to sign in with Google."
+                        )}
                       </span>
                       <Button
                         type="button"
@@ -170,23 +183,60 @@ export default function AccountDialog({
                         onClick={() => void handleCopyCurrentLink()}
                       >
                         <Copy className="size-4" />
-                        링크 복사
+                        {t("링크 복사", "Copy link")}
                       </Button>
                     </div>
                     {copyStatus === "success" ? (
                       <div className="mt-1">
-                         링크를 복사했어요. 사용하시는 브라우저로 열어주세요.
+                        {t(
+                          "링크를 복사했어요. 사용하시는 브라우저로 열어주세요.",
+                          "Link copied. Open it in your browser."
+                        )}
                       </div>
                     ) : null}
                     {copyStatus === "error" ? (
                       <div className="mt-1">
-                        자동 복사에 실패했어요. 주소창 URL을 직접 복사해 주세요.
+                        {t(
+                          "자동 복사에 실패했어요. 주소창 URL을 직접 복사해 주세요.",
+                          "Automatic copy failed. Please copy the URL from the address bar."
+                        )}
                       </div>
                     ) : null}
                   </div>
                 ) : null}
               </div>
             )}
+          </div>
+          <div className="flex items-center justify-between gap-2 rounded-md border border-gray-200/80 bg-white/50 px-2.5 py-1.5 dark:border-gray-700/70 dark:bg-gray-900/20">
+            <div className="text-[10px] font-medium text-gray-400">
+              {t("언어", "Language")}
+            </div>
+            <div className="inline-flex rounded-sm border border-gray-200/80 bg-gray-100/70 p-0.5 text-[11px] leading-none dark:border-gray-600/70 dark:bg-gray-700/30">
+              <button
+                type="button"
+                onClick={() => setLanguage("ko")}
+                className={[
+                  "rounded-sm px-2 py-1 transition-colors",
+                  language === "ko"
+                    ? "bg-white text-gray-900 shadow-sm dark:bg-gray-100/10 dark:text-gray-100"
+                    : "text-gray-500 hover:text-gray-700 dark:text-gray-300 dark:hover:text-white",
+                ].join(" ")}
+              >
+                한국어
+              </button>
+              <button
+                type="button"
+                onClick={() => setLanguage("en")}
+                className={[
+                  "rounded-sm px-2 py-1 transition-colors",
+                  language === "en"
+                    ? "bg-white text-gray-900 shadow-sm dark:bg-gray-100/10 dark:text-gray-100"
+                    : "text-gray-500 hover:text-gray-700 dark:text-gray-300 dark:hover:text-white",
+                ].join(" ")}
+              >
+                English
+              </button>
+            </div>
           </div>
           <div className="flex flex-wrap justify-end gap-2">
             {isSignedIn ? (
@@ -198,7 +248,7 @@ export default function AccountDialog({
                   onClick={() => setDeleteDialogOpen(true)}
                   disabled={isSigningOut}
                 >
-                  로컬 데이터 삭제
+                  {t("로컬 데이터 삭제", "Clear local data")}
                 </Button>
                 <Button
                   type="button"
@@ -207,7 +257,9 @@ export default function AccountDialog({
                   disabled={isSigningOut || isDeletingLocal}
                 >
                   <LogOut className="size-4" />
-                  {isSigningOut ? "로그아웃 중..." : "로그아웃"}
+                  {isSigningOut
+                    ? t("로그아웃 중...", "Signing out...")
+                    : t("로그아웃", "Sign out")}
                 </Button>
               </>
             ) : (
@@ -219,7 +271,7 @@ export default function AccountDialog({
                   onClick={() => setDeleteDialogOpen(true)}
                   disabled={isSigningOut}
                 >
-                  로컬 데이터 삭제
+                  {t("로컬 데이터 삭제", "Clear local data")}
                 </Button>
                 {isInAppBrowser ? null : (
                   <Button
@@ -228,7 +280,7 @@ export default function AccountDialog({
                     disabled={isAuthLoading}
                   >
                     <LogIn className="size-4" />
-                    Google로 로그인
+                    {t("Google로 로그인", "Sign in with Google")}
                   </Button>
                 )}
               </>
@@ -239,9 +291,17 @@ export default function AccountDialog({
       <Dialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>로컬 데이터를 삭제할까요?</DialogTitle>
+            <DialogTitle>
+              {t(
+                "로컬 데이터를 삭제할까요?",
+                "Clear local data?"
+              )}
+            </DialogTitle>
             <DialogDescription>
-              로컬에 저장된 위젯, 기록, 동기화 대기 변경이 모두 삭제됩니다.
+              {t(
+                "로컬에 저장된 위젯, 기록, 동기화 대기 변경이 모두 삭제됩니다.",
+                "All locally stored widgets, records, and pending sync changes will be deleted."
+              )}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
@@ -251,7 +311,7 @@ export default function AccountDialog({
               onClick={() => setDeleteDialogOpen(false)}
               disabled={isDeletingLocal || isSigningOut}
             >
-              취소
+              {t("취소", "Cancel")}
             </Button>
             <Button
               type="button"
@@ -259,7 +319,7 @@ export default function AccountDialog({
               onClick={handleDeleteLocalData}
               disabled={isDeletingLocal || isSigningOut}
             >
-              {isDeletingLocal ? "삭제 중..." : "삭제"}
+              {isDeletingLocal ? t("삭제 중...", "Deleting...") : t("삭제", "Delete")}
             </Button>
           </DialogFooter>
         </DialogContent>

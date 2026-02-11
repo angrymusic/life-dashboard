@@ -15,6 +15,8 @@ import {
 import { cn } from "@/shared/lib/utils";
 import { useMembers } from "@/shared/db/queries";
 import type { Dashboard, Id } from "@/shared/db/schema";
+import { useI18n } from "@/shared/i18n/client";
+import { localizeErrorMessage } from "@/shared/i18n/errorMessage";
 import { useSession } from "next-auth/react";
 
 type DashboardManagerDialogProps = {
@@ -44,6 +46,7 @@ export default function DashboardManagerDialog({
   onRefreshDashboards,
   isRefreshingDashboards,
 }: DashboardManagerDialogProps) {
+  const { t } = useI18n();
   const { data: session } = useSession();
   const members = useMembers();
   const [draftName, setDraftName] = useState("");
@@ -114,7 +117,9 @@ export default function DashboardManagerDialog({
       await onRefreshDashboards();
     } catch (err) {
       const message =
-        err instanceof Error ? err.message : "목록 새로고침에 실패했어요.";
+        err instanceof Error
+          ? localizeErrorMessage(err.message, t)
+          : t("목록 새로고침에 실패했어요.", "Failed to refresh dashboard list.");
       setRefreshError(message);
     }
   };
@@ -187,7 +192,9 @@ export default function DashboardManagerDialog({
       setEditingDashboardId(null);
     } catch (err) {
       const message =
-        err instanceof Error ? err.message : "이름 변경에 실패했어요.";
+        err instanceof Error
+          ? localizeErrorMessage(err.message, t)
+          : t("이름 변경에 실패했어요.", "Failed to rename.");
       setRenameError(message);
     } finally {
       setIsRenaming(false);
@@ -200,13 +207,13 @@ export default function DashboardManagerDialog({
         <DialogContent className="max-w-lg">
           <DialogHeader className="gap-3 pr-8">
             <div className="flex items-center justify-start gap-4">
-              <DialogTitle>대시보드 목록</DialogTitle>
+              <DialogTitle>{t("대시보드 목록", "Dashboards")}</DialogTitle>
               {onRefreshDashboards ? (
                 <Button
                   type="button"
                   variant="outline"
                   size="sm"
-                  aria-label="대시보드 목록 새로고침"
+                  aria-label={t("대시보드 목록 새로고침", "Refresh dashboard list")}
                   onClick={() => void handleRefreshDashboards()}
                   disabled={
                     Boolean(isRefreshingDashboards) ||
@@ -215,7 +222,7 @@ export default function DashboardManagerDialog({
                   }
                   className="h-7 gap-1 px-2 text-xs text-gray-600 hover:text-gray-800"
                 >
-                  <span>새로고침</span>
+                  <span>{t("새로고침", "Refresh")}</span>
                   <RefreshCw
                     className={cn(
                       "size-3.5",
@@ -233,17 +240,20 @@ export default function DashboardManagerDialog({
             <div className="grid gap-2">
               {hasRenameRestriction ? (
                 <div className="rounded-md border border-amber-200/70 bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:border-amber-400/30 dark:bg-amber-400/10 dark:text-amber-200">
-                  공유 대시보드 이름 변경은 관리자만 가능해요.
+                  {t(
+                    "공유 대시보드 이름 변경은 관리자만 가능해요.",
+                    "Only admins can rename shared dashboards."
+                  )}
                 </div>
               ) : null}
               <div className="grid gap-2">
                 {dashboards === undefined ? (
                   <div className="rounded-lg border border-dashed border-gray-200 px-3 py-4 text-sm text-gray-400 dark:border-gray-700">
-                    대시보드를 불러오는 중...
+                    {t("대시보드를 불러오는 중...", "Loading dashboards...")}
                   </div>
                 ) : dashboards.length === 0 ? (
                   <div className="rounded-lg border border-dashed border-gray-200 px-3 py-4 text-sm text-gray-400 dark:border-gray-700">
-                    아직 대시보드가 없어요.
+                    {t("아직 대시보드가 없어요.", "No dashboards yet.")}
                   </div>
                 ) : (
                   dashboards.map((dashboard) => {
@@ -281,7 +291,7 @@ export default function DashboardManagerDialog({
                                   }
                                 }}
                                 className="w-full min-w-[120px] rounded-md border border-gray-300 bg-transparent px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-700"
-                                aria-label="대시보드 이름"
+                                aria-label={t("대시보드 이름", "Dashboard name")}
                                 aria-invalid={renameError ? "true" : "false"}
                                 title={renameError ?? undefined}
                                 disabled={isRenaming}
@@ -330,7 +340,7 @@ export default function DashboardManagerDialog({
                                     : "border-gray-200/70 bg-gray-100 text-gray-500 dark:border-gray-600/60 dark:bg-gray-700/30 dark:text-gray-200"
                                 )}
                               >
-                                {isShared ? "공유" : "개인"}
+                                {isShared ? t("공유", "Shared") : t("개인", "Personal")}
                               </span>
                               {isActive ? (
                                 <Check className="ml-auto size-4 text-primary" />
@@ -369,13 +379,13 @@ export default function DashboardManagerDialog({
                   <div className="rounded-lg border border-gray-200/80 bg-white/60 p-3 dark:border-gray-700/70 dark:bg-gray-900/20">
                     <div className="flex items-center justify-between">
                       <div className="text-xs font-medium text-gray-500">
-                        새 대시보드
+                        {t("새 대시보드", "New dashboard")}
                       </div>
                       <Button
                         type="button"
                         variant="ghost"
                         size="icon-sm"
-                        aria-label="새 대시보드 취소"
+                        aria-label={t("새 대시보드 취소", "Cancel new dashboard")}
                         onClick={() => {
                           setIsCreateFormOpen(false);
                           setDraftName("");
@@ -391,7 +401,7 @@ export default function DashboardManagerDialog({
                     >
                       <div className="grid gap-1">
                         <label className="text-[11px] text-gray-400">
-                          이름
+                          {t("이름", "Name")}
                         </label>
                         <input
                           className="w-full rounded-md border border-gray-300 bg-transparent px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-700"
@@ -399,15 +409,17 @@ export default function DashboardManagerDialog({
                           onChange={(event) =>
                             setDraftName(event.target.value)
                           }
-                          placeholder="예: 패밀리 보드"
+                          placeholder={t("예: 패밀리 보드", "e.g., Family board")}
                           autoFocus
                           disabled={isCreating}
                         />
                       </div>
                       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                         <span className="min-w-0 text-[11px] text-gray-400">
-                          개인 대시보드는 언제든 이름을 바꿀 수 있고, 공유
-                          대시보드는 관리자만 변경할 수 있어요.
+                          {t(
+                            "개인 대시보드는 언제든 이름을 바꿀 수 있고, 공유 대시보드는 관리자만 변경할 수 있어요.",
+                            "Personal dashboards can be renamed anytime. Shared dashboards can be renamed by admins only."
+                          )}
                         </span>
                         <div className="flex w-full justify-end gap-2 sm:w-auto">
                           <Button
@@ -420,14 +432,14 @@ export default function DashboardManagerDialog({
                             }}
                             disabled={isCreating}
                           >
-                            취소
+                            {t("취소", "Cancel")}
                           </Button>
                           <Button
                             type="submit"
                             size="sm"
                             disabled={!draftName.trim() || isCreating}
                           >
-                            {isCreating ? "생성 중..." : "생성"}
+                            {isCreating ? t("생성 중...", "Creating...") : t("생성", "Create")}
                           </Button>
                         </div>
                       </div>
@@ -438,10 +450,13 @@ export default function DashboardManagerDialog({
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
                       <div className="min-w-0">
                         <div className="font-medium text-gray-700 dark:text-gray-200">
-                          새 보드를 추가하세요
+                          {t("새 보드를 추가하세요", "Add a new board")}
                         </div>
                         <div className="text-xs text-gray-400">
-                          개인/공유 대시보드를 자유롭게 만들 수 있어요.
+                          {t(
+                            "개인/공유 대시보드를 자유롭게 만들 수 있어요.",
+                            "Create personal or shared dashboards freely."
+                          )}
                         </div>
                       </div>
                       <Button
@@ -452,7 +467,7 @@ export default function DashboardManagerDialog({
                         disabled={isCreating || dashboards === undefined}
                       >
                         <Plus className="size-4" />
-                        추가
+                        {t("추가", "Add")}
                       </Button>
                     </div>
                   </div>
@@ -472,18 +487,25 @@ export default function DashboardManagerDialog({
       >
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>대시보드를 삭제할까요?</DialogTitle>
+            <DialogTitle>{t("대시보드를 삭제할까요?", "Delete this dashboard?")}</DialogTitle>
           </DialogHeader>
           <DialogDescription asChild>
             <div className="space-y-2 text-sm text-gray-500">
               <div className="font-medium text-gray-900 dark:text-gray-100">
                 {deleteTarget?.name}
               </div>
-              <div>이 대시보드의 위젯과 기록이 모두 삭제됩니다.</div>
+              <div>
+                {t(
+                  "이 대시보드의 위젯과 기록이 모두 삭제됩니다.",
+                  "All widgets and records in this dashboard will be deleted."
+                )}
+              </div>
               {deleteTarget?.groupId ? (
                 <div className="text-xs text-gray-400">
-                  공유 대시보드는 멤버들과 공유된 데이터에도 영향을 줄 수
-                  있어요.
+                  {t(
+                    "공유 대시보드는 멤버들과 공유된 데이터에도 영향을 줄 수 있어요.",
+                    "Deleting a shared dashboard can affect data shared with members."
+                  )}
                 </div>
               ) : null}
             </div>
@@ -494,14 +516,14 @@ export default function DashboardManagerDialog({
               variant="outline"
               onClick={() => setDeleteTarget(null)}
             >
-              취소
+              {t("취소", "Cancel")}
             </Button>
             <Button
               type="button"
               variant="destructive"
               onClick={handleDeleteConfirm}
             >
-              삭제
+              {t("삭제", "Delete")}
             </Button>
           </DialogFooter>
         </DialogContent>

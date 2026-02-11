@@ -13,6 +13,7 @@ import {
   formatLongDate,
   formatValue,
 } from "@/feature/widgets/Chart/libs/chartFormatters";
+import { useI18n } from "@/shared/i18n/client";
 
 type RecordManagementDialogProps = {
   open: boolean;
@@ -57,18 +58,20 @@ export function RecordManagementDialog({
   onEdit,
   onDelete,
 }: RecordManagementDialogProps) {
+  const { t, locale } = useI18n();
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>기록 관리</DialogTitle>
+          <DialogTitle>{t("기록 관리", "Record management")}</DialogTitle>
         </DialogHeader>
         <form
           onSubmit={onSubmit}
           className="grid gap-2 sm:grid-cols-[auto_1fr_auto]"
         >
           <div className="flex flex-col gap-1">
-            <label className="text-xs text-gray-500">날짜</label>
+            <label className="text-xs text-gray-500">{t("날짜", "Date")}</label>
             <input
               type="date"
               className="w-full rounded-md border border-gray-300 dark:border-gray-700 bg-transparent px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-60"
@@ -81,7 +84,7 @@ export function RecordManagementDialog({
             />
           </div>
           <div className="flex flex-col gap-1">
-            <label className="text-xs text-gray-500">값</label>
+            <label className="text-xs text-gray-500">{t("값", "Value")}</label>
             <div className="flex items-center gap-2">
               <input
                 type="number"
@@ -89,7 +92,7 @@ export function RecordManagementDialog({
                 className="w-full rounded-md border border-gray-300 dark:border-gray-700 bg-transparent px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-60"
                 value={newEntryValue}
                 onChange={(event) => setNewEntryValue(event.target.value)}
-                placeholder="값을 입력하세요"
+                placeholder={t("값을 입력하세요", "Enter a value")}
                 autoFocus
                 disabled={!canEdit || Boolean(editingEntryId)}
               />
@@ -107,7 +110,7 @@ export function RecordManagementDialog({
                 !canEdit || !newEntryValue.trim() || Boolean(editingEntryId)
               }
             >
-              추가
+              {t("추가", "Add")}
             </Button>
           </div>
         </form>
@@ -117,7 +120,9 @@ export function RecordManagementDialog({
           style={{ scrollbarGutter: "stable" }}
         >
           {entries.length === 0 ? (
-            <div className="text-xs text-gray-400">아직 기록이 없어요.</div>
+            <div className="text-xs text-gray-400">
+              {t("아직 기록이 없어요.", "No records yet.")}
+            </div>
           ) : (
             <div className="space-y-1">
               {entries.map((entry) => (
@@ -159,7 +164,7 @@ export function RecordManagementDialog({
                             type="button"
                             size="icon-sm"
                             onClick={() => void onSaveEdit()}
-                            aria-label="기록 저장"
+                            aria-label={t("기록 저장", "Save record")}
                             disabled={!editingValue.trim() || !editingDate}
                           >
                             <Check className="size-4" />
@@ -169,7 +174,7 @@ export function RecordManagementDialog({
                             size="icon-sm"
                             variant="outline"
                             onClick={onCancelEdit}
-                            aria-label="편집 취소"
+                            aria-label={t("편집 취소", "Cancel edit")}
                           >
                             <X className="size-4" />
                           </Button>
@@ -180,10 +185,10 @@ export function RecordManagementDialog({
                     <>
                       <div className="flex items-center gap-2 min-w-0">
                         <span className="text-xs text-gray-500">
-                          {formatLongDate(entry.date)}
+                          {formatLongDate(entry.date, locale)}
                         </span>
                         <span className="font-medium text-gray-900 dark:text-gray-100">
-                          {formatValue(entry.value, unitLabel || undefined)}
+                          {formatValue(entry.value, locale, unitLabel || undefined)}
                         </span>
                       </div>
                       {canEdit ? (
@@ -192,7 +197,7 @@ export function RecordManagementDialog({
                             type="button"
                             onClick={() => onEdit(entry)}
                             className="rounded-md p-1 text-gray-400 transition hover:text-gray-600"
-                            aria-label="기록 수정"
+                            aria-label={t("기록 수정", "Edit record")}
                           >
                             <Pencil className="size-4" />
                           </button>
@@ -200,7 +205,7 @@ export function RecordManagementDialog({
                             type="button"
                             onClick={() => void onDelete(entry.id)}
                             className="rounded-md p-1 text-gray-400 transition hover:text-gray-600"
-                            aria-label="기록 삭제"
+                            aria-label={t("기록 삭제", "Delete record")}
                           >
                             <Trash2 className="size-4" />
                           </button>
@@ -216,7 +221,7 @@ export function RecordManagementDialog({
 
         <DialogFooter>
           <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-            닫기
+            {t("닫기", "Close")}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -255,37 +260,39 @@ export function ChartSettingsDialog({
   onSave,
   onCancel,
 }: ChartSettingsDialogProps) {
+  const { t } = useI18n();
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>지표 설정</DialogTitle>
+          <DialogTitle>{t("차트 설정", "Chart settings")}</DialogTitle>
         </DialogHeader>
         <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_140px_auto]">
           <div className="flex flex-col gap-1">
-            <label className="text-xs text-gray-500">지표 이름</label>
+            <label className="text-xs text-gray-500">{t("차트 이름", "Chart name")}</label>
             <input
               className="w-full rounded-md border border-gray-300 dark:border-gray-700 bg-transparent px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-60"
               value={draftName}
               onChange={(event) => setDraftName(event.target.value)}
               onBlur={() => void saveName()}
-              placeholder="예: 체중, 키, 공부 시간"
+              placeholder={t("예: 체중, 키, 공부 시간", "e.g., Weight, Height, Study time")}
               disabled={!canEdit}
             />
           </div>
           <div className="flex flex-col gap-1">
-            <label className="text-xs text-gray-500">단위</label>
+            <label className="text-xs text-gray-500">{t("단위", "Unit")}</label>
             <input
               className="w-full rounded-md border border-gray-300 dark:border-gray-700 bg-transparent px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-60"
               value={draftUnit}
               onChange={(event) => setDraftUnit(event.target.value)}
               onBlur={() => void saveUnit()}
-              placeholder="예: kg, cm"
+              placeholder={t("예: kg, cm", "e.g., kg, cm")}
               disabled={!canEdit}
             />
           </div>
           <div className="flex flex-col gap-1">
-            <label className="text-xs text-gray-500">차트</label>
+            <label className="text-xs text-gray-500">{t("차트", "Chart")}</label>
             <div className="flex items-center gap-1">
               <Button
                 type="button"
@@ -294,7 +301,7 @@ export function ChartSettingsDialog({
                 onClick={() => void setChartType("line")}
                 disabled={!canEdit}
               >
-                선
+                {t("선", "Line")}
               </Button>
               <Button
                 type="button"
@@ -303,17 +310,17 @@ export function ChartSettingsDialog({
                 onClick={() => void setChartType("bar")}
                 disabled={!canEdit}
               >
-                막대
+                {t("막대", "Bar")}
               </Button>
             </div>
           </div>
         </div>
         <DialogFooter>
           <Button type="button" variant="outline" onClick={onCancel}>
-            취소
+            {t("취소", "Cancel")}
           </Button>
           <Button type="button" onClick={() => void onSave()}>
-            설정
+            {t("설정", "Save")}
           </Button>
         </DialogFooter>
       </DialogContent>

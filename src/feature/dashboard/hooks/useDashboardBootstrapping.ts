@@ -7,6 +7,8 @@ import {
 import type { Dashboard, Id } from "@/shared/db/schema";
 import { useEnsureDashboard } from "@/feature/dashboard/hooks/useEnsureDashboard";
 import { readJson } from "@/feature/dashboard/libs/readJson";
+import { useI18n } from "@/shared/i18n/client";
+import { localizeErrorMessage } from "@/shared/i18n/errorMessage";
 
 type BootstrappingParams = {
   dashboards?: Dashboard[];
@@ -38,6 +40,7 @@ export function useDashboardBootstrapping({
   isSignedIn,
   isAuthLoading,
 }: BootstrappingParams): BootstrappingResult {
+  const { t } = useI18n();
   const [serverDashboardsLoaded, setServerDashboardsLoaded] = useState(false);
   const [serverDashboardCount, setServerDashboardCount] = useState<number | null>(
     null
@@ -66,8 +69,8 @@ export function useDashboardBootstrapping({
     if (!response.ok || !payload?.ok || !Array.isArray(payload.dashboards)) {
       const message =
         typeof payload?.error === "string" && payload.error
-          ? payload.error
-          : "대시보드를 불러오지 못했어요.";
+          ? localizeErrorMessage(payload.error, t)
+          : t("대시보드를 불러오지 못했어요.", "Failed to load dashboards.");
       throw new Error(message);
     }
 
@@ -78,7 +81,7 @@ export function useDashboardBootstrapping({
     await syncDashboardsFromServer(payload.dashboards);
 
     return payload.dashboards.length;
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     if (!dashboards) return;
@@ -153,7 +156,7 @@ export function useDashboardBootstrapping({
           setServerDashboardCount(count);
         }
       } catch {
-        // 초기 부트스트랩 실패 시에도 대시보드 생성 플로우가 막히지 않게 로딩만 종료한다.
+        // Even when initial bootstrap fails, finish loading to keep creation flow available.
       } finally {
         if (!cancelled) setServerDashboardsLoaded(true);
       }

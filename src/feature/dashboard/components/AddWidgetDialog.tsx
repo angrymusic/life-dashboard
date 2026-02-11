@@ -2,6 +2,7 @@
 
 import { useRef, useState } from "react";
 import { Button } from "@/shared/ui/button";
+import { useI18n } from "@/shared/i18n/client";
 import {
   Dialog,
   DialogContent,
@@ -27,8 +28,54 @@ export function AddWidgetDialog({
   onAdd,
   disabled = false,
 }: Props) {
+  const { t } = useI18n();
   const [selected, setSelected] = useState<AddableWidgetType | null>(null);
   const optionRefs = useRef<Array<HTMLButtonElement | null>>([]);
+  const getWidgetTitle = (type: AddableWidgetType) => {
+    switch (type) {
+      case "calendar":
+        return t("달력", "Calendar");
+      case "memo":
+        return t("메모", "Memo");
+      case "photo":
+        return t("사진", "Photo");
+      case "todo":
+        return t("할 일", "Todo");
+      case "dday":
+        return t("디데이", "D-Day");
+      case "mood":
+        return t("기분", "Mood");
+      case "chart":
+        return t("차트", "Chart");
+      case "weather":
+        return t("날씨", "Weather");
+      default:
+        return type;
+    }
+  };
+  const getWidgetDescription = (type: AddableWidgetType) => {
+    switch (type) {
+      case "calendar":
+        return t("월간 일정과 이벤트를 확인해요", "View monthly schedules and events");
+      case "memo":
+        return t("간단한 메모를 적어요", "Write quick notes");
+      case "photo":
+        return t("사진을 올려요", "Upload photos");
+      case "todo":
+        return t("오늘 할 일을 체크해요", "Track today's tasks");
+      case "dday":
+        return t("목표일까지 남은 날짜를 확인해요", "Count down to your target date");
+      case "mood":
+        return t("현재 기분을 골라요", "Pick your current mood");
+      case "chart":
+        return t("목표 진행을 시간 순으로 기록해요", "Track progress over time");
+      case "weather":
+        return t("이번 주 날씨를 확인해요", "Check this week's weather");
+      default:
+        return "";
+    }
+  };
+
   const handleAdd = (type: AddableWidgetType) => {
     if (disabled) return;
     onAdd(type);
@@ -46,13 +93,13 @@ export function AddWidgetDialog({
     >
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>위젯 추가</DialogTitle>
+          <DialogTitle>{t("위젯 추가", "Add widget")}</DialogTitle>
         </DialogHeader>
 
         <div
           className="grid max-h-[min(56svh,24rem)] gap-2 overflow-y-auto pr-1"
           role="radiogroup"
-          aria-label="위젯 종류"
+          aria-label={t("위젯 종류", "Widget type")}
           onKeyDown={(event) => {
             const keys = ["ArrowDown", "ArrowRight", "ArrowUp", "ArrowLeft"];
             if (!keys.includes(event.key)) return;
@@ -108,15 +155,17 @@ export function AddWidgetDialog({
                   : "border-gray-200 dark:border-gray-700",
               ].join(" ")}
             >
-              <div className="font-medium">{option.title}</div>
-              <div className="text-sm text-gray-500">{option.description}</div>
+              <div className="font-medium">{getWidgetTitle(option.type)}</div>
+              <div className="text-sm text-gray-500">
+                {getWidgetDescription(option.type)}
+              </div>
             </button>
           ))}
         </div>
 
         <DialogFooter className="pt-1">
           <Button variant="outline" onClick={() => onOpenChange(false)}>
-            취소
+            {t("취소", "Cancel")}
           </Button>
           <Button
             disabled={disabled || !selected}
@@ -125,7 +174,7 @@ export function AddWidgetDialog({
               handleAdd(selected);
             }}
           >
-            추가
+            {t("추가", "Add")}
           </Button>
         </DialogFooter>
       </DialogContent>

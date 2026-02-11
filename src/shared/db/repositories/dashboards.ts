@@ -23,7 +23,7 @@ function buildLocalOwnerMember(
   now: ISODate
 ): Member {
   const email = profile.email?.trim() || undefined;
-  const displayName = profile.displayName?.trim() || email || "사용자";
+  const displayName = profile.displayName?.trim() || email || "User";
   const groupId = getLocalMembersGroupId(dashboardId);
   return {
     id: `${groupId}:owner`,

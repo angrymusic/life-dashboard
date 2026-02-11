@@ -1,7 +1,6 @@
 import type { CalendarEvent, YMD } from "@/shared/db/schema";
 
 export const DEFAULT_EVENT_COLOR = "#3b82f6";
-export const WEEK_DAYS = ["일", "월", "화", "수", "목", "금", "토"];
 export const COLOR_PRESETS = [
   "#3b82f6",
   "#22c55e",
@@ -13,6 +12,16 @@ export const COLOR_PRESETS = [
   "#14b8a6",
 ];
 export const MAX_EVENT_ROWS = 4;
+
+export function getWeekDayLabels(locale: string) {
+  const sunday = new Date(2024, 0, 7);
+  return Array.from({ length: 7 }, (_, index) => {
+    const date = addDays(sunday, index);
+    return new Intl.DateTimeFormat(locale, {
+      weekday: "short",
+    }).format(date);
+  });
+}
 
 const DEFAULT_ALL_DAY_HOUR = 9;
 const DAY_MS = 24 * 60 * 60 * 1000;
@@ -578,23 +587,26 @@ export function expandCalendarEvents(
   return results;
 }
 
-export function formatMonth(date: Date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  return `${year}.${month}`;
+export function formatMonth(date: Date, locale: string) {
+  return new Intl.DateTimeFormat(locale, {
+    year: "numeric",
+    month: "long",
+  }).format(date);
 }
 
-export function formatMonthDay(date: Date) {
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${month}.${day}`;
+export function formatMonthDay(date: Date, locale: string) {
+  return new Intl.DateTimeFormat(locale, {
+    month: "2-digit",
+    day: "2-digit",
+  }).format(date);
 }
 
-export function formatYearMonthDay(date: Date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}.${month}.${day}`;
+export function formatYearMonthDay(date: Date, locale: string) {
+  return new Intl.DateTimeFormat(locale, {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(date);
 }
 
 function isSameDay(a: Date, b: Date) {
@@ -611,12 +623,11 @@ function formatTime(date: Date) {
   return `${hours}:${minutes}`;
 }
 
-function formatMeridiemTime(date: Date) {
-  const hours = date.getHours();
-  const minutes = String(date.getMinutes()).padStart(2, "0");
-  const period = hours < 12 ? "오전" : "오후";
-  const hour12 = hours % 12 === 0 ? 12 : hours % 12;
-  return `${period} ${hour12}:${minutes}`;
+function formatMeridiemTime(date: Date, locale: string) {
+  return new Intl.DateTimeFormat(locale, {
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(date);
 }
 
 export function formatTimeInput(date: Date) {
@@ -630,30 +641,33 @@ export function parseTimeInput(value: string) {
   return { hours, minutes };
 }
 
-export function formatEventTime(event: CalendarEvent) {
+export function formatEventTime(event: CalendarEvent, locale: string) {
   const start = new Date(event.startAt);
   if (Number.isNaN(start.getTime())) return "";
   const end = event.endAt ? new Date(event.endAt) : null;
+  const allDayLabel = locale.startsWith("ko") ? "종일" : "All day";
 
   if (event.allDay) {
     if (end && !Number.isNaN(end.getTime()) && !isSameDay(start, end)) {
-      return `${formatYearMonthDay(start)} ~ ${formatYearMonthDay(end)}`;
+      return `${formatYearMonthDay(start, locale)} ~ ${formatYearMonthDay(end, locale)}`;
     }
-    return `${formatYearMonthDay(start)} 종일`;
+    return `${formatYearMonthDay(start, locale)} ${allDayLabel}`;
   }
 
   if (end && !Number.isNaN(end.getTime())) {
     if (isSameDay(start, end)) {
-      return `${formatYearMonthDay(start)} ${formatMeridiemTime(
-        start
-      )} - ${formatMeridiemTime(end)}`;
+      return `${formatYearMonthDay(start, locale)} ${formatMeridiemTime(
+        start,
+        locale
+      )} - ${formatMeridiemTime(end, locale)}`;
     }
-    return `${formatYearMonthDay(start)} ${formatMeridiemTime(
-      start
-    )} ~ ${formatYearMonthDay(end)} ${formatMeridiemTime(end)}`;
+    return `${formatYearMonthDay(start, locale)} ${formatMeridiemTime(
+      start,
+      locale
+    )} ~ ${formatYearMonthDay(end, locale)} ${formatMeridiemTime(end, locale)}`;
   }
 
-  return `${formatYearMonthDay(start)} ${formatMeridiemTime(start)}`;
+  return `${formatYearMonthDay(start, locale)} ${formatMeridiemTime(start, locale)}`;
 }
 
 export function normalizeColor(value?: string) {

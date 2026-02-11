@@ -17,6 +17,7 @@ import { WidgetCard } from "@/feature/widgets/shared/components/WidgetCard";
 import { WidgetDeleteDialog } from "@/feature/widgets/shared/components/WidgetDeleteDialog";
 import { WidgetHeader } from "@/feature/widgets/shared/components/WidgetHeader";
 import { useWidgetActionMenu } from "@/feature/widgets/shared/hooks/useWidgetActionMenu";
+import { useI18n } from "@/shared/i18n/client";
 
 const MS_DAY = 24 * 60 * 60 * 1000;
 
@@ -27,10 +28,16 @@ function toYmd(date: Date): YMD {
   return `${yyyy}-${mm}-${dd}` as YMD;
 }
 
-function formatYmd(ymd: string) {
+function formatYmd(ymd: string, locale: string) {
   const [yyyy, mm, dd] = ymd.split("-");
   if (!yyyy || !mm || !dd) return ymd;
-  return `${yyyy}.${mm}.${dd}`;
+  const date = new Date(Number(yyyy), Number(mm) - 1, Number(dd));
+  if (Number.isNaN(date.getTime())) return ymd;
+  return new Intl.DateTimeFormat(locale, {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(date);
 }
 
 function toUtcDay(ymd: string) {
@@ -53,6 +60,7 @@ type DdayWidgetProps = {
 };
 
 export function DdayWidget({ widgetId, canEdit = true }: DdayWidgetProps) {
+  const { t, locale } = useI18n();
   const { dday, saveDday, deleteDday } = useDdayWidget(widgetId);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [draftTitle, setDraftTitle] = useState("");
@@ -83,7 +91,7 @@ export function DdayWidget({ widgetId, canEdit = true }: DdayWidgetProps) {
     setDialogOpen(false);
   }, [deleteDday]);
 
-  const actionLabel = dday ? "수정" : "추가";
+  const actionLabel = dday ? t("수정", "Edit") : t("추가", "Add");
   const actionIcon = dday ? <Pencil /> : <Plus />;
 
   const {
@@ -96,7 +104,7 @@ export function DdayWidget({ widgetId, canEdit = true }: DdayWidgetProps) {
   } = useWidgetActionMenu({
     widgetId,
     canEdit,
-    deleteLabel: "위젯 삭제",
+    deleteLabel: t("위젯 삭제", "Delete widget"),
     extraItems: [
       {
         text: actionLabel,
@@ -110,12 +118,12 @@ export function DdayWidget({ widgetId, canEdit = true }: DdayWidgetProps) {
   const displayDays = diff === null ? "--" : String(Math.abs(diff));
   const statusLabel =
     diff === null
-      ? "날짜를 확인해주세요"
+      ? t("날짜를 확인해주세요", "Please check the date")
       : diff === 0
-      ? "오늘"
+      ? t("오늘", "Today")
       : diff > 0
-      ? "남은 날"
-      : "지난 날";
+      ? t("남은 날", "Days left")
+      : t("지난 날", "Days passed");
   const tone =
     diff === null
       ? "text-gray-400"
@@ -125,14 +133,14 @@ export function DdayWidget({ widgetId, canEdit = true }: DdayWidgetProps) {
       ? "text-blue-600 dark:text-blue-400"
       : "text-rose-600 dark:text-rose-400";
 
-  const submitLabel = dday ? "저장" : "추가";
+  const submitLabel = dday ? t("저장", "Save") : t("추가", "Add");
   const canSubmit = draftTitle.trim().length > 0 && Boolean(draftDate);
 
   const content = useMemo(() => {
     if (!dday) {
       return (
         <div className="flex h-full items-center justify-center text-sm text-gray-400">
-          추가해주세요
+          {t("추가해주세요", "Add one")}
         </div>
       );
     }
@@ -145,7 +153,7 @@ export function DdayWidget({ widgetId, canEdit = true }: DdayWidgetProps) {
               {dday.title}
             </div>
           </div>
-          <span className="text-xs text-gray-400">{formatYmd(dday.date)}</span>
+          <span className="text-xs text-gray-400">{formatYmd(dday.date, locale)}</span>
         </div>
 
         <div className="flex flex-1 items-center justify-center">
@@ -160,12 +168,12 @@ export function DdayWidget({ widgetId, canEdit = true }: DdayWidgetProps) {
         </div>
       </div>
     );
-  }, [dday, displayDays, statusLabel, tone]);
+  }, [dday, displayDays, locale, statusLabel, t, tone]);
 
   return (
     <WidgetCard
       header={
-        <WidgetHeader title="디데이" actions={actions} canEdit={canEdit} />
+        <WidgetHeader title={t("디데이", "D-Day")} actions={actions} canEdit={canEdit} />
       }
     >
       <div className="flex h-full min-h-0 flex-col">
@@ -179,22 +187,26 @@ export function DdayWidget({ widgetId, canEdit = true }: DdayWidgetProps) {
         >
           <DialogContent className="max-w-sm">
             <DialogHeader>
-              <DialogTitle>{dday ? "디데이 설정" : "디데이 추가"}</DialogTitle>
-              <DialogDescription>제목과 날짜를 입력해주세요.</DialogDescription>
+              <DialogTitle>
+                {dday ? t("디데이 설정", "D-Day settings") : t("디데이 추가", "Add D-Day")}
+              </DialogTitle>
+              <DialogDescription>
+                {t("제목과 날짜를 입력해주세요.", "Enter a title and date.")}
+              </DialogDescription>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="grid gap-3">
               <div>
-                <label className="text-[11px] text-gray-400">제목</label>
+                <label className="text-[11px] text-gray-400">{t("제목", "Title")}</label>
                 <input
                   className="mt-1 w-full rounded-md border border-gray-300 bg-transparent px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-700"
                   value={draftTitle}
                   onChange={(event) => setDraftTitle(event.target.value)}
-                  placeholder="예: 프로젝트 마감"
+                  placeholder={t("예: 프로젝트 마감", "e.g., Project deadline")}
                   disabled={!canEdit}
                 />
               </div>
               <div>
-                <label className="text-[11px] text-gray-400">날짜</label>
+                <label className="text-[11px] text-gray-400">{t("날짜", "Date")}</label>
                 <input
                   type="date"
                   className="mt-1 w-full rounded-md border border-gray-300 bg-transparent px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-700"
@@ -211,7 +223,7 @@ export function DdayWidget({ widgetId, canEdit = true }: DdayWidgetProps) {
                     className="sm:mr-auto"
                     onClick={handleRemove}
                   >
-                    삭제
+                    {t("삭제", "Delete")}
                   </Button>
                 ) : null}
                 <Button
@@ -219,7 +231,7 @@ export function DdayWidget({ widgetId, canEdit = true }: DdayWidgetProps) {
                   variant="outline"
                   onClick={() => setDialogOpen(false)}
                 >
-                  취소
+                  {t("취소", "Cancel")}
                 </Button>
                 <Button type="submit" disabled={!canSubmit || !canEdit}>
                   {submitLabel}
@@ -232,7 +244,7 @@ export function DdayWidget({ widgetId, canEdit = true }: DdayWidgetProps) {
         {canEdit ? (
           <WidgetDeleteDialog
             open={isDeleteDialogOpen}
-            widgetName="디데이"
+            widgetName={t("디데이", "D-Day")}
             onClose={closeDeleteDialog}
             onConfirm={handleDelete}
           />

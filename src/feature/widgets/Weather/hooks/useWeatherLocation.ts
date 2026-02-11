@@ -1,17 +1,25 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   DEFAULT_WEATHER_LOCATION,
   WeatherLocation,
 } from "@/feature/widgets/Weather/libs/openMeteo";
+import { useI18n } from "@/shared/i18n/client";
 
 const STORAGE_KEY = "lifedashboard.weatherLocation";
 let geolocationPromise: Promise<WeatherLocation | null> | null = null;
-const CURRENT_LOCATION_LABEL = "현재 위치";
+const CURRENT_LOCATION_LABEL = {
+  ko: "현재 위치",
+  en: "Current location",
+} as const;
 
 type WeatherLocationState = {
   location: WeatherLocation;
   hasStoredLocation: boolean;
 };
+
+function getDefaultLocationLabel(language: "ko" | "en") {
+  return language === "ko" ? "서울" : "Seoul";
+}
 
 function parseStoredLocation(value: string | null): WeatherLocation | null {
   if (!value) return null;
@@ -37,7 +45,9 @@ function parseStoredLocation(value: string | null): WeatherLocation | null {
   }
 }
 
-function requestGeolocation(): Promise<WeatherLocation | null> {
+function requestGeolocation(
+  currentLocationLabel: string
+): Promise<WeatherLocation | null> {
   if (geolocationPromise) return geolocationPromise;
   geolocationPromise = new Promise((resolve) => {
     if (!navigator.geolocation) {
@@ -49,7 +59,7 @@ function requestGeolocation(): Promise<WeatherLocation | null> {
         resolve({
           latitude: position.coords.latitude,
           longitude: position.coords.longitude,
-          label: CURRENT_LOCATION_LABEL,
+          label: currentLocationLabel,
         });
       },
       () => resolve(null),
@@ -60,10 +70,23 @@ function requestGeolocation(): Promise<WeatherLocation | null> {
 }
 
 export function useWeatherLocation() {
+  const { language } = useI18n();
+  const currentLocationLabel =
+    language === "ko"
+      ? CURRENT_LOCATION_LABEL.ko
+      : CURRENT_LOCATION_LABEL.en;
+  const defaultLocation = useMemo<WeatherLocation>(
+    () => ({
+      ...DEFAULT_WEATHER_LOCATION,
+      label: getDefaultLocationLabel(language),
+    }),
+    [language]
+  );
+
   const [state, setState] = useState<WeatherLocationState>(() => {
     if (typeof window === "undefined") {
       return {
-        location: DEFAULT_WEATHER_LOCATION,
+        location: defaultLocation,
         hasStoredLocation: false,
       };
     }
@@ -72,18 +95,19 @@ export function useWeatherLocation() {
       return { location: stored, hasStoredLocation: true };
     }
     return {
-      location: DEFAULT_WEATHER_LOCATION,
+      location: defaultLocation,
       hasStoredLocation: false,
     };
   });
-  const { location, hasStoredLocation } = state;
+  const { location: storedLocation, hasStoredLocation } = state;
+  const location = hasStoredLocation ? storedLocation : defaultLocation;
 
   const resolveLocationLabel = useCallback(
     async (baseLocation: WeatherLocation) => {
       const params = new URLSearchParams({
         lat: String(baseLocation.latitude),
         lon: String(baseLocation.longitude),
-        language: "ko",
+        language,
       });
       const url = `/api/geocode/reverse?${params.toString()}`;
       try {
@@ -98,7 +122,7 @@ export function useWeatherLocation() {
         return baseLocation.label;
       }
     },
-    []
+    [language]
   );
 
   useEffect(() => {
@@ -109,11 +133,19 @@ export function useWeatherLocation() {
     };
 
     if (hasStoredLocation) {
-      if (location.label !== CURRENT_LOCATION_LABEL) return;
+      const isCurrentLocationLabel =
+        storedLocation.label === CURRENT_LOCATION_LABEL.ko ||
+        storedLocation.label === CURRENT_LOCATION_LABEL.en;
+      if (!isCurrentLocationLabel) return;
       void (async () => {
-        const label = await resolveLocationLabel(location);
-        if (label === location.label) return;
-        persistLocation({ ...location, label });
+        const label =
+          (await resolveLocationLabel({
+            ...storedLocation,
+            label: currentLocationLabel,
+          })) ||
+          currentLocationLabel;
+        if (label === storedLocation.label) return;
+        persistLocation({ ...storedLocation, label });
       })();
       return;
     }
@@ -124,12 +156,17 @@ export function useWeatherLocation() {
         name: "geolocation" as PermissionName,
       });
       if (status.state !== "granted") return;
-      const result = await requestGeolocation();
+      const result = await requestGeolocation(currentLocationLabel);
       if (!result) return;
       const label = await resolveLocationLabel(result);
       persistLocation({ ...result, label });
     })();
-  }, [hasStoredLocation, location, resolveLocationLabel]);
+  }, [
+    currentLocationLabel,
+    hasStoredLocation,
+    resolveLocationLabel,
+    storedLocation,
+  ]);
 
   const saveLocation = useCallback((next: WeatherLocation) => {
     setState({ location: next, hasStoredLocation: true });

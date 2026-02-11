@@ -6,6 +6,7 @@ import { useWidgetActionMenu } from "@/feature/widgets/shared/hooks/useWidgetAct
 import { updateWidgetSettings } from "@/shared/db/db";
 import { useWidget } from "@/shared/db/queries";
 import type { Id, Mood } from "@/shared/db/schema";
+import { useI18n } from "@/shared/i18n/client";
 import { cn } from "@/shared/lib/utils";
 import { Button } from "@/shared/ui/button";
 import {
@@ -24,15 +25,14 @@ type MoodValue = Mood["mood"];
 
 type MoodOption = {
   value: MoodValue;
-  label: string;
 };
 
 const MOOD_OPTIONS: MoodOption[] = [
-  { value: "great", label: "매우 행복" },
-  { value: "good", label: "행복" },
-  { value: "ok", label: "그저 그럼" },
-  { value: "bad", label: "슬픔.." },
-  { value: "awful", label: "화남!" },
+  { value: "great" },
+  { value: "good" },
+  { value: "ok" },
+  { value: "bad" },
+  { value: "awful" },
 ];
 
 const MOOD_ICONS: Record<MoodValue, ComponentType<{ className?: string }>> = {
@@ -61,7 +61,25 @@ type MoodWidgetProps = {
   canEdit?: boolean;
 };
 
+function getMoodLabel(value: MoodValue, t: (ko: string, en: string) => string) {
+  switch (value) {
+    case "great":
+      return t("매우 행복", "Very happy");
+    case "good":
+      return t("행복", "Happy");
+    case "ok":
+      return t("그저 그럼", "So-so");
+    case "bad":
+      return t("슬픔..", "Sad");
+    case "awful":
+      return t("화남!", "Angry");
+    default:
+      return "";
+  }
+}
+
 export function MoodWidget({ widgetId, canEdit = true }: MoodWidgetProps) {
+  const { t } = useI18n();
   const { mood, setMood } = useMoodWidget(widgetId);
   const widget = useWidget(widgetId);
   const [titleDialogOpen, setTitleDialogOpen] = useState(false);
@@ -128,17 +146,17 @@ export function MoodWidget({ widgetId, canEdit = true }: MoodWidgetProps) {
   } = useWidgetActionMenu({
     widgetId,
     canEdit,
-    deleteLabel: "위젯 삭제",
+    deleteLabel: t("위젯 삭제", "Delete widget"),
     extraItems: [
       {
-        text: "이름 설정",
+        text: t("이름 설정", "Set name"),
         icon: <Pencil className="size-4" />,
         onClick: openTitleDialog,
       },
       ...MOOD_OPTIONS.map((option) => {
         const Icon = MOOD_ICONS[option.value];
         return {
-          text: option.label,
+          text: getMoodLabel(option.value, t),
           icon: <Icon className="size-4" />,
           onClick: () => {
             void setMood(option.value);
@@ -150,9 +168,13 @@ export function MoodWidget({ widgetId, canEdit = true }: MoodWidgetProps) {
   });
 
   const PanelIcon = selectedMood ? MOOD_ICONS[selectedMood] : Meh;
-  const label = selectedOption?.label ?? "기분이 어때요?";
+  const label = selectedOption
+    ? getMoodLabel(selectedOption.value, t)
+    : t("기분이 어때요?", "How are you feeling?");
   const tone = selectedMood ? MOOD_TONES[selectedMood] : EMPTY_PANEL_CLASS;
-  const titleText = currentTitle ? `${currentTitle}의 기분` : "기분";
+  const titleText = currentTitle
+    ? t(`${currentTitle}의 기분`, `${currentTitle}'s mood`)
+    : t("기분", "Mood");
 
   return (
     <WidgetCard
@@ -188,7 +210,7 @@ export function MoodWidget({ widgetId, canEdit = true }: MoodWidgetProps) {
                 >
                   <Icon className="size-12 shrink-0" />
                   <span className="font-medium leading-none whitespace-nowrap">
-                    {option.label}
+                    {getMoodLabel(option.value, t)}
                   </span>
                 </button>
               );
@@ -204,19 +226,22 @@ export function MoodWidget({ widgetId, canEdit = true }: MoodWidgetProps) {
         >
           <DialogContent className="max-w-sm">
             <DialogHeader>
-              <DialogTitle>이름 설정</DialogTitle>
+              <DialogTitle>{t("이름 설정", "Set name")}</DialogTitle>
               <DialogDescription>
-                감정 위젯에 표시할 이름을 입력하세요.
+                {t(
+                  "감정 위젯에 표시할 이름을 입력하세요.",
+                  "Enter a name to display on the mood widget."
+                )}
               </DialogDescription>
             </DialogHeader>
             <form onSubmit={handleTitleSubmit} className="grid gap-3">
               <div>
-                <label className="text-[11px] text-gray-400">이름</label>
+                <label className="text-[11px] text-gray-400">{t("이름", "Name")}</label>
                 <input
                   className="mt-1 w-full rounded-md border border-gray-300 bg-transparent px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-700"
                   value={draftTitle}
                   onChange={(event) => setDraftTitle(event.target.value)}
-                  placeholder="예: 민지"
+                  placeholder={t("예: 민지", "e.g., Alex")}
                   disabled={!canEdit}
                 />
               </div>
@@ -226,10 +251,10 @@ export function MoodWidget({ widgetId, canEdit = true }: MoodWidgetProps) {
                   variant="outline"
                   onClick={() => setTitleDialogOpen(false)}
                 >
-                  취소
+                  {t("취소", "Cancel")}
                 </Button>
                 <Button type="submit" disabled={!canEdit}>
-                  저장
+                  {t("저장", "Save")}
                 </Button>
               </DialogFooter>
             </form>
@@ -239,7 +264,7 @@ export function MoodWidget({ widgetId, canEdit = true }: MoodWidgetProps) {
         {canEdit ? (
           <WidgetDeleteDialog
             open={isDeleteDialogOpen}
-            widgetName="감정"
+            widgetName={t("감정", "Mood")}
             onClose={closeDeleteDialog}
             onConfirm={handleDelete}
           />

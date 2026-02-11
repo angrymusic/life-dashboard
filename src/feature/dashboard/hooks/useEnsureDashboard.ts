@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ensureDefaultDashboard, getOrCreateLocalProfileId } from "@/shared/db/db";
 import type { Dashboard } from "@/shared/db/schema";
+import { useI18n } from "@/shared/i18n/client";
+import { localizeErrorMessage } from "@/shared/i18n/errorMessage";
 
 type EnsureOptions = {
   enabled?: boolean;
@@ -12,6 +14,7 @@ export function useEnsureDashboard(
   dashboards: Dashboard[] | undefined,
   options: EnsureOptions = {}
 ) {
+  const { t } = useI18n();
   const isCreatingRef = useRef(false);
   const [isCreating, setIsCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -46,15 +49,22 @@ export function useEnsureDashboard(
       } catch (err) {
         const message =
           err instanceof Error
-            ? err.message
-            : "대시보드를 생성하지 못했어요.";
+            ? localizeErrorMessage(err.message, t)
+            : t("대시보드를 생성하지 못했어요.", "Failed to create dashboard.");
         setError(message);
       } finally {
         isCreatingRef.current = false;
         setIsCreating(false);
       }
     })();
-  }, [dashboards, attempt, options.enabled, options.shouldCreate, options.skipOutbox]);
+  }, [
+    dashboards,
+    attempt,
+    options.enabled,
+    options.shouldCreate,
+    options.skipOutbox,
+    t,
+  ]);
 
   return { isCreating, error, retry };
 }

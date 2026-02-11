@@ -44,7 +44,7 @@ type OpenMeteoForecast = {
 export const DEFAULT_WEATHER_LOCATION: WeatherLocation = {
   latitude: 37.5665,
   longitude: 126.978,
-  label: "서울",
+  label: "Seoul",
 };
 
 export const WEATHER_CACHE_TTL_MS = 30 * 60 * 1000;
