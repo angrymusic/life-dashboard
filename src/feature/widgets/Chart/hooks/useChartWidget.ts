@@ -8,6 +8,7 @@ import {
 } from "@/shared/db/db";
 import type { Id, Metric, MetricEntry, YMD } from "@/shared/db/schema";
 import { useMetricEntries, useMetrics, useWidget } from "@/shared/db/queries";
+import { useI18n } from "@/shared/i18n/client";
 
 type ChartType = "line" | "bar";
 type DraftField<T> = { metricId: Id; value: T } | null;
@@ -20,6 +21,7 @@ function toYmd(date: Date): YMD {
 }
 
 export function useChartWidget(widgetId: Id) {
+  const { t } = useI18n();
   const widget = useWidget(widgetId);
   const metrics = useMetrics(widgetId);
   const metric = useMemo(() => metrics?.[0] ?? null, [metrics]);
@@ -62,7 +64,7 @@ export function useChartWidget(widgetId: Id) {
   const saveName = useCallback(async () => {
     if (!metric) return;
     const trimmed = resolvedDraftName.trim();
-    const nextName = trimmed || "지표";
+    const nextName = trimmed || t("지표", "Metric");
     if (nextName === metric.name) {
       if (nextName !== resolvedDraftName) {
         setDraftNameState({ metricId: metric.id, value: nextName });
@@ -71,7 +73,7 @@ export function useChartWidget(widgetId: Id) {
     }
     await updateMetric({ name: nextName });
     setDraftNameState({ metricId: metric.id, value: nextName });
-  }, [metric, resolvedDraftName, updateMetric]);
+  }, [metric, resolvedDraftName, t, updateMetric]);
 
   const saveUnit = useCallback(async () => {
     if (!metric) return;
@@ -118,10 +120,10 @@ export function useChartWidget(widgetId: Id) {
     await createMetricRecord({
       widgetId,
       dashboardId: widget.dashboardId,
-      name: "지표",
+      name: t("지표", "Metric"),
       chartType: "line",
     });
-  }, [widget, widgetId]);
+  }, [t, widget, widgetId]);
 
   const addEntry = useCallback(async () => {
     if (!metric) return;

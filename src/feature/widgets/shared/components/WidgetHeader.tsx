@@ -5,6 +5,7 @@ import {
   ActionMenuItem,
 } from "@/shared/ui/buttons/DropdownButton";
 import { cn } from "@/shared/lib/utils";
+import { useI18n } from "@/shared/i18n/client";
 
 type WidgetHeaderProps = {
   title?: string;
@@ -47,6 +48,7 @@ export function WidgetHeader({
 }
 
 function ReadOnlyLockHint() {
+  const { t } = useI18n();
   const [isHovered, setIsHovered] = useState(false);
   const [isPinnedOpen, setIsPinnedOpen] = useState(false);
   const [isHoverSuppressed, setIsHoverSuppressed] = useState(false);
@@ -94,7 +96,7 @@ function ReadOnlyLockHint() {
     >
       <button
         type="button"
-        aria-label="수정 권한 안내"
+        aria-label={t("수정 권한 안내", "Edit permission info")}
         aria-describedby={isOpen ? tooltipId : undefined}
         aria-pressed={isPinnedOpen}
         className={cn(
@@ -121,7 +123,7 @@ function ReadOnlyLockHint() {
           isOpen ? "translate-y-0 opacity-100" : "invisible -translate-y-1 opacity-0"
         )}
       >
-        작성자만 수정 가능
+        {t("작성자만 수정 가능", "Only the creator can edit")}
       </div>
     </div>
   );

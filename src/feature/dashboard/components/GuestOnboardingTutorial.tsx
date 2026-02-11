@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Button } from "@/shared/ui/button";
 import { cn } from "@/shared/lib/utils";
+import { useI18n } from "@/shared/i18n/client";
 
 const STORAGE_KEY = "lifedashboard.guestOnboarding.v1.completed";
 const HIGHLIGHT_PADDING = 8;
@@ -19,36 +20,6 @@ type TutorialStep = {
   description: string;
   placement: StepPlacement;
 };
-
-const STEPS: TutorialStep[] = [
-  {
-    targetId: "dashboard-manage",
-    title: "대시보드 관리",
-    description:
-      "좌측 상단 버튼에서 대시보드를 만들고, 이름을 바꾸거나 삭제할 수 있어요.",
-    placement: "bottom-start",
-  },
-  {
-    targetId: "member-manage",
-    title: "구성원 관리",
-    description:
-      "우측 상단 구성원 버튼에서 현재 대시보드의 구성원을 추가하고 관리할 수 있어요.",
-    placement: "bottom-end",
-  },
-  {
-    targetId: "account-manage",
-    title: "계정 관리",
-    description:
-      "우측 상단 계정 버튼에서 로그인 상태 확인, 로그인/로그아웃, 로컬 데이터 관리를 할 수 있어요.",
-    placement: "bottom-end",
-  },
-  {
-    targetId: "add-widget",
-    title: "위젯 추가",
-    description: "우측 하단 + 버튼에서 원하는 위젯을 추가할 수 있어요.",
-    placement: "top-end",
-  },
-];
 
 type Rect = {
   top: number;
@@ -73,13 +44,55 @@ function clamp(value: number, min: number, max: number) {
 export default function GuestOnboardingTutorial({
   enabled,
 }: GuestOnboardingTutorialProps) {
+  const { t } = useI18n();
+  const steps = useMemo<TutorialStep[]>(
+    () => [
+      {
+        targetId: "dashboard-manage",
+        title: t("대시보드 관리", "Dashboard management"),
+        description: t(
+          "좌측 상단 버튼에서 대시보드를 만들고, 이름을 바꾸거나 삭제할 수 있어요.",
+          "Use the top-left button to create dashboards, rename them, or delete them."
+        ),
+        placement: "bottom-start",
+      },
+      {
+        targetId: "member-manage",
+        title: t("구성원 관리", "Member management"),
+        description: t(
+          "우측 상단 구성원 버튼에서 현재 대시보드의 구성원을 추가하고 관리할 수 있어요.",
+          "Use the top-right member button to add and manage members of the current dashboard."
+        ),
+        placement: "bottom-end",
+      },
+      {
+        targetId: "account-manage",
+        title: t("계정 관리", "Account management"),
+        description: t(
+          "우측 상단 계정 버튼에서 로그인 상태 확인, 로그인/로그아웃, 로컬 데이터 관리를 할 수 있어요.",
+          "Use the top-right account button to check sign-in status, sign in/out, and manage local data."
+        ),
+        placement: "bottom-end",
+      },
+      {
+        targetId: "add-widget",
+        title: t("위젯 추가", "Add widget"),
+        description: t(
+          "우측 하단 + 버튼에서 원하는 위젯을 추가할 수 있어요.",
+          "Use the bottom-right + button to add the widgets you want."
+        ),
+        placement: "top-end",
+      },
+    ],
+    [t]
+  );
   const [open, setOpen] = useState(false);
   const [stepIndex, setStepIndex] = useState(0);
   const [targetRect, setTargetRect] = useState<Rect | null>(null);
   const [viewport, setViewport] = useState<Viewport>({ width: 0, height: 0 });
 
-  const currentStep = STEPS[Math.min(stepIndex, STEPS.length - 1)];
-  const isLastStep = stepIndex >= STEPS.length - 1;
+  const currentStep = steps[Math.min(stepIndex, steps.length - 1)];
+  const isLastStep = stepIndex >= steps.length - 1;
 
   const completeTutorial = useCallback(() => {
     localStorage.setItem(STORAGE_KEY, "1");
@@ -113,9 +126,9 @@ export default function GuestOnboardingTutorial({
       }
       const completed = localStorage.getItem(STORAGE_KEY) === "1";
       if (!completed) {
-        setStepIndex(0);
-        setOpen(true);
-      }
+              setStepIndex(0);
+              setOpen(true);
+            }
     });
     return () => window.cancelAnimationFrame(frame);
   }, [enabled]);
@@ -202,7 +215,7 @@ export default function GuestOnboardingTutorial({
       <div
         role="dialog"
         aria-modal="true"
-        aria-label="초기 사용 가이드"
+        aria-label={t("초기 사용 가이드", "Getting started guide")}
         className={cn(
           "fixed z-[70] w-[min(20rem,calc(100vw-2rem))] rounded-2xl border border-white/20 bg-card/95 p-4 text-card-foreground shadow-xl backdrop-blur-sm",
           !targetRect ? "top-4 left-4 right-4 mx-auto sm:w-80 sm:left-1/2 sm:-translate-x-1/2" : ""
@@ -211,14 +224,14 @@ export default function GuestOnboardingTutorial({
       >
         <div className="mb-2 flex items-center justify-between gap-3">
           <div className="text-xs font-medium text-muted-foreground">
-            시작 가이드 {stepIndex + 1}/{STEPS.length}
+            {t("시작 가이드", "Guide")} {stepIndex + 1}/{steps.length}
           </div>
           <button
             type="button"
             className="rounded px-2 py-1 text-xs text-muted-foreground hover:bg-accent"
             onClick={completeTutorial}
           >
-            건너뛰기
+            {t("건너뛰기", "Skip")}
           </button>
         </div>
         <div className="space-y-1">
@@ -235,7 +248,7 @@ export default function GuestOnboardingTutorial({
             onClick={() => setStepIndex((prev) => Math.max(0, prev - 1))}
             disabled={stepIndex === 0}
           >
-            이전
+            {t("이전", "Back")}
           </Button>
           <Button
             type="button"
@@ -245,10 +258,10 @@ export default function GuestOnboardingTutorial({
                 completeTutorial();
                 return;
               }
-              setStepIndex((prev) => Math.min(prev + 1, STEPS.length - 1));
+              setStepIndex((prev) => Math.min(prev + 1, steps.length - 1));
             }}
           >
-            {isLastStep ? "완료" : "다음"}
+            {isLastStep ? t("완료", "Done") : t("다음", "Next")}
           </Button>
         </div>
       </div>

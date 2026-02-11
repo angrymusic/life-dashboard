@@ -33,18 +33,25 @@ import {
   toYmd,
 } from "@/feature/widgets/Calendar/libs/calendarUtils";
 import { useSpecialDayEvents } from "@/feature/widgets/Calendar/hooks/useSpecialDayEvents";
+import { useI18n } from "@/shared/i18n/client";
 
 type RecurrenceType = "none" | "weekly" | "cycle" | "yearly";
 type DeleteScope = "all" | "future";
 
-const DEFAULT_CYCLE_PATTERN: CalendarRecurrenceCycleItem[] = [
-  { label: "주간", days: 1 },
-  { label: "야간", days: 1 },
-  { label: "비번", days: 1 },
-  { label: "휴무", days: 1 },
-];
+function buildDefaultCyclePattern(
+  t: (ko: string, en: string) => string
+): CalendarRecurrenceCycleItem[] {
+  return [
+    { label: t("주간", "Day shift"), days: 1 },
+    { label: t("야간", "Night shift"), days: 1 },
+    { label: t("비번", "Off"), days: 1 },
+    { label: t("휴무", "Rest"), days: 1 },
+  ];
+}
 
 export function useCalendarWidget(widgetId: Id) {
+  const { t } = useI18n();
+  const defaultCyclePattern = buildDefaultCyclePattern(t);
   const events = useCalendarEvents(widgetId);
   const widget = useWidget(widgetId);
 
@@ -67,7 +74,7 @@ export function useCalendarWidget(widgetId: Id) {
   const [weeklyDays, setWeeklyDays] = useState<number[]>([]);
   const [cyclePattern, setCyclePattern] = useState<
     CalendarRecurrenceCycleItem[]
-  >(DEFAULT_CYCLE_PATTERN);
+  >(defaultCyclePattern);
 
   const selectedYmd = useMemo(() => toYmd(selectedDate), [selectedDate]);
   const todayYmd = useMemo(() => toYmd(new Date()), []);
@@ -220,8 +227,8 @@ export function useCalendarWidget(widgetId: Id) {
     setRecurrenceTypeState("none");
     setRecurrenceUntil("");
     setWeeklyDays([]);
-    setCyclePattern(DEFAULT_CYCLE_PATTERN);
-  }, [selectedYmd]);
+    setCyclePattern(defaultCyclePattern);
+  }, [defaultCyclePattern, selectedYmd]);
 
   const setRangeEnabled = useCallback(
     (next: boolean) => {
@@ -265,7 +272,7 @@ export function useCalendarWidget(widgetId: Id) {
       }
       if (next === "cycle") {
         if (cyclePattern.length === 0) {
-          setCyclePattern(DEFAULT_CYCLE_PATTERN);
+          setCyclePattern(defaultCyclePattern);
         }
         return;
       }
@@ -273,7 +280,7 @@ export function useCalendarWidget(widgetId: Id) {
         return;
       }
     },
-    [cyclePattern.length, draftStartDate, selectedDate, weeklyDays.length]
+    [cyclePattern.length, defaultCyclePattern, draftStartDate, selectedDate, weeklyDays.length]
   );
 
   const toggleWeeklyDay = useCallback((dayIndex: number) => {
@@ -318,8 +325,8 @@ export function useCalendarWidget(widgetId: Id) {
     setRecurrenceTypeState("none");
     setRecurrenceUntil("");
     setWeeklyDays([]);
-    setCyclePattern(DEFAULT_CYCLE_PATTERN);
-  }, [selectedYmd]);
+    setCyclePattern(defaultCyclePattern);
+  }, [defaultCyclePattern, selectedYmd]);
 
   const startEdit = useCallback(
     (event: CalendarEventInstance) => {
@@ -346,7 +353,7 @@ export function useCalendarWidget(widgetId: Id) {
         setRecurrenceTypeState("none");
         setRecurrenceUntil("");
         setWeeklyDays([]);
-        setCyclePattern(DEFAULT_CYCLE_PATTERN);
+        setCyclePattern(defaultCyclePattern);
       } else if (baseEvent.recurrence.type === "weekly") {
         setRecurrenceTypeState("weekly");
         setRecurrenceUntil(baseEvent.recurrence.until ?? "");
@@ -363,7 +370,7 @@ export function useCalendarWidget(widgetId: Id) {
                 ...item,
                 days: item.days ?? 1,
               }))
-            : DEFAULT_CYCLE_PATTERN
+            : defaultCyclePattern
         );
       }
 
@@ -403,7 +410,7 @@ export function useCalendarWidget(widgetId: Id) {
       setDraftEndTime("");
       setDraftTime(!baseEvent.allDay ? formatTimeInput(start) : "");
     },
-    [eventsById]
+    [defaultCyclePattern, eventsById]
   );
 
   const addEvent = useCallback(async () => {
@@ -569,8 +576,9 @@ export function useCalendarWidget(widgetId: Id) {
     setRecurrenceTypeState("none");
     setRecurrenceUntil("");
     setWeeklyDays([]);
-    setCyclePattern(DEFAULT_CYCLE_PATTERN);
+    setCyclePattern(defaultCyclePattern);
   }, [
+    defaultCyclePattern,
     widget,
     editingEventId,
     widgetId,

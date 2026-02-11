@@ -13,6 +13,8 @@ import {
   WeatherHourly,
   WeatherLocation,
 } from "@/feature/widgets/Weather/libs/openMeteo";
+import { useI18n } from "@/shared/i18n/client";
+import { localizeErrorMessage } from "@/shared/i18n/errorMessage";
 
 type WeatherForecast = {
   days: WeatherForecastDay[];
@@ -31,6 +33,7 @@ export function useWeatherForecast(
   widgetId: Id,
   options: UseWeatherForecastOptions = {}
 ) {
+  const { t } = useI18n();
   const widget = useWidget(widgetId);
   const cacheEntry = useWeatherCache(widgetId);
   const [isLoading, setIsLoading] = useState(false);
@@ -82,7 +85,9 @@ export function useWeatherForecast(
         const url = buildOpenMeteoUrl(location, days);
         const response = await fetch(url);
         if (!response.ok) {
-          throw new Error("날씨 정보를 불러오지 못했어요.");
+          throw new Error(
+            t("날씨 정보를 불러오지 못했어요.", "Failed to load weather information.")
+          );
         }
 
         const payload = (await response.json()) as unknown;
@@ -98,14 +103,16 @@ export function useWeatherForecast(
         });
       } catch (err) {
         const message =
-          err instanceof Error ? err.message : "날씨 정보를 불러오지 못했어요.";
+          err instanceof Error
+            ? localizeErrorMessage(err.message, t)
+            : t("날씨 정보를 불러오지 못했어요.", "Failed to load weather information.");
         setError(message);
       } finally {
         inFlightRef.current = false;
         setIsLoading(false);
       }
     },
-    [enabled, widget, isCacheFresh, location, days, widgetId, cacheKey]
+    [cacheKey, days, enabled, isCacheFresh, location, t, widget, widgetId]
   );
 
   useEffect(() => {

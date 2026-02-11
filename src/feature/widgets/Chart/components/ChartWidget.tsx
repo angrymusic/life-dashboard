@@ -11,6 +11,7 @@ import { WidgetHeader } from "@/feature/widgets/shared/components/WidgetHeader";
 import { useWidgetActionMenu } from "@/feature/widgets/shared/hooks/useWidgetActionMenu";
 import { updateWidgetSettings } from "@/shared/db/db";
 import type { Id, YMD } from "@/shared/db/schema";
+import { useI18n } from "@/shared/i18n/client";
 import { Button } from "@/shared/ui/button";
 import { List, Pencil } from "lucide-react";
 import type { FormEvent } from "react";
@@ -33,6 +34,7 @@ type ChartWidgetProps = {
 };
 
 export function ChartWidget({ widgetId, canEdit = true }: ChartWidgetProps) {
+  const { t, locale } = useI18n();
   const {
     metric,
     widget,
@@ -122,12 +124,12 @@ export function ChartWidget({ widgetId, canEdit = true }: ChartWidgetProps) {
   const extraItems = isConfigured
     ? [
         {
-          text: "기록 관리",
+          text: t("기록 관리", "Record management"),
           icon: <List />,
           onClick: handleManageEntries,
         },
         {
-          text: "지표 설정",
+          text: t("차트 설정", "Chart settings"),
           icon: <Pencil />,
           onClick: () => handleSettingsOpenChange(true),
         },
@@ -143,7 +145,7 @@ export function ChartWidget({ widgetId, canEdit = true }: ChartWidgetProps) {
   } = useWidgetActionMenu({
     widgetId,
     canEdit,
-    deleteLabel: "위젯 삭제",
+    deleteLabel: t("위젯 삭제", "Delete widget"),
     extraItems,
   });
 
@@ -156,7 +158,7 @@ export function ChartWidget({ widgetId, canEdit = true }: ChartWidgetProps) {
     [entries]
   );
   const unitLabel = metric?.unit?.trim() || "";
-  const title = metric?.name?.trim() || "차트";
+  const title = metric?.name?.trim() || t("차트", "Chart");
 
   return (
     <WidgetCard
@@ -177,46 +179,46 @@ export function ChartWidget({ widgetId, canEdit = true }: ChartWidgetProps) {
     >
       <div className="flex h-full min-h-0 flex-col">
         {!metricsLoaded ? (
-          <div className="text-sm text-gray-400">불러오는 중...</div>
+          <div className="text-sm text-gray-400">{t("불러오는 중...", "Loading...")}</div>
         ) : !metric ? (
           <div className="flex flex-1 flex-col items-start justify-center gap-3 text-sm text-gray-500">
-            <div>지표가 없습니다.</div>
+            <div>{t("지표가 없습니다.", "No metric yet.")}</div>
             {canEdit ? (
               <Button type="button" size="sm" onClick={() => void createMetric()}>
-                지표 생성
+                {t("지표 생성", "Create metric")}
               </Button>
             ) : null}
           </div>
         ) : needsSetup ? (
           <div className="flex flex-1 flex-col gap-3">
             <div className="text-sm text-gray-500">
-              지표 설정을 완료하면 차트가 표시됩니다.
+              {t("설정을 완료하면 차트가 표시됩니다.", "Complete settings to display the chart.")}
             </div>
             <div className="grid gap-2 sm:grid-cols-[minmax(0,1fr)_140px_auto]">
               <div className="flex flex-col gap-1">
-                <label className="text-xs text-gray-500">지표 이름</label>
+                <label className="text-xs text-gray-500">{t("차트 이름", "Chart name")}</label>
                 <input
                   className="w-full rounded-md border border-gray-300 dark:border-gray-700 bg-transparent px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-60"
                   value={draftName}
                   onChange={(event) => setDraftName(event.target.value)}
                   onBlur={() => void saveName()}
-                  placeholder="예: 체중, 키, 공부 시간"
+                  placeholder={t("예: 체중, 키, 공부 시간", "e.g., Weight, Height, Study time")}
                   disabled={!canEdit}
                 />
               </div>
               <div className="flex flex-col gap-1">
-                <label className="text-xs text-gray-500">단위</label>
+                <label className="text-xs text-gray-500">{t("단위", "Unit")}</label>
                 <input
                   className="w-full rounded-md border border-gray-300 dark:border-gray-700 bg-transparent px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-60"
                   value={draftUnit}
                   onChange={(event) => setDraftUnit(event.target.value)}
                   onBlur={() => void saveUnit()}
-                  placeholder="예: kg, cm"
+                  placeholder={t("예: kg, cm", "e.g., kg, cm")}
                   disabled={!canEdit}
                 />
               </div>
               <div className="flex flex-col gap-1">
-                <label className="text-xs text-gray-500">차트</label>
+                <label className="text-xs text-gray-500">{t("차트", "Chart")}</label>
                 <div className="flex items-center gap-1">
                   <Button
                     type="button"
@@ -225,7 +227,7 @@ export function ChartWidget({ widgetId, canEdit = true }: ChartWidgetProps) {
                     onClick={() => void setChartType("line")}
                     disabled={!canEdit}
                   >
-                    선
+                    {t("선", "Line")}
                   </Button>
                   <Button
                     type="button"
@@ -234,7 +236,7 @@ export function ChartWidget({ widgetId, canEdit = true }: ChartWidgetProps) {
                     onClick={() => void setChartType("bar")}
                     disabled={!canEdit}
                   >
-                    막대
+                    {t("막대", "Bar")}
                   </Button>
                 </div>
               </div>
@@ -246,7 +248,7 @@ export function ChartWidget({ widgetId, canEdit = true }: ChartWidgetProps) {
                 onClick={handleCompleteSettings}
                 disabled={!canEdit}
               >
-                설정 완료
+                {t("설정 완료", "Done")}
               </Button>
             </div>
           </div>
@@ -256,7 +258,7 @@ export function ChartWidget({ widgetId, canEdit = true }: ChartWidgetProps) {
               <div className="flex min-h-[180px] flex-1 rounded-md border border-gray-200/70 dark:border-gray-700 p-2 overflow-hidden">
                 {chartData.length === 0 ? (
                   <div className="flex h-full w-full items-center justify-center text-sm text-gray-400">
-                    기록이 없습니다
+                    {t("기록이 없습니다", "No records")}
                   </div>
                 ) : (
                   <ResponsiveContainer
@@ -275,7 +277,7 @@ export function ChartWidget({ widgetId, canEdit = true }: ChartWidgetProps) {
                         <XAxis
                           dataKey="date"
                           tickFormatter={(value) =>
-                            formatShortDate(value as YMD)
+                            formatShortDate(value as YMD, locale)
                           }
                           tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
                           axisLine={false}
@@ -290,11 +292,11 @@ export function ChartWidget({ widgetId, canEdit = true }: ChartWidgetProps) {
                         />
                         <Tooltip
                           formatter={(value) => [
-                            formatValue(Number(value), unitLabel || undefined),
+                            formatValue(Number(value), locale, unitLabel || undefined),
                             title,
                           ]}
                           labelFormatter={(label) =>
-                            formatLongDate(label as YMD)
+                            formatLongDate(label as YMD, locale)
                           }
                           contentStyle={{
                             background: "var(--popover)",
@@ -321,7 +323,7 @@ export function ChartWidget({ widgetId, canEdit = true }: ChartWidgetProps) {
                         <XAxis
                           dataKey="date"
                           tickFormatter={(value) =>
-                            formatShortDate(value as YMD)
+                            formatShortDate(value as YMD, locale)
                           }
                           tick={{ fontSize: 11, fill: "var(--muted-foreground)" }}
                           axisLine={false}
@@ -336,11 +338,11 @@ export function ChartWidget({ widgetId, canEdit = true }: ChartWidgetProps) {
                         />
                         <Tooltip
                           formatter={(value) => [
-                            formatValue(Number(value), unitLabel || undefined),
+                            formatValue(Number(value), locale, unitLabel || undefined),
                             title,
                           ]}
                           labelFormatter={(label) =>
-                            formatLongDate(label as YMD)
+                            formatLongDate(label as YMD, locale)
                           }
                           contentStyle={{
                             background: "var(--popover)",
@@ -415,7 +417,7 @@ export function ChartWidget({ widgetId, canEdit = true }: ChartWidgetProps) {
         {canEdit ? (
           <WidgetDeleteDialog
             open={isDeleteDialogOpen}
-            widgetName="차트"
+            widgetName={t("차트", "Chart")}
             onClose={closeDeleteDialog}
             onConfirm={handleDelete}
           />

@@ -8,19 +8,23 @@ import { useWidgetActionMenu } from "@/feature/widgets/shared/hooks/useWidgetAct
 import { WeatherIcon } from "@/feature/widgets/Weather/components/WeatherIcon";
 import { useWeatherForecast } from "@/feature/widgets/Weather/hooks/useWeatherForecast";
 import { useWeatherLocation } from "@/feature/widgets/Weather/hooks/useWeatherLocation";
+import { useI18n } from "@/shared/i18n/client";
 import { cn } from "@/shared/lib/utils";
 import type { WeatherHourly } from "@/feature/widgets/Weather/libs/openMeteo";
 
-const WEEK_DAYS = ["일", "월", "화", "수", "목", "금", "토"];
-
-function formatDayLabel(ymd: YMD, index: number) {
-  if (index === 0) return "오늘";
-  if (index === 1) return "내일";
+function formatDayLabel(
+  ymd: YMD,
+  index: number,
+  locale: string,
+  t: (ko: string, en: string) => string
+) {
+  if (index === 0) return t("오늘", "Today");
+  if (index === 1) return t("내일", "Tomorrow");
   const [year, month, day] = ymd.split("-").map(Number);
   if (!year || !month || !day) return ymd;
   const date = new Date(year, month - 1, day);
   if (Number.isNaN(date.getTime())) return ymd;
-  return WEEK_DAYS[date.getDay()];
+  return new Intl.DateTimeFormat(locale, { weekday: "short" }).format(date);
 }
 
 function formatTemp(value: number | null) {
@@ -28,12 +32,13 @@ function formatTemp(value: number | null) {
   return `${Math.round(value)}°`;
 }
 
-function formatUpdatedAt(value: string) {
+function formatUpdatedAt(value: string, locale: string) {
   const date = new Date(value);
   if (Number.isNaN(date.getTime())) return "";
-  const hh = String(date.getHours()).padStart(2, "0");
-  const mm = String(date.getMinutes()).padStart(2, "0");
-  return `${hh}:${mm}`;
+  return new Intl.DateTimeFormat(locale, {
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
 }
 
 function toYmd(date: Date) {
@@ -43,9 +48,13 @@ function toYmd(date: Date) {
   return `${yyyy}-${mm}-${dd}` as YMD;
 }
 
-function formatHourLabel(hour: number | null) {
+function formatHourLabel(hour: number | null, locale: string) {
   if (hour === null) return "--";
-  return `${hour}시`;
+  const date = new Date();
+  date.setHours(hour, 0, 0, 0);
+  return new Intl.DateTimeFormat(locale, {
+    hour: "numeric",
+  }).format(date);
 }
 
 type WeatherWidgetProps = {
@@ -54,6 +63,7 @@ type WeatherWidgetProps = {
 };
 
 export function WeatherWidget({ widgetId, canEdit = true }: WeatherWidgetProps) {
+  const { t, locale } = useI18n();
   const { location } = useWeatherLocation();
   const { forecast, isLoading, error, refresh } = useWeatherForecast(widgetId, {
     location,
@@ -68,10 +78,10 @@ export function WeatherWidget({ widgetId, canEdit = true }: WeatherWidgetProps) 
   } = useWidgetActionMenu({
     widgetId,
     canEdit,
-    deleteLabel: "위젯 삭제",
+    deleteLabel: t("위젯 삭제", "Delete widget"),
     extraItems: [
       {
-        text: "새로고침",
+        text: t("새로고침", "Refresh"),
         icon: <RefreshCcw className="size-4" />,
         disabled: isLoading,
         onClick: refresh,
@@ -99,28 +109,30 @@ export function WeatherWidget({ widgetId, canEdit = true }: WeatherWidgetProps) 
     return `${formatTemp(days[0].tempMin)} / ${formatTemp(days[0].tempMax)}`;
   }, [days]);
   const updatedAt = forecast?.fetchedAt
-    ? formatUpdatedAt(forecast.fetchedAt)
+    ? formatUpdatedAt(forecast.fetchedAt, locale)
     : "";
   const tempRangeByDay = useMemo(
     () =>
       days.map((day, index) => ({
-        label: formatDayLabel(day.ymd, index),
+        label: formatDayLabel(day.ymd, index, locale, t),
         tempRange: `${formatTemp(day.tempMin)} / ${formatTemp(day.tempMax)}`,
       })),
-    [days]
+    [days, locale, t]
   );
 
   return (
     <WidgetCard
       header={
-        <WidgetHeader title="날씨" actions={actions} canEdit={canEdit} />
+        <WidgetHeader title={t("날씨", "Weather")} actions={actions} canEdit={canEdit} />
       }
     >
       <div className="flex h-full min-h-0 flex-col">
         <div className="flex items-center justify-between text-xs text-gray-500">
           <span className="min-w-0 truncate">{location.label}</span>
           {updatedAt ? (
-            <span className="hidden @xs:inline">업데이트 {updatedAt}</span>
+            <span className="hidden @xs:inline">
+              {t("업데이트", "Updated")} {updatedAt}
+            </span>
           ) : null}
         </div>
 
@@ -128,13 +140,13 @@ export function WeatherWidget({ widgetId, canEdit = true }: WeatherWidgetProps) 
           <div className="mt-3 rounded-lg border border-gray-200/70 dark:border-gray-700 p-3">
             <div className="flex items-center justify-between">
               <div>
-                <div className="text-xs text-gray-500">현재</div>
+                <div className="text-xs text-gray-500">{t("현재", "Now")}</div>
                 <div className="text-3xl font-semibold leading-none">
                   {formatTemp(currentEntry.temp)}
                 </div>
                 {todayRange ? (
                   <div className="mt-1 text-xs text-gray-500">
-                    최저/최고 {todayRange}
+                    {t("최저/최고", "Low/High")} {todayRange}
                   </div>
                 ) : null}
               </div>
@@ -151,14 +163,16 @@ export function WeatherWidget({ widgetId, canEdit = true }: WeatherWidgetProps) 
           style={{ WebkitOverflowScrolling: "touch" }}
         >
           {!forecast && isLoading ? (
-            <div className="text-sm text-gray-400">날씨 불러오는 중...</div>
+            <div className="text-sm text-gray-400">
+              {t("날씨 불러오는 중...", "Loading weather...")}
+            </div>
           ) : null}
           {error ? (
             <div className="text-sm text-red-500">{error}</div>
           ) : null}
           {forecast ? (
             <div className="mb-3 min-w-0">
-              <div className="mb-2 text-xs text-gray-500">이번 주</div>
+              <div className="mb-2 text-xs text-gray-500">{t("이번 주", "This week")}</div>
               <div
                 className="flex gap-2 overflow-x-auto overflow-y-hidden pb-1 touch-pan-x overscroll-x-contain"
                 style={{ WebkitOverflowScrolling: "touch" }}
@@ -184,7 +198,7 @@ export function WeatherWidget({ widgetId, canEdit = true }: WeatherWidgetProps) 
           ) : null}
           {hourlyToday.length > 0 ? (
             <div className="space-y-2">
-              <div className="text-xs text-gray-500">오늘 시간별</div>
+              <div className="text-xs text-gray-500">{t("오늘 시간별", "Today by hour")}</div>
               <div className="space-y-2">
                 {hourlyToday.map((hour) => (
                   <div
@@ -198,7 +212,7 @@ export function WeatherWidget({ widgetId, canEdit = true }: WeatherWidgetProps) 
                   >
                     <div className="flex items-center gap-3">
                       <span className="w-10 font-medium">
-                        {formatHourLabel(hour.hour)}
+                        {formatHourLabel(hour.hour, locale)}
                       </span>
                       <WeatherIcon
                         code={hour.weatherCode}
@@ -216,7 +230,7 @@ export function WeatherWidget({ widgetId, canEdit = true }: WeatherWidgetProps) 
         {canEdit ? (
           <WidgetDeleteDialog
             open={isDeleteDialogOpen}
-            widgetName="날씨"
+            widgetName={t("날씨", "Weather")}
             onClose={closeDeleteDialog}
             onConfirm={handleDelete}
           />

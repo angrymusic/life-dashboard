@@ -42,8 +42,8 @@ const createWithLayout =
 const widgetRegistryEntries = [
   {
     type: "calendar",
-    title: "달력",
-    description: "월간 일정과 이벤트를 확인해요",
+    title: "Calendar",
+    description: "View monthly schedules and events",
     create: createWithLayout({ w: 5, h: 13, minW: 5, minH: 12 }),
     render: ({ widgetId, canEdit }) => (
       <CalendarWidget widgetId={widgetId} canEdit={canEdit} />
@@ -51,8 +51,8 @@ const widgetRegistryEntries = [
   },
   {
     type: "memo",
-    title: "메모",
-    description: "간단한 메모를 적어요",
+    title: "Memo",
+    description: "Write quick notes",
     create: createWithLayout(
       { w: 3, h: 4, minW: 3, minH: 4 },
       { payload: { type: "memo", data: { text: "", color: undefined } } }
@@ -63,8 +63,8 @@ const widgetRegistryEntries = [
   },
   {
     type: "photo",
-    title: "사진",
-    description: "사진을 올려요",
+    title: "Photo",
+    description: "Upload photos",
     create: createWithLayout({ w: 2, h: 5, minW: 2, minH: 5 }),
     render: ({ widgetId, canEdit }) => (
       <PhotoWidget widgetId={widgetId} canEdit={canEdit} />
@@ -72,8 +72,8 @@ const widgetRegistryEntries = [
   },
   {
     type: "todo",
-    title: "할 일",
-    description: "오늘 할 일을 체크해요",
+    title: "Todo",
+    description: "Track today's tasks",
     create: createWithLayout({ w: 3, h: 6, minW: 3, minH: 6 }),
     render: ({ widgetId, canEdit }) => (
       <TodoWidget widgetId={widgetId} canEdit={canEdit} />
@@ -81,8 +81,8 @@ const widgetRegistryEntries = [
   },
   {
     type: "dday",
-    title: "디데이",
-    description: "목표일까지 남은 날짜를 확인해요",
+    title: "D-Day",
+    description: "Count down to your target date",
     create: createWithLayout({ w: 3, h: 6, minW: 3, minH: 6 }),
     render: ({ widgetId, canEdit }) => (
       <DdayWidget widgetId={widgetId} canEdit={canEdit} />
@@ -90,8 +90,8 @@ const widgetRegistryEntries = [
   },
   {
     type: "mood",
-    title: "기분",
-    description: "현재 기분을 골라요",
+    title: "Mood",
+    description: "Pick your current mood",
     create: createWithLayout({ w: 2, h: 5, minW: 2, minH: 5 }),
     render: ({ widgetId, canEdit }) => (
       <MoodWidget widgetId={widgetId} canEdit={canEdit} />
@@ -99,15 +99,15 @@ const widgetRegistryEntries = [
   },
   {
     type: "chart",
-    title: "차트",
-    description: "목표 진행을 시간 순으로 기록해요",
+    title: "Chart",
+    description: "Track progress over time",
     create: createWithLayout(
       { w: 6, h: 9, minW: 5, minH: 8 },
       {
         settings: { isConfigured: false },
         payload: {
           type: "chart",
-          data: { name: "지표", unit: undefined, chartType: "line" },
+          data: { name: "Metric", unit: undefined, chartType: "line" },
         },
       }
     ),
@@ -117,8 +117,8 @@ const widgetRegistryEntries = [
   },
   {
     type: "weather",
-    title: "날씨",
-    description: "이번 주 날씨를 확인해요",
+    title: "Weather",
+    description: "Check this week's weather",
     create: createWithLayout({ w: 3, h: 5, minW: 3, minH: 5 }),
     render: ({ widgetId, canEdit }) => (
       <WeatherWidget widgetId={widgetId} canEdit={canEdit} />

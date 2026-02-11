@@ -4,6 +4,7 @@ import {
   formatEventTime,
   formatYearMonthDay,
 } from "@/feature/widgets/Calendar/libs/calendarUtils";
+import { useI18n } from "@/shared/i18n/client";
 import { Button } from "@/shared/ui/button";
 import {
   Dialog,
@@ -33,12 +34,13 @@ export function CalendarDeleteDialog({
   onDeleteAll,
   onDeleteFuture,
 }: CalendarDeleteDialogProps) {
+  const { t, locale } = useI18n();
   const [deleteScope, setDeleteScope] = useState<DeleteScope>("future");
 
   if (!event) return null;
 
   const isRecurring = Boolean(event.recurrence);
-  const selectedLabel = formatYearMonthDay(selectedDate);
+  const selectedLabel = formatYearMonthDay(selectedDate, locale);
 
   return (
     <Dialog
@@ -49,17 +51,17 @@ export function CalendarDeleteDialog({
     >
       <DialogContent className="max-w-sm">
         <DialogHeader>
-          <DialogTitle>일정을 삭제할까요?</DialogTitle>
+          <DialogTitle>{t("일정을 삭제할까요?", "Delete event?")}</DialogTitle>
         </DialogHeader>
         <DialogDescription asChild>
           <div className="space-y-2 text-sm text-gray-500">
             <div className="font-medium text-gray-900 dark:text-gray-100">
               {event.title}
             </div>
-            <div>{formatEventTime(event)}</div>
+            <div>{formatEventTime(event, locale)}</div>
             {isRecurring ? (
               <div className="text-xs text-gray-400">
-                선택한 날짜: {selectedLabel}
+                {t("선택한 날짜", "Selected date")}: {selectedLabel}
               </div>
             ) : null}
             {isRecurring ? (
@@ -72,8 +74,12 @@ export function CalendarDeleteDialog({
                     checked={deleteScope === "future"}
                     onChange={() => setDeleteScope("future")}
                   />
-                  <span className="font-medium">선택한 날 이후 삭제</span>
-                  <span className="text-gray-400">선택한 날짜 포함</span>
+                  <span className="font-medium">
+                    {t("선택한 날 이후 삭제", "Delete from selected date")}
+                  </span>
+                  <span className="text-gray-400">
+                    {t("선택한 날짜 포함", "Including selected date")}
+                  </span>
                 </label>
                 <label className="flex items-center gap-2 rounded-md border border-gray-200 px-2 py-1.5 dark:border-gray-700">
                   <input
@@ -83,7 +89,7 @@ export function CalendarDeleteDialog({
                     checked={deleteScope === "all"}
                     onChange={() => setDeleteScope("all")}
                   />
-                  <span className="font-medium">전체 삭제</span>
+                  <span className="font-medium">{t("전체 삭제", "Delete all")}</span>
                 </label>
               </div>
             ) : null}
@@ -91,7 +97,7 @@ export function CalendarDeleteDialog({
         </DialogDescription>
         <DialogFooter>
           <Button type="button" variant="outline" onClick={onClose}>
-            취소
+            {t("취소", "Cancel")}
           </Button>
           <Button
             type="button"
@@ -104,7 +110,7 @@ export function CalendarDeleteDialog({
                 : onDeleteAll
             }
           >
-            삭제
+            {t("삭제", "Delete")}
           </Button>
         </DialogFooter>
       </DialogContent>

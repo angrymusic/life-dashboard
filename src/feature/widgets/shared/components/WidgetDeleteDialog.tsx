@@ -7,6 +7,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/shared/ui/dialog";
+import { useI18n } from "@/shared/i18n/client";
 
 type WidgetDeleteDialogProps = {
   open: boolean;
@@ -21,12 +22,16 @@ export function WidgetDeleteDialog({
   onClose,
   onConfirm,
 }: WidgetDeleteDialogProps) {
+  const { t } = useI18n();
   const title = widgetName
-    ? `${widgetName} 위젯을 삭제할까요?`
-    : "위젯을 삭제할까요?";
+    ? t(`${widgetName} 위젯을 삭제할까요?`, `Delete ${widgetName} widget?`)
+    : t("위젯을 삭제할까요?", "Delete widget?");
   const description = widgetName
-    ? `${widgetName} 위젯을 삭제하면 되돌릴 수 없습니다.`
-    : "위젯을 삭제하면 되돌릴 수 없습니다.";
+    ? t(
+        `${widgetName} 위젯을 삭제하면 되돌릴 수 없습니다.`,
+        `Deleting ${widgetName} widget cannot be undone.`
+      )
+    : t("위젯을 삭제하면 되돌릴 수 없습니다.", "Deleting this widget cannot be undone.");
 
   return (
     <Dialog
@@ -44,10 +49,10 @@ export function WidgetDeleteDialog({
         </DialogDescription>
         <DialogFooter>
           <Button type="button" variant="outline" onClick={onClose}>
-            취소
+            {t("취소", "Cancel")}
           </Button>
           <Button type="button" variant="destructive" onClick={onConfirm}>
-            삭제
+            {t("삭제", "Delete")}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -9,19 +9,17 @@ import { WidgetCard } from "@/feature/widgets/shared/components/WidgetCard";
 import { WidgetDeleteDialog } from "@/feature/widgets/shared/components/WidgetDeleteDialog";
 import { WidgetHeader } from "@/feature/widgets/shared/components/WidgetHeader";
 import { useWidgetActionMenu } from "@/feature/widgets/shared/hooks/useWidgetActionMenu";
+import { useI18n } from "@/shared/i18n/client";
 
-const WEEK_DAYS = ["일", "월", "화", "수", "목", "금", "토"];
-
-function formatMonthDay(date: Date) {
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${month}.${day}`;
-}
-
-function formatDateLabel(date: Date) {
-  const monthDay = formatMonthDay(date);
-  const weekDay = WEEK_DAYS[date.getDay()] ?? "";
-  return `${monthDay} ${weekDay}`.trim();
+function formatDateLabel(date: Date, locale: string) {
+  const monthDay = new Intl.DateTimeFormat(locale, {
+    month: "2-digit",
+    day: "2-digit",
+  }).format(date);
+  const weekDay = new Intl.DateTimeFormat(locale, {
+    weekday: "short",
+  }).format(date);
+  return `${monthDay} ${weekDay}`;
 }
 
 type TodoWidgetProps = {
@@ -30,6 +28,7 @@ type TodoWidgetProps = {
 };
 
 export function TodoWidget({ widgetId, canEdit = true }: TodoWidgetProps) {
+  const { t, locale } = useI18n();
   const {
     todos,
     selectedDate,
@@ -50,8 +49,8 @@ export function TodoWidget({ widgetId, canEdit = true }: TodoWidgetProps) {
     [todos]
   );
   const dateLabel = useMemo(
-    () => formatDateLabel(selectedDate),
-    [selectedDate]
+    () => formatDateLabel(selectedDate, locale),
+    [selectedDate, locale]
   );
   const {
     actions,
@@ -63,7 +62,7 @@ export function TodoWidget({ widgetId, canEdit = true }: TodoWidgetProps) {
   } = useWidgetActionMenu({
     widgetId,
     canEdit,
-    deleteLabel: "위젯 삭제",
+    deleteLabel: t("위젯 삭제", "Delete widget"),
   });
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
@@ -74,7 +73,7 @@ export function TodoWidget({ widgetId, canEdit = true }: TodoWidgetProps) {
 
   return (
     <WidgetCard
-      header={<WidgetHeader title="할 일" actions={actions} canEdit={canEdit} />}
+      header={<WidgetHeader title={t("할 일", "Todo")} actions={actions} canEdit={canEdit} />}
     >
       <div className="flex h-full min-h-0 flex-col">
         <div className="flex items-center justify-between text-xs text-gray-500">
@@ -82,14 +81,14 @@ export function TodoWidget({ widgetId, canEdit = true }: TodoWidgetProps) {
             <Button
               variant="ghost"
               size="icon-sm"
-              aria-label="이전 날짜"
+              aria-label={t("이전 날짜", "Previous date")}
               onClick={goPrevDay}
             >
               <ChevronLeft className="size-4" />
             </Button>
             <div className="min-w-[80px] text-center leading-tight">
               <div className="text-sm font-semibold text-gray-800 dark:text-gray-100">
-                {isToday ? "오늘" : dateLabel}
+                {isToday ? t("오늘", "Today") : dateLabel}
               </div>
               {isToday ? (
                 <div className="text-[11px] text-gray-400">{dateLabel}</div>
@@ -98,7 +97,7 @@ export function TodoWidget({ widgetId, canEdit = true }: TodoWidgetProps) {
             <Button
               variant="ghost"
               size="icon-sm"
-              aria-label="다음 날짜"
+              aria-label={t("다음 날짜", "Next date")}
               onClick={goNextDay}
             >
               <ChevronRight className="size-4" />
@@ -107,11 +106,11 @@ export function TodoWidget({ widgetId, canEdit = true }: TodoWidgetProps) {
           <div className="flex items-center gap-2">
             {!isToday ? (
               <Button variant="ghost" size="sm" onClick={goToday}>
-                오늘
+                {t("오늘", "Today")}
               </Button>
             ) : null}
             <span className="text-xs text-gray-400">
-              완료 {completedCount}/{totalCount}
+              {t("완료", "Done")} {completedCount}/{totalCount}
             </span>
           </div>
         </div>
@@ -121,14 +120,14 @@ export function TodoWidget({ widgetId, canEdit = true }: TodoWidgetProps) {
             className="flex-1 min-w-0 rounded-md border border-gray-300 dark:border-gray-700 bg-transparent px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-60"
             value={draftTitle}
             onChange={(event) => setDraftTitle(event.target.value)}
-            placeholder="할 일을 입력하세요"
+            placeholder={t("할 일을 입력하세요", "Enter a task")}
             disabled={!canEdit}
           />
           <Button
             type="submit"
             size="icon-sm"
             disabled={!canEdit || !draftTitle.trim()}
-            aria-label="할 일 추가"
+            aria-label={t("할 일 추가", "Add task")}
           >
             <Plus className="size-4" />
           </Button>
@@ -136,7 +135,7 @@ export function TodoWidget({ widgetId, canEdit = true }: TodoWidgetProps) {
 
         <div className="mt-3 flex-1 min-h-0 overflow-auto">
           {totalCount === 0 ? (
-            <div className="text-sm text-gray-400">할 일이 없습니다</div>
+            <div className="text-sm text-gray-400">{t("할 일이 없습니다", "No tasks")}</div>
           ) : (
             <div className="space-y-2">
               {todos.map((todo) => (
@@ -147,7 +146,9 @@ export function TodoWidget({ widgetId, canEdit = true }: TodoWidgetProps) {
                   <button
                     type="button"
                     aria-label={
-                      todo.done ? "완료 해제" : "할 일 완료로 표시"
+                      todo.done
+                        ? t("완료 해제", "Mark as not done")
+                        : t("할 일 완료로 표시", "Mark task as done")
                     }
                     onClick={() => {
                       if (!canEdit) return;
@@ -179,7 +180,7 @@ export function TodoWidget({ widgetId, canEdit = true }: TodoWidgetProps) {
                       type="button"
                       onClick={() => void deleteTodo(todo.id)}
                       className="rounded-md p-1 text-gray-400 opacity-0 transition group-hover:opacity-100 hover:text-gray-600"
-                      aria-label="할 일 삭제"
+                      aria-label={t("할 일 삭제", "Delete task")}
                     >
                       <Trash2 className="size-4" />
                     </button>
@@ -193,7 +194,7 @@ export function TodoWidget({ widgetId, canEdit = true }: TodoWidgetProps) {
         {canEdit ? (
           <WidgetDeleteDialog
             open={isDeleteDialogOpen}
-            widgetName="할 일"
+            widgetName={t("할 일", "Todo")}
             onClose={closeDeleteDialog}
             onConfirm={handleDelete}
           />

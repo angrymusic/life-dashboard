@@ -5,6 +5,7 @@ import { WidgetCard } from "@/feature/widgets/shared/components/WidgetCard";
 import { WidgetDeleteDialog } from "@/feature/widgets/shared/components/WidgetDeleteDialog";
 import { WidgetHeader } from "@/feature/widgets/shared/components/WidgetHeader";
 import { useWidgetActionMenu } from "@/feature/widgets/shared/hooks/useWidgetActionMenu";
+import { useI18n } from "@/shared/i18n/client";
 
 type MemoWidgetProps = {
   widgetId: Id;
@@ -12,10 +13,11 @@ type MemoWidgetProps = {
 };
 
 export function MemoWidget({ widgetId, canEdit = true }: MemoWidgetProps) {
+  const { t } = useI18n();
   const {
     value,
     isEditing,
-    beginEdit, // ✅ 훅에 추가 추천
+    beginEdit,
     handleChange,
     handleBlur,
     handleKeyDown,
@@ -31,10 +33,10 @@ export function MemoWidget({ widgetId, canEdit = true }: MemoWidgetProps) {
   } = useWidgetActionMenu({
     widgetId,
     canEdit: canShowActions,
-    deleteLabel: "위젯 삭제",
+    deleteLabel: t("위젯 삭제", "Delete widget"),
     extraItems: [
       {
-        text: "수정",
+        text: t("수정", "Edit"),
         icon: <Pencil />,
         onClick: beginEdit,
       },
@@ -52,13 +54,11 @@ export function MemoWidget({ widgetId, canEdit = true }: MemoWidgetProps) {
       }
     >
       <div className="flex h-full min-h-0 flex-col">
-
-        {/* 본문 */}
         {isEditing ? (
           <textarea
             className="w-full flex-1 min-h-0 resize-none rounded-md border border-gray-300 dark:border-gray-700 bg-transparent p-2 text-sm outline-none focus:ring-1 focus:ring-blue-500"
             value={value}
-            placeholder="메모를 입력하세요"
+            placeholder={t("메모를 입력하세요", "Enter a memo")}
             onChange={handleChange}
             onBlur={handleBlur}
             onKeyDown={handleKeyDown}
@@ -69,7 +69,7 @@ export function MemoWidget({ widgetId, canEdit = true }: MemoWidgetProps) {
             {value?.trim() ? (
               value
             ) : (
-              <span className="text-gray-400">메모가 없습니다</span>
+              <span className="text-gray-400">{t("메모가 없습니다", "No memo")}</span>
             )}
           </div>
         )}
@@ -77,7 +77,7 @@ export function MemoWidget({ widgetId, canEdit = true }: MemoWidgetProps) {
         {canEdit ? (
           <WidgetDeleteDialog
             open={isDeleteDialogOpen}
-            widgetName="메모"
+            widgetName={t("메모", "Memo")}
             onClose={closeDeleteDialog}
             onConfirm={handleDelete}
           />

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import prisma from "@/server/prisma";
 import { jsonError, parseJson } from "@/server/api-response";
 import { isAdminRole, requireUser } from "@/server/api-auth";
+import { detectLanguageFromRequest } from "@/shared/i18n/language";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -91,6 +92,10 @@ function normalizeEmail(email: string) {
   return email.trim().toLowerCase();
 }
 
+function tr(language: "ko" | "en", ko: string, en: string) {
+  return language === "ko" ? ko : en;
+}
+
 function mapMember(member: {
   id: string;
   groupId: string;
@@ -119,6 +124,7 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ dashboardId: string }> }
 ) {
+  const language = detectLanguageFromRequest(request);
   const userResult = await requireUser();
   if (!userResult.ok) return userResult.response;
   const { user: requester, email: sessionEmail } = userResult.context;
@@ -129,8 +135,12 @@ export async function POST(
 
   const parsed = parseAddMemberBody(body);
   if (!parsed) {
-    return jsonError(400, "Invalid request body", {
-      hint: "Send { email, dashboardName? }",
+    return jsonError(400, tr(language, "요청 본문 형식이 올바르지 않아요.", "Invalid request body"), {
+      hint: tr(
+        language,
+        "다음 형식으로 보내주세요: { email, dashboardName? }",
+        "Send { email, dashboardName? }"
+      ),
     });
   }
 
@@ -141,8 +151,12 @@ export async function POST(
 
   if (!dashboard) {
     if (!parsed.dashboardName) {
-      return jsonError(404, "Dashboard not found", {
-        hint: "Provide dashboardName to create on demand",
+      return jsonError(404, tr(language, "대시보드를 찾을 수 없어요.", "Dashboard not found"), {
+        hint: tr(
+          language,
+          "없으면 dashboardName을 함께 보내 생성해주세요.",
+          "Provide dashboardName to create on demand"
+        ),
       });
     }
     dashboard = await prisma.dashboard.create({
@@ -162,16 +176,23 @@ export async function POST(
       },
     });
     if (!member || !isAdminRole(member.role)) {
-      return jsonError(403, "Forbidden");
+      return jsonError(403, tr(language, "권한이 없어요.", "Forbidden"));
     }
   } else if (dashboard.ownerId && dashboard.ownerId !== requester.id) {
-    return jsonError(403, "Forbidden");
+    return jsonError(403, tr(language, "권한이 없어요.", "Forbidden"));
   }
 
   const normalizedEmail = normalizeEmail(parsed.email);
   const normalizedRequester = normalizeEmail(sessionEmail);
   if (normalizedEmail === normalizedRequester) {
-    return jsonError(400, "Cannot add yourself");
+    return jsonError(
+      400,
+      tr(
+        language,
+        "본인은 구성원으로 추가할 수 없어요.",
+        "Cannot add yourself"
+      )
+    );
   }
 
   const targetUser = await prisma.user.findFirst({
@@ -183,7 +204,11 @@ export async function POST(
     },
   });
   if (!targetUser || !targetUser.email) {
-    return jsonError(404, "User not found", { email: parsed.email });
+    return jsonError(
+      404,
+      tr(language, "사용자를 찾을 수 없어요.", "User not found"),
+      { email: parsed.email }
+    );
   }
 
   let groupId = dashboard.groupId;
@@ -208,7 +233,10 @@ export async function POST(
       update: {
         userId: requester.id,
         role: "parent",
-        displayName: requester.name ?? requester.email ?? "사용자",
+        displayName:
+          requester.name ??
+          requester.email ??
+          tr(language, "사용자", "User"),
         avatarUrl: requester.image,
       },
       create: {
@@ -216,7 +244,10 @@ export async function POST(
         userId: requester.id,
         email: requester.email ?? sessionEmail,
         role: "parent",
-        displayName: requester.name ?? requester.email ?? "사용자",
+        displayName:
+          requester.name ??
+          requester.email ??
+          tr(language, "사용자", "User"),
         avatarUrl: requester.image,
       },
     });
@@ -265,6 +296,7 @@ export async function PATCH(
   request: Request,
   { params }: { params: Promise<{ dashboardId: string }> }
 ) {
+  const language = detectLanguageFromRequest(request);
   const userResult = await requireUser();
   if (!userResult.ok) return userResult.response;
   const { user: requester } = userResult.context;
@@ -275,8 +307,12 @@ export async function PATCH(
 
   const parsed = parseUpdateMemberRoleBody(body);
   if (!parsed) {
-    return jsonError(400, "Invalid request body", {
-      hint: "Send { memberId, role }",
+    return jsonError(400, tr(language, "요청 본문 형식이 올바르지 않아요.", "Invalid request body"), {
+      hint: tr(
+        language,
+        "다음 형식으로 보내주세요: { memberId, role }",
+        "Send { memberId, role }"
+      ),
     });
   }
 
@@ -285,10 +321,13 @@ export async function PATCH(
     where: { id: dashboardId },
   });
   if (!dashboard) {
-    return jsonError(404, "Dashboard not found");
+    return jsonError(404, tr(language, "대시보드를 찾을 수 없어요.", "Dashboard not found"));
   }
   if (!dashboard.groupId) {
-    return jsonError(400, "Dashboard is not shared");
+    return jsonError(
+      400,
+      tr(language, "공유 대시보드가 아니에요.", "Dashboard is not shared")
+    );
   }
 
   const requesterMember = await prisma.groupMember.findFirst({
@@ -298,7 +337,7 @@ export async function PATCH(
     },
   });
   if (!requesterMember || !isAdminRole(requesterMember.role)) {
-    return jsonError(403, "Forbidden");
+    return jsonError(403, tr(language, "권한이 없어요.", "Forbidden"));
   }
 
   const targetMember = await prisma.groupMember.findFirst({
@@ -308,7 +347,7 @@ export async function PATCH(
     },
   });
   if (!targetMember) {
-    return jsonError(404, "Member not found");
+    return jsonError(404, tr(language, "구성원을 찾을 수 없어요.", "Member not found"));
   }
 
   const firstMember = await prisma.groupMember.findFirst({
@@ -317,7 +356,14 @@ export async function PATCH(
     select: { id: true },
   });
   if (firstMember?.id === targetMember.id && parsed.role !== "parent") {
-    return jsonError(400, "첫 생성자의 권한은 변경할 수 없어요.");
+    return jsonError(
+      400,
+      tr(
+        language,
+        "첫 생성자의 권한은 변경할 수 없어요.",
+        "You cannot change the first creator's role."
+      )
+    );
   }
 
   await prisma.groupMember.update({
@@ -340,6 +386,7 @@ export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ dashboardId: string }> }
 ) {
+  const language = detectLanguageFromRequest(request);
   const userResult = await requireUser();
   if (!userResult.ok) return userResult.response;
   const { user: requester } = userResult.context;
@@ -350,8 +397,12 @@ export async function DELETE(
 
   const parsed = parseRemoveMemberBody(body);
   if (!parsed) {
-    return jsonError(400, "Invalid request body", {
-      hint: "Send { memberId }",
+    return jsonError(400, tr(language, "요청 본문 형식이 올바르지 않아요.", "Invalid request body"), {
+      hint: tr(
+        language,
+        "다음 형식으로 보내주세요: { memberId }",
+        "Send { memberId }"
+      ),
     });
   }
 
@@ -361,10 +412,13 @@ export async function DELETE(
     where: { id: dashboardId },
   });
   if (!dashboard) {
-    return jsonError(404, "Dashboard not found");
+    return jsonError(404, tr(language, "대시보드를 찾을 수 없어요.", "Dashboard not found"));
   }
   if (!dashboard.groupId) {
-    return jsonError(400, "Dashboard is not shared");
+    return jsonError(
+      400,
+      tr(language, "공유 대시보드가 아니에요.", "Dashboard is not shared")
+    );
   }
 
   const requesterMember = await prisma.groupMember.findFirst({
@@ -374,7 +428,7 @@ export async function DELETE(
     },
   });
   if (!requesterMember || !isAdminRole(requesterMember.role)) {
-    return jsonError(403, "Forbidden");
+    return jsonError(403, tr(language, "권한이 없어요.", "Forbidden"));
   }
 
   const targetMember = await prisma.groupMember.findFirst({
@@ -384,11 +438,14 @@ export async function DELETE(
     },
   });
   if (!targetMember) {
-    return jsonError(404, "Member not found");
+    return jsonError(404, tr(language, "구성원을 찾을 수 없어요.", "Member not found"));
   }
 
   if (targetMember.userId && targetMember.userId === requester.id) {
-    return jsonError(400, "본인은 퇴출할 수 없어요.");
+    return jsonError(
+      400,
+      tr(language, "본인은 퇴출할 수 없어요.", "You cannot remove yourself.")
+    );
   }
 
   const firstMember = await prisma.groupMember.findFirst({
@@ -397,7 +454,14 @@ export async function DELETE(
     select: { id: true },
   });
   if (firstMember?.id === targetMember.id) {
-    return jsonError(400, "첫 생성자는 퇴출할 수 없어요.");
+    return jsonError(
+      400,
+      tr(
+        language,
+        "첫 생성자는 퇴출할 수 없어요.",
+        "You cannot remove the first creator."
+      )
+    );
   }
 
   await prisma.groupMember.delete({

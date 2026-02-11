@@ -11,8 +11,9 @@ import {
 import {
   COLOR_PRESETS,
   DEFAULT_EVENT_COLOR,
-  WEEK_DAYS,
+  getWeekDayLabels,
 } from "@/feature/widgets/Calendar/libs/calendarUtils";
+import { useI18n } from "@/shared/i18n/client";
 
 type RecurrenceType = "none" | "weekly" | "cycle" | "yearly";
 type ScheduleMode = "single" | "range" | "recurrence" | "anniversary";
@@ -87,6 +88,8 @@ export function CalendarEventDialog({
   removeCyclePatternItem,
   setRangeEnabled,
 }: CalendarEventDialogProps) {
+  const { t, locale } = useI18n();
+  const weekDays = getWeekDayLabels(locale);
   const isEditing = Boolean(editingEventId);
   const isWeekly = recurrenceType === "weekly";
   const isCycle = recurrenceType === "cycle";
@@ -104,10 +107,10 @@ export function CalendarEventDialog({
   const isRangeMode = scheduleMode === "range";
   const dateLabel =
     scheduleMode === "anniversary"
-      ? "기념일 날짜"
+      ? t("기념일 날짜", "Anniversary date")
       : scheduleMode === "recurrence"
-        ? "기준 날짜"
-        : "시작 날짜";
+        ? t("기준 날짜", "Base date")
+        : t("시작 날짜", "Start date");
   const hasRangeTime = Boolean(draftStartTime) || Boolean(draftEndTime);
   const isRangeTimeValid =
     !hasRangeTime || (Boolean(draftStartTime) && Boolean(draftEndTime));
@@ -163,7 +166,9 @@ export function CalendarEventDialog({
     >
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>{isEditing ? "일정 수정" : "일정 추가"}</DialogTitle>
+          <DialogTitle>
+            {isEditing ? t("일정 수정", "Edit event") : t("일정 추가", "Add event")}
+          </DialogTitle>
         </DialogHeader>
         <form
           className="grid gap-3"
@@ -174,19 +179,19 @@ export function CalendarEventDialog({
         >
           <input
             className="w-full rounded-md border border-gray-300 dark:border-gray-700 bg-transparent px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-blue-500"
-            placeholder="일정 제목"
+            placeholder={t("일정 제목", "Event title")}
             value={draftTitle}
             onChange={(event) => setDraftTitle(event.target.value)}
             autoFocus
           />
           <div className="flex flex-col gap-2 text-sm text-gray-500 sm:flex-row sm:items-center sm:justify-between">
-            <span>일정 종류</span>
+            <span>{t("일정 종류", "Schedule type")}</span>
             <div className="inline-flex flex-wrap items-center gap-1 rounded-2xl border border-gray-200 p-1 dark:border-gray-700">
               {[
-                { value: "single", label: "당일 일정" },
-                { value: "range", label: "기간 일정" },
-                { value: "recurrence", label: "반복 일정" },
-                { value: "anniversary", label: "기념일" },
+                { value: "single", label: t("당일 일정", "Single day") },
+                { value: "range", label: t("기간 일정", "Date range") },
+                { value: "recurrence", label: t("반복 일정", "Recurring") },
+                { value: "anniversary", label: t("기념일", "Anniversary") },
               ].map((option) => {
                 const isActive = scheduleMode === option.value;
                 return (
@@ -211,8 +216,8 @@ export function CalendarEventDialog({
           {scheduleMode === "range" ? (
             <>
               <div className="grid grid-cols-2 gap-2 text-xs text-gray-500">
-                <span>시작 날짜</span>
-                <span>끝 날짜</span>
+                <span>{t("시작 날짜", "Start date")}</span>
+                <span>{t("끝 날짜", "End date")}</span>
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <input
@@ -233,8 +238,8 @@ export function CalendarEventDialog({
                 />
               </div>
               <div className="grid grid-cols-2 gap-2 text-xs text-gray-500">
-                <span>시작 시간</span>
-                <span>끝 시간</span>
+                <span>{t("시작 시간", "Start time")}</span>
+                <span>{t("끝 시간", "End time")}</span>
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <input
@@ -262,7 +267,7 @@ export function CalendarEventDialog({
                 )}
               >
                 <span>{dateLabel}</span>
-                {showSingleTime ? <span>시작 시간</span> : null}
+                {showSingleTime ? <span>{t("시작 시간", "Start time")}</span> : null}
               </div>
               <div
                 className={cn(
@@ -291,7 +296,7 @@ export function CalendarEventDialog({
           )}
           {scheduleMode === "recurrence" ? (
             <div className="flex flex-col gap-2 text-sm text-gray-500 sm:flex-row sm:items-center sm:justify-between">
-              <span>반복 유형</span>
+              <span>{t("반복 유형", "Recurrence type")}</span>
               <select
                 aria-label="Recurrence type"
                 className="w-full rounded-md border border-gray-300 dark:border-gray-700 bg-transparent px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-blue-500 sm:w-auto"
@@ -300,16 +305,16 @@ export function CalendarEventDialog({
                   setRecurrenceType(event.target.value as RecurrenceType)
                 }
               >
-                <option value="weekly">요일 반복</option>
-                <option value="cycle">교대 패턴</option>
+                <option value="weekly">{t("요일 반복", "Weekly")}</option>
+                <option value="cycle">{t("교대 패턴", "Shift cycle")}</option>
               </select>
             </div>
           ) : null}
           {scheduleMode === "recurrence" ? (
             <>
               <div className="grid grid-cols-2 gap-2 text-xs text-gray-500">
-                <span>반복 종료</span>
-                <span className="text-right">선택</span>
+                <span>{t("반복 종료", "Repeat until")}</span>
+                <span className="text-right">{t("선택", "Choose")}</span>
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <input
@@ -325,16 +330,16 @@ export function CalendarEventDialog({
                   className="rounded-md border border-gray-200 px-2 py-1 text-xs text-gray-500 transition hover:bg-gray-100 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-800/40"
                   onClick={() => setRecurrenceUntil("")}
                 >
-                  무기한
+                  {t("무기한", "No end date")}
                 </button>
               </div>
             </>
           ) : null}
           {scheduleMode === "recurrence" && isWeekly ? (
             <>
-              <div className="text-xs text-gray-500">요일 선택</div>
+              <div className="text-xs text-gray-500">{t("요일 선택", "Select weekdays")}</div>
               <div className="grid grid-cols-7 gap-1">
-                {WEEK_DAYS.map((day, index) => {
+                {weekDays.map((day, index) => {
                   const isActive = weeklyDays.includes(index);
                   return (
                     <button
@@ -358,13 +363,13 @@ export function CalendarEventDialog({
           {scheduleMode === "recurrence" && isCycle ? (
             <>
               <div className="flex flex-col gap-2 text-xs text-gray-500 sm:flex-row sm:items-center sm:justify-between">
-                <span>교대 패턴</span>
+                <span>{t("교대 패턴", "Shift cycle")}</span>
                 <button
                   type="button"
                   className="rounded-md border border-gray-200 px-2 py-1 text-xs text-gray-500 transition hover:bg-gray-100 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-800/40"
                   onClick={addCyclePatternItem}
                 >
-                  + 항목 추가
+                  {t("+ 항목 추가", "+ Add item")}
                 </button>
               </div>
               <div className="space-y-2">
@@ -384,7 +389,7 @@ export function CalendarEventDialog({
                             })
                           }
                         />
-                        공백
+                        {t("공백", "Gap")}
                       </label>
                       <input
                         aria-label={`Pattern label ${index + 1}`}
@@ -394,7 +399,11 @@ export function CalendarEventDialog({
                             ? "text-gray-400 placeholder:text-gray-400"
                             : ""
                         )}
-                        placeholder={item.isGap ? "공백" : `패턴 ${index + 1}`}
+                        placeholder={
+                          item.isGap
+                            ? t("공백", "Gap")
+                            : t(`패턴 ${index + 1}`, `Pattern ${index + 1}`)
+                        }
                         value={item.isGap ? "" : item.label}
                         onChange={(event) =>
                           updateCyclePatternItem(index, {
@@ -465,14 +474,14 @@ export function CalendarEventDialog({
                       className="justify-self-start text-xs font-medium text-gray-400 transition hover:text-red-500 sm:justify-self-auto"
                       onClick={() => removeCyclePatternItem(index)}
                     >
-                      삭제
+                      {t("삭제", "Delete")}
                     </button>
                   </div>
                 ))}
               </div>
               {!isCyclePatternValid ? (
                 <div className="text-xs text-rose-500">
-                  일수는 1 이상이어야 합니다.
+                  {t("일수는 1 이상이어야 합니다.", "Days must be 1 or greater.")}
                 </div>
               ) : null}
             </>
@@ -480,7 +489,7 @@ export function CalendarEventDialog({
           {!isCycle ? (
             <div className="flex flex-col gap-2 text-sm text-gray-500 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex min-w-0 items-center gap-2">
-                <span>색상</span>
+                <span>{t("색상", "Color")}</span>
                 <div className="flex min-w-0 items-center gap-2">
                   <input
                     type="color"
@@ -515,10 +524,10 @@ export function CalendarEventDialog({
           ) : null}
           <DialogFooter className="mt-2">
             <Button type="button" variant="outline" onClick={onClose}>
-              취소
+              {t("취소", "Cancel")}
             </Button>
             <Button type="submit" disabled={!canSubmit}>
-              {isEditing ? "저장" : "추가"}
+              {isEditing ? t("저장", "Save") : t("추가", "Add")}
             </Button>
           </DialogFooter>
         </form>

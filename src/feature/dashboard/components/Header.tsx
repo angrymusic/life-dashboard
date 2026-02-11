@@ -8,6 +8,7 @@ import { cn } from "@/shared/lib/utils";
 import { getLocalMembersGroupId } from "@/shared/db/db";
 import type { Dashboard, Id } from "@/shared/db/schema";
 import { useMembers } from "@/shared/db/queries";
+import { useI18n } from "@/shared/i18n/client";
 import { useSession } from "next-auth/react";
 import AccountDialog from "./AccountDialog";
 import DashboardManagerDialog from "./DashboardManagerDialog";
@@ -38,6 +39,7 @@ export default function Header({
   const [dashboardDialogOpen, setDashboardDialogOpen] = useState(false);
   const [membersDialogOpen, setMembersDialogOpen] = useState(false);
   const { data: session, status: authStatus } = useSession();
+  const { t } = useI18n();
   const members = useMembers();
 
   const activeDashboard = dashboards?.find(
@@ -46,13 +48,13 @@ export default function Header({
   const headerTitle = activeDashboard
     ? activeDashboard.name
     : dashboards === undefined
-      ? "대시보드 불러오는 중..."
-      : "대시보드 없음";
+      ? t("대시보드 불러오는 중...", "Loading dashboards...")
+      : t("대시보드 없음", "No dashboard");
   const isActiveShared = Boolean(activeDashboard?.groupId);
   const authUser = session?.user ?? null;
   const isAuthLoading = authStatus === "loading";
   const isSignedIn = authStatus === "authenticated";
-  const authDisplayName = authUser?.name ?? authUser?.email ?? "사용자";
+  const authDisplayName = authUser?.name ?? authUser?.email ?? t("사용자", "User");
   const authAvatarFallback = authDisplayName.trim().slice(0, 1) || "?";
   const activeMembers = useMemo(() => {
     if (!members) return [];
@@ -84,7 +86,7 @@ export default function Header({
         <Button
           variant="outline"
           size="icon-lg"
-          aria-label="대시보드 관리"
+          aria-label={t("대시보드 관리", "Manage dashboards")}
           data-tour-target="dashboard-manage"
           className="rounded-full bg-white/60 backdrop-blur-[2px] hover:bg-white/80"
           onClick={() => setDashboardDialogOpen(true)}
@@ -104,7 +106,7 @@ export default function Header({
                 : "border-gray-200/70 bg-gray-100 text-gray-500"
             )}
           >
-            {isActiveShared ? "공유" : "개인"}
+            {isActiveShared ? t("공유", "Shared") : t("개인", "Personal")}
           </span>
         ) : null}
       </div>
@@ -113,7 +115,10 @@ export default function Header({
         {shouldShowMemberPreview ? (
           <div
             className="hidden items-center gap-2 sm:flex"
-            title={`구성원 ${activeMembers.length}명: ${memberTitle}`}
+            title={t(
+              `구성원 ${activeMembers.length}명: ${memberTitle}`,
+              `${activeMembers.length} members: ${memberTitle}`
+            )}
           >
             <div className="flex items-center">
               {visibleMembers.map((member, index) => {
@@ -132,7 +137,7 @@ export default function Header({
                     {member.avatarUrl ? (
                       <Image
                         src={member.avatarUrl}
-                        alt={member.displayName || "구성원"}
+                        alt={member.displayName || t("구성원", "Member")}
                         fill
                         sizes="28px"
                         className="rounded-full object-cover"
@@ -151,7 +156,7 @@ export default function Header({
               ) : null}
             </div>
             <span className="text-[10px] text-gray-500">
-              {activeMembers.length}명
+              {t(`${activeMembers.length}명`, `${activeMembers.length}`)}
             </span>
           </div>
         ) : null}
@@ -159,7 +164,7 @@ export default function Header({
           <Button
             variant="outline"
             size="icon-lg"
-            aria-label="구성원 설정"
+            aria-label={t("구성원 설정", "Manage members")}
             data-tour-target="member-manage"
             className="rounded-full bg-white/60 backdrop-blur-[2px] hover:bg-white/80"
             onClick={() => setMembersDialogOpen(true)}
@@ -176,7 +181,7 @@ export default function Header({
         <Button
           variant="outline"
           size="icon-lg"
-          aria-label="계정"
+          aria-label={t("계정", "Account")}
           data-tour-target="account-manage"
           className="rounded-full bg-white/60 backdrop-blur-[2px] hover:bg-white/80"
           onClick={() => setAccountDialogOpen(true)}

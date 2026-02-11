@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import {
   Calendar,
   ChevronLeft,
@@ -24,7 +24,7 @@ import {
 } from "@/shared/ui/dialog";
 import {
   CalendarEventInstance,
-  WEEK_DAYS,
+  getWeekDayLabels,
   formatEventTime,
   formatMonth,
   formatMonthDay,
@@ -42,6 +42,7 @@ import { WeatherIcon } from "@/feature/widgets/Weather/components/WeatherIcon";
 import { useWeatherForecast } from "@/feature/widgets/Weather/hooks/useWeatherForecast";
 import { useWeatherLocation } from "@/feature/widgets/Weather/hooks/useWeatherLocation";
 import type { WeatherForecastDay } from "@/feature/widgets/Weather/libs/openMeteo";
+import { useI18n } from "@/shared/i18n/client";
 
 type CalendarWidgetProps = {
   widgetId: Id;
@@ -98,6 +99,8 @@ export function CalendarWidget({
   widgetId,
   canEdit = true,
 }: CalendarWidgetProps) {
+  const { t, locale } = useI18n();
+  const weekDays = getWeekDayLabels(locale);
   const {
     calendarDays,
     selectedDate,
@@ -156,22 +159,19 @@ export function CalendarWidget({
   const [draftShowAnniversary, setDraftShowAnniversary] =
     useState(showAnniversary);
 
-  const openSpecialDayDialog = useCallback(() => {
+  const openSpecialDayDialog = () => {
     setDraftShowHoliday(showHoliday);
     setDraftShowAnniversary(showAnniversary);
     setSpecialDayDialogOpen(true);
-  }, [showHoliday, showAnniversary]);
+  };
 
-  const handleSpecialDayDialogOpenChange = useCallback(
-    (nextOpen: boolean) => {
-      if (nextOpen) {
-        setDraftShowHoliday(showHoliday);
-        setDraftShowAnniversary(showAnniversary);
-      }
-      setSpecialDayDialogOpen(nextOpen);
-    },
-    [showHoliday, showAnniversary]
-  );
+  const handleSpecialDayDialogOpenChange = (nextOpen: boolean) => {
+    if (nextOpen) {
+      setDraftShowHoliday(showHoliday);
+      setDraftShowAnniversary(showAnniversary);
+    }
+    setSpecialDayDialogOpen(nextOpen);
+  };
 
   const { location } = useWeatherLocation();
   const { forecast } = useWeatherForecast(widgetId, { location, days: 7 });
@@ -184,7 +184,7 @@ export function CalendarWidget({
   }, [forecast?.days]);
   const weekEndYmd = useMemo(() => shiftYmd(todayYmd, 6), [todayYmd]);
 
-  const saveSpecialDaySettings = useCallback(async () => {
+  const saveSpecialDaySettings = async () => {
     if (
       draftShowHoliday === showHoliday &&
       draftShowAnniversary === showAnniversary
@@ -199,41 +199,26 @@ export function CalendarWidget({
     };
     await updateWidgetSettings(widgetId, nextSettings);
     setSpecialDayDialogOpen(false);
-  }, [
-    widgetId,
-    widgetSettings,
-    draftShowHoliday,
-    draftShowAnniversary,
-    showHoliday,
-    showAnniversary,
-  ]);
+  };
 
-  const extraActions = useMemo<ActionMenuItem[]>(
-    () => [
-      {
-        text: "오늘로 이동",
-        icon: <Calendar className="size-4" />,
-        onClick: goToday,
-      },
-      {
-        text: "새 일정",
-        icon: <Plus className="size-4" />,
-        onClick: startAdd,
-        disabled: !canCreate,
-      },
-      {
-        text: "공휴일/기념일 설정",
-        icon: <SlidersHorizontal className="size-4" />,
-        onClick: openSpecialDayDialog,
-      },
-    ],
-    [
-      goToday,
-      startAdd,
-      canCreate,
-      openSpecialDayDialog,
-    ]
-  );
+  const extraActions: ActionMenuItem[] = [
+    {
+      text: t("오늘로 이동", "Go to today"),
+      icon: <Calendar className="size-4" />,
+      onClick: goToday,
+    },
+    {
+      text: t("새 일정", "New event"),
+      icon: <Plus className="size-4" />,
+      onClick: startAdd,
+      disabled: !canCreate,
+    },
+    {
+      text: t("공휴일/기념일 설정", "Holiday/anniversary settings"),
+      icon: <SlidersHorizontal className="size-4" />,
+      onClick: openSpecialDayDialog,
+    },
+  ];
   const {
     actions,
     deleteDialog: {
@@ -244,7 +229,7 @@ export function CalendarWidget({
   } = useWidgetActionMenu({
     widgetId,
     canEdit,
-    deleteLabel: "위젯 삭제",
+    deleteLabel: t("위젯 삭제", "Delete widget"),
     extraItems: extraActions,
   });
   const [deleteTarget, setDeleteTarget] =
@@ -283,7 +268,7 @@ export function CalendarWidget({
                 <ChevronLeft className="size-4" />
               </Button>
               <div className="min-w-[72px] text-center text-sm font-semibold @[360px]:text-base">
-                {formatMonth(viewDate)}
+                {formatMonth(viewDate, locale)}
               </div>
               <Button
                 variant="ghost"
@@ -301,7 +286,7 @@ export function CalendarWidget({
       <div className="flex h-full min-h-0 flex-col">
 
         <div className="grid grid-cols-7 text-center text-xs font-medium text-gray-500">
-          {WEEK_DAYS.map((day) => (
+          {weekDays.map((day) => (
             <div key={day}>{day}</div>
           ))}
         </div>
@@ -438,7 +423,7 @@ export function CalendarWidget({
 
         <div className="mt-3 flex items-center justify-between">
           <div className="text-base font-medium">
-            {formatMonthDay(selectedDate)}
+            {formatMonthDay(selectedDate, locale)}
           </div>
           {canEdit ? (
             <Button
@@ -501,7 +486,7 @@ export function CalendarWidget({
         {canEdit ? (
           <WidgetDeleteDialog
             open={isWidgetDeleteOpen}
-            widgetName="캘린더"
+            widgetName={t("캘린더", "Calendar")}
             onClose={closeWidgetDeleteDialog}
             onConfirm={handleWidgetDelete}
           />
@@ -512,23 +497,32 @@ export function CalendarWidget({
         >
           <DialogContent className="max-w-sm">
             <DialogHeader>
-              <DialogTitle>특일 표시 설정</DialogTitle>
+              <DialogTitle>{t("특일 표시 설정", "Special day display settings")}</DialogTitle>
               <DialogDescription>
-                공휴일과 기념일 표시 여부를 선택하세요.
+                {t(
+                  "공휴일과 기념일 표시 여부를 선택하세요.",
+                  "Choose whether to show holidays and anniversaries."
+                )}
               </DialogDescription>
             </DialogHeader>
             <div className="grid gap-2">
               <ToggleRow
-                label="공휴일 표시"
-                description="공휴일 날짜를 빨간색으로 표시합니다."
+                label={t("공휴일 표시", "Show holidays")}
+                description={t(
+                  "공휴일 날짜를 빨간색으로 표시합니다.",
+                  "Show holiday dates in red."
+                )}
                 checked={draftShowHoliday}
                 onToggle={() =>
                   setDraftShowHoliday((current) => !current)
                 }
               />
               <ToggleRow
-                label="기념일 표시"
-                description="기념일을 캘린더에 표시합니다."
+                label={t("기념일 표시", "Show anniversaries")}
+                description={t(
+                  "기념일을 캘린더에 표시합니다.",
+                  "Show anniversaries on the calendar."
+                )}
                 checked={draftShowAnniversary}
                 onToggle={() =>
                   setDraftShowAnniversary((current) => !current)
@@ -541,10 +535,10 @@ export function CalendarWidget({
                 variant="outline"
                 onClick={() => setSpecialDayDialogOpen(false)}
               >
-                취소
+                {t("취소", "Cancel")}
               </Button>
               <Button type="button" onClick={saveSpecialDaySettings}>
-                저장
+                {t("저장", "Save")}
               </Button>
             </DialogFooter>
           </DialogContent>
@@ -552,16 +546,16 @@ export function CalendarWidget({
 
         <div className="mt-2 flex-1 min-h-0 overflow-auto">
           {selectedEvents.length === 0 ? (
-            <div className="text-sm text-gray-400">일정이 없습니다</div>
+            <div className="text-sm text-gray-400">{t("일정이 없습니다", "No events")}</div>
           ) : (
             <div className="space-y-2">
               {selectedEvents.map((event) => {
                 const isReadOnlyEvent = Boolean(event.readOnly);
                 const specialLabel =
                   event.source === "holiday"
-                    ? "공휴일"
+                    ? t("공휴일", "Holiday")
                     : event.source === "anniversary"
-                      ? "기념일"
+                      ? t("기념일", "Anniversary")
                       : null;
                 const eventColor = normalizeColor(event.color);
                 return (
@@ -580,7 +574,7 @@ export function CalendarWidget({
                           {event.title}
                         </div>
                         <div className="text-sm text-gray-500">
-                          {formatEventTime(event)}
+                          {formatEventTime(event, locale)}
                         </div>
                         {specialLabel ? (
                           <div className="text-xs text-gray-400">
@@ -624,11 +618,16 @@ export function CalendarWidget({
         <div className="mt-2 flex items-center justify-between text-sm text-gray-400 shrink-0">
           <div className="flex items-center gap-2">
             {specialDayLoading ? (
-              <span className="text-xs">공휴일/기념일 불러오는 중...</span>
+              <span className="text-xs">
+                {t("공휴일/기념일 불러오는 중...", "Loading holidays/anniversaries...")}
+              </span>
             ) : null}
             {specialDayError ? (
               <span className="text-xs">
-                공휴일/기념일 정보를 불러오지 못했어요
+                {t(
+                  "공휴일/기념일 정보를 불러오지 못했어요",
+                  "Failed to load holiday/anniversary information."
+                )}
               </span>
             ) : null}
           </div>
