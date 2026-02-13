@@ -350,7 +350,7 @@ export default function MembersDialog({
                   {t("Google 이메일", "Google email")}
                 </label>
                 <input
-                  className="w-full rounded-md border border-gray-300 bg-transparent px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-700"
+                  className="w-full rounded-md border border-gray-300 bg-transparent px-3 py-2 text-base outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-700"
                   value={memberEmail}
                   onChange={(event) => setMemberEmail(event.target.value)}
                   placeholder="example@gmail.com"

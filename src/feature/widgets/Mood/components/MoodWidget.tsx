@@ -238,7 +238,7 @@ export function MoodWidget({ widgetId, canEdit = true }: MoodWidgetProps) {
               <div>
                 <label className="text-[11px] text-gray-400">{t("이름", "Name")}</label>
                 <input
-                  className="mt-1 w-full rounded-md border border-gray-300 bg-transparent px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-700"
+                  className="mt-1 w-full rounded-md border border-gray-300 bg-transparent px-3 py-2 text-base outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-700"
                   value={draftTitle}
                   onChange={(event) => setDraftTitle(event.target.value)}
                   placeholder={t("예: 민지", "e.g., Alex")}

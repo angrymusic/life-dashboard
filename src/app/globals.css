@@ -148,6 +148,14 @@
     scrollbar-color: var(--primary) transparent;
     scrollbar-width: thin;
   }
+
+  /* Prevent iOS input-focus zoom by keeping form controls at least 16px. */
+  input,
+  textarea,
+  select {
+    font-size: max(16px, 1em);
+  }
+
   body {
     @apply bg-background text-foreground;
   }

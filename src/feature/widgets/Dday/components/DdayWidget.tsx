@@ -238,7 +238,7 @@ export function DdayWidget({ widgetId, canEdit = true }: DdayWidgetProps) {
               <div>
                 <label className="text-[11px] text-gray-400">{t("제목", "Title")}</label>
                 <input
-                  className="mt-1 w-full rounded-md border border-gray-300 bg-transparent px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-700"
+                  className="mt-1 w-full rounded-md border border-gray-300 bg-transparent px-3 py-2 text-base outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-700"
                   value={draftTitle}
                   onChange={(event) => setDraftTitle(event.target.value)}
                   placeholder={t("예: 프로젝트 마감", "e.g., Project deadline")}
@@ -249,7 +249,7 @@ export function DdayWidget({ widgetId, canEdit = true }: DdayWidgetProps) {
                 <label className="text-[11px] text-gray-400">{t("날짜", "Date")}</label>
                 <input
                   type="date"
-                  className="mt-1 w-full rounded-md border border-gray-300 bg-transparent px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-700"
+                  className="mt-1 w-full rounded-md border border-gray-300 bg-transparent px-3 py-2 text-base outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-700"
                   value={draftDate}
                   onChange={(event) => setDraftDate(event.target.value as YMD)}
                   disabled={!canEdit}

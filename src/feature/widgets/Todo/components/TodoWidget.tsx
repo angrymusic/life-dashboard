@@ -117,7 +117,7 @@ export function TodoWidget({ widgetId, canEdit = true }: TodoWidgetProps) {
 
         <form onSubmit={handleSubmit} className="mt-3 flex items-center gap-2">
           <input
-            className="flex-1 min-w-0 rounded-md border border-gray-300 dark:border-gray-700 bg-transparent px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-60"
+            className="flex-1 min-w-0 rounded-md border border-gray-300 dark:border-gray-700 bg-transparent px-3 py-2 text-base outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-60"
             value={draftTitle}
             onChange={(event) => setDraftTitle(event.target.value)}
             placeholder={t("할 일을 입력하세요", "Enter a task")}
