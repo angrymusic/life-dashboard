@@ -290,7 +290,7 @@ export default function DashboardManagerDialog({
                                     handleRenameCancel();
                                   }
                                 }}
-                                className="w-full min-w-[120px] rounded-md border border-gray-300 bg-transparent px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-700"
+                                className="w-full min-w-[120px] rounded-md border border-gray-300 bg-transparent px-2 py-1 text-base outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-700"
                                 aria-label={t("대시보드 이름", "Dashboard name")}
                                 aria-invalid={renameError ? "true" : "false"}
                                 title={renameError ?? undefined}
@@ -404,7 +404,7 @@ export default function DashboardManagerDialog({
                           {t("이름", "Name")}
                         </label>
                         <input
-                          className="w-full rounded-md border border-gray-300 bg-transparent px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-700"
+                          className="w-full rounded-md border border-gray-300 bg-transparent px-3 py-2 text-base outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-700"
                           value={draftName}
                           onChange={(event) =>
                             setDraftName(event.target.value)

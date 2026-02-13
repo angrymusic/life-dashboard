@@ -198,7 +198,7 @@ export function ChartWidget({ widgetId, canEdit = true }: ChartWidgetProps) {
               <div className="flex flex-col gap-1">
                 <label className="text-xs text-gray-500">{t("차트 이름", "Chart name")}</label>
                 <input
-                  className="w-full rounded-md border border-gray-300 dark:border-gray-700 bg-transparent px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-60"
+                  className="w-full rounded-md border border-gray-300 dark:border-gray-700 bg-transparent px-3 py-2 text-base outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-60"
                   value={draftName}
                   onChange={(event) => setDraftName(event.target.value)}
                   onBlur={() => void saveName()}
@@ -209,7 +209,7 @@ export function ChartWidget({ widgetId, canEdit = true }: ChartWidgetProps) {
               <div className="flex flex-col gap-1">
                 <label className="text-xs text-gray-500">{t("단위", "Unit")}</label>
                 <input
-                  className="w-full rounded-md border border-gray-300 dark:border-gray-700 bg-transparent px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-60"
+                  className="w-full rounded-md border border-gray-300 dark:border-gray-700 bg-transparent px-3 py-2 text-base outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-60"
                   value={draftUnit}
                   onChange={(event) => setDraftUnit(event.target.value)}
                   onBlur={() => void saveUnit()}

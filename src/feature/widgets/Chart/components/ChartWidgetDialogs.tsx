@@ -74,7 +74,7 @@ export function RecordManagementDialog({
             <label className="text-xs text-gray-500">{t("날짜", "Date")}</label>
             <input
               type="date"
-              className="w-full rounded-md border border-gray-300 dark:border-gray-700 bg-transparent px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-60"
+              className="w-full rounded-md border border-gray-300 dark:border-gray-700 bg-transparent px-3 py-2 text-base outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-60"
               value={newEntryDate}
               onChange={(event) => {
                 if (!event.target.value) return;
@@ -89,7 +89,7 @@ export function RecordManagementDialog({
               <input
                 type="number"
                 step="0.1"
-                className="w-full rounded-md border border-gray-300 dark:border-gray-700 bg-transparent px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-60"
+                className="w-full rounded-md border border-gray-300 dark:border-gray-700 bg-transparent px-3 py-2 text-base outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-60"
                 value={newEntryValue}
                 onChange={(event) => setNewEntryValue(event.target.value)}
                 placeholder={t("값을 입력하세요", "Enter a value")}
@@ -135,7 +135,7 @@ export function RecordManagementDialog({
                       <div className="flex min-w-0 w-full flex-wrap items-center gap-2 sm:w-auto sm:flex-nowrap sm:pr-2">
                         <input
                           type="date"
-                          className="w-full min-w-0 rounded-md border border-gray-300 bg-transparent px-2 py-1 text-xs outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-60 dark:border-gray-700 sm:w-[140px]"
+                          className="w-full min-w-0 rounded-md border border-gray-300 bg-transparent px-2 py-1 text-base outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-60 dark:border-gray-700 sm:w-[140px]"
                           value={editingDate}
                           onChange={(event) => {
                             setEditingDate(event.target.value as YMD);
@@ -145,7 +145,7 @@ export function RecordManagementDialog({
                         <input
                           type="number"
                           step="0.1"
-                          className="w-full min-w-0 rounded-md border border-gray-300 bg-transparent px-2 py-1 text-sm outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-60 dark:border-gray-700 sm:w-[120px]"
+                          className="w-full min-w-0 rounded-md border border-gray-300 bg-transparent px-2 py-1 text-base outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-60 dark:border-gray-700 sm:w-[120px]"
                           value={editingValue}
                           onChange={(event) =>
                             setEditingValue(event.target.value)
@@ -272,7 +272,7 @@ export function ChartSettingsDialog({
           <div className="flex flex-col gap-1">
             <label className="text-xs text-gray-500">{t("차트 이름", "Chart name")}</label>
             <input
-              className="w-full rounded-md border border-gray-300 dark:border-gray-700 bg-transparent px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-60"
+              className="w-full rounded-md border border-gray-300 dark:border-gray-700 bg-transparent px-3 py-2 text-base outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-60"
               value={draftName}
               onChange={(event) => setDraftName(event.target.value)}
               onBlur={() => void saveName()}
@@ -283,7 +283,7 @@ export function ChartSettingsDialog({
           <div className="flex flex-col gap-1">
             <label className="text-xs text-gray-500">{t("단위", "Unit")}</label>
             <input
-              className="w-full rounded-md border border-gray-300 dark:border-gray-700 bg-transparent px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-60"
+              className="w-full rounded-md border border-gray-300 dark:border-gray-700 bg-transparent px-3 py-2 text-base outline-none focus:ring-1 focus:ring-blue-500 disabled:opacity-60"
               value={draftUnit}
               onChange={(event) => setDraftUnit(event.target.value)}
               onBlur={() => void saveUnit()}

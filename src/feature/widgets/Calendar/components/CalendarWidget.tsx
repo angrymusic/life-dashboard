@@ -332,7 +332,7 @@ export function CalendarWidget({
                     : ""
                 )}
               >
-                <div className="flex items-center justify-between text-[11px] font-medium leading-none">
+                <div className="flex items-center justify-between min-h-[10px] text-[11px] font-medium leading-none">
                   <div className="flex items-center gap-1">
                     <span className={cn(hasHoliday ? "text-red-600" : "")}>
                       {day.date.getDate()}

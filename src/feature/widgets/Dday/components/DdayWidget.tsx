@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from "react";
 import type { FormEvent } from "react";
 import { Pencil, Plus } from "lucide-react";
+import { updateWidgetSettings } from "@/shared/db/db";
 import type { Id, YMD } from "@/shared/db/schema";
 import { cn } from "@/shared/lib/utils";
 import { Button } from "@/shared/ui/button";
@@ -61,10 +62,21 @@ type DdayWidgetProps = {
 
 export function DdayWidget({ widgetId, canEdit = true }: DdayWidgetProps) {
   const { t, locale } = useI18n();
-  const { dday, saveDday, deleteDday } = useDdayWidget(widgetId);
+  const { widget, dday, saveDday, deleteDday } = useDdayWidget(widgetId);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [draftTitle, setDraftTitle] = useState("");
   const [draftDate, setDraftDate] = useState<YMD>(() => toYmd(new Date()));
+
+  const widgetSettings = useMemo(() => {
+    const settings = widget?.settings;
+    if (!settings || typeof settings !== "object" || Array.isArray(settings))
+      return {};
+    return settings as Record<string, unknown>;
+  }, [widget?.settings]);
+  const countFromOne = useMemo(() => {
+    const value = widgetSettings.countFromOne;
+    return typeof value === "boolean" ? value : true;
+  }, [widgetSettings]);
 
   const openDialog = useCallback(() => {
     if (!canEdit) return;
@@ -72,6 +84,14 @@ export function DdayWidget({ widgetId, canEdit = true }: DdayWidgetProps) {
     setDraftDate(dday?.date ?? toYmd(new Date()));
     setDialogOpen(true);
   }, [canEdit, dday]);
+
+  const toggleCountFromOne = useCallback(async () => {
+    if (!widget) return;
+    await updateWidgetSettings(widget.id, {
+      ...widgetSettings,
+      countFromOne: !countFromOne,
+    });
+  }, [widget, widgetSettings, countFromOne]);
 
   const handleSubmit = useCallback(
     async (event: FormEvent<HTMLFormElement>) => {
@@ -93,6 +113,7 @@ export function DdayWidget({ widgetId, canEdit = true }: DdayWidgetProps) {
 
   const actionLabel = dday ? t("수정", "Edit") : t("추가", "Add");
   const actionIcon = dday ? <Pencil /> : <Plus />;
+  const countFromOneLabel = t("시작일 1일 계산", "Start day as Day 1");
 
   const {
     actions,
@@ -107,6 +128,12 @@ export function DdayWidget({ widgetId, canEdit = true }: DdayWidgetProps) {
     deleteLabel: t("위젯 삭제", "Delete widget"),
     extraItems: [
       {
+        text: countFromOneLabel,
+        toggle: true,
+        checked: countFromOne,
+        onClick: toggleCountFromOne,
+      },
+      {
         text: actionLabel,
         icon: actionIcon,
         onClick: openDialog,
@@ -115,7 +142,20 @@ export function DdayWidget({ widgetId, canEdit = true }: DdayWidgetProps) {
   });
 
   const diff = dday ? diffDays(dday.date) : null;
-  const displayDays = diff === null ? "--" : String(Math.abs(diff));
+  const displayDays =
+    diff === null
+      ? null
+      : countFromOne && diff <= 0
+      ? Math.abs(diff) + 1
+      : Math.abs(diff);
+  const ddayLabel =
+    diff === null || displayDays === null
+      ? "D--"
+      : diff > 0
+      ? `D-${displayDays}`
+      : diff === 0 && !countFromOne
+      ? "D-DAY"
+      : `D+${displayDays}`;
   const statusLabel =
     diff === null
       ? t("날짜를 확인해주세요", "Please check the date")
@@ -160,7 +200,7 @@ export function DdayWidget({ widgetId, canEdit = true }: DdayWidgetProps) {
           <div className="flex flex-col items-center gap-2">
             <div className="flex h-32 w-32 flex-col items-center justify-center rounded-2xl border border-gray-200/70 bg-gray-50/80 dark:border-gray-700 dark:bg-gray-900/30">
               <div className={cn("text-4xl font-bold leading-none", tone)}>
-                {displayDays === "0" ? "D-DAY" : `D-${displayDays}`}
+                {ddayLabel}
               </div>
               <div className="mt-1 text-xs text-gray-500">{statusLabel}</div>
             </div>
@@ -168,7 +208,7 @@ export function DdayWidget({ widgetId, canEdit = true }: DdayWidgetProps) {
         </div>
       </div>
     );
-  }, [dday, displayDays, locale, statusLabel, t, tone]);
+  }, [dday, ddayLabel, locale, statusLabel, t, tone]);
 
   return (
     <WidgetCard
@@ -198,7 +238,7 @@ export function DdayWidget({ widgetId, canEdit = true }: DdayWidgetProps) {
               <div>
                 <label className="text-[11px] text-gray-400">{t("제목", "Title")}</label>
                 <input
-                  className="mt-1 w-full rounded-md border border-gray-300 bg-transparent px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-700"
+                  className="mt-1 w-full rounded-md border border-gray-300 bg-transparent px-3 py-2 text-base outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-700"
                   value={draftTitle}
                   onChange={(event) => setDraftTitle(event.target.value)}
                   placeholder={t("예: 프로젝트 마감", "e.g., Project deadline")}
@@ -209,7 +249,7 @@ export function DdayWidget({ widgetId, canEdit = true }: DdayWidgetProps) {
                 <label className="text-[11px] text-gray-400">{t("날짜", "Date")}</label>
                 <input
                   type="date"
-                  className="mt-1 w-full rounded-md border border-gray-300 bg-transparent px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-700"
+                  className="mt-1 w-full rounded-md border border-gray-300 bg-transparent px-3 py-2 text-base outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-700"
                   value={draftDate}
                   onChange={(event) => setDraftDate(event.target.value as YMD)}
                   disabled={!canEdit}

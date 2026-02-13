@@ -2,6 +2,8 @@ import Image from "next/image";
 import type { ChangeEvent } from "react";
 import { useCallback, useRef } from "react";
 import { Upload, X } from "lucide-react";
+import { PhotoViewerDialog } from "@/feature/widgets/Photo/components/PhotoViewerDialog";
+import { usePhotoViewer } from "@/feature/widgets/Photo/hooks/usePhotoViewer";
 import { usePhotoWidget } from "@/feature/widgets/Photo/hooks/usePhotoWidget";
 import { WidgetCard } from "@/feature/widgets/shared/components/WidgetCard";
 import { WidgetDeleteDialog } from "@/feature/widgets/shared/components/WidgetDeleteDialog";
@@ -20,6 +22,7 @@ export function PhotoWidget({ widgetId, canEdit = true }: PhotoWidgetProps) {
   const { t } = useI18n();
   const { photoUrl, hasPhoto, replacePhoto, clearPhoto } =
     usePhotoWidget(widgetId);
+  const viewer = usePhotoViewer(photoUrl);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const openFileDialog = useCallback(() => {
@@ -84,15 +87,22 @@ export function PhotoWidget({ widgetId, canEdit = true }: PhotoWidgetProps) {
 
         {photoUrl ? (
           <div className="flex h-full w-full items-center justify-center overflow-hidden">
-            <Image
-              src={photoUrl}
-              alt={t("업로드된 사진", "Uploaded photo")}
-              width={1}
-              height={1}
-              unoptimized
-              className="block h-full w-auto max-w-none shrink-0"
-              draggable={false}
-            />
+            <button
+              type="button"
+              className="flex h-full w-full cursor-zoom-in items-center justify-center overflow-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/70"
+              onClick={viewer.openViewer}
+              aria-label={t("사진 전체 화면 보기", "Open photo in full screen")}
+            >
+              <Image
+                src={photoUrl}
+                alt={t("업로드된 사진", "Uploaded photo")}
+                width={1}
+                height={1}
+                unoptimized
+                className="pointer-events-none block h-full w-auto max-w-none shrink-0"
+                draggable={false}
+              />
+            </button>
           </div>
         ) : (
           <div className="flex h-full w-full flex-col items-center justify-center gap-2 text-sm text-gray-400">
@@ -120,6 +130,8 @@ export function PhotoWidget({ widgetId, canEdit = true }: PhotoWidgetProps) {
           className="hidden"
           onChange={handleFileChange}
         />
+
+        {photoUrl ? <PhotoViewerDialog photoUrl={photoUrl} viewer={viewer} /> : null}
 
         {canEdit ? (
           <WidgetDeleteDialog
