@@ -15,6 +15,8 @@ export type ActionMenuItem = {
   onClick: () => void;
   disabled?: boolean;
   danger?: boolean; // 삭제 같은 빨간 액션용
+  toggle?: boolean;
+  checked?: boolean;
 };
 
 type ActionMenuButtonProps = {
@@ -66,10 +68,30 @@ export function ActionMenuButton({
               item.danger ? "text-destructive focus:text-destructive" : "",
             ].join(" ")}
           >
-            {item.icon ? (
-              <span className="shrink-0 [&_svg]:size-4">{item.icon}</span>
+            <div className="flex min-w-0 flex-1 items-center gap-2">
+              {item.icon ? (
+                <span className="shrink-0 [&_svg]:size-4">{item.icon}</span>
+              ) : null}
+              <span className="truncate text-sm">{item.text}</span>
+            </div>
+            {item.toggle ? (
+              <span
+                aria-hidden
+                className={[
+                  "relative inline-flex h-5 w-9 shrink-0 items-center rounded-full border transition",
+                  item.checked
+                    ? "border-primary bg-primary"
+                    : "border-gray-300 bg-gray-200 dark:border-gray-600 dark:bg-gray-700",
+                ].join(" ")}
+              >
+                <span
+                  className={[
+                    "inline-block h-4 w-4 rounded-full bg-white shadow transition",
+                    item.checked ? "translate-x-4" : "translate-x-0.5",
+                  ].join(" ")}
+                />
+              </span>
             ) : null}
-            <span className="text-sm">{item.text}</span>
           </DropdownMenuItem>
         ))}
       </DropdownMenuContent>
