@@ -1,6 +1,7 @@
 import { useMemoWidget } from "@/feature/widgets/Memo/hooks/useMemoWidget";
 import { Id } from "@/shared/db/schema";
 import { Pencil } from "lucide-react";
+import { useEffect, useRef } from "react";
 import { WidgetCard } from "@/feature/widgets/shared/components/WidgetCard";
 import { WidgetDeleteDialog } from "@/feature/widgets/shared/components/WidgetDeleteDialog";
 import { WidgetHeader } from "@/feature/widgets/shared/components/WidgetHeader";
@@ -14,7 +15,9 @@ type MemoWidgetProps = {
 
 export function MemoWidget({ widgetId, canEdit = true }: MemoWidgetProps) {
   const { t } = useI18n();
+  const hasAttemptedAutoEditRef = useRef(false);
   const {
+    memo,
     value,
     isEditing,
     beginEdit,
@@ -43,13 +46,30 @@ export function MemoWidget({ widgetId, canEdit = true }: MemoWidgetProps) {
     ],
   });
 
+  useEffect(() => {
+    if (!memo) return;
+    if (!canEdit) return;
+    if (hasAttemptedAutoEditRef.current) return;
+
+    hasAttemptedAutoEditRef.current = true;
+    if (!memo.text.trim()) {
+      beginEdit();
+    }
+  }, [memo, canEdit, beginEdit]);
+
+  const content = value?.trim() ? (
+    value
+  ) : (
+    <span className="text-gray-400">{t("메모가 없습니다", "No memo")}</span>
+  );
+
   return (
     <WidgetCard
       header={
         <WidgetHeader
           className="shrink-0"
           actions={actions}
-          canEdit={canShowActions}
+          canEdit={canEdit}
         />
       }
     >
@@ -65,13 +85,21 @@ export function MemoWidget({ widgetId, canEdit = true }: MemoWidgetProps) {
             autoFocus
           />
         ) : (
-          <div className="w-full flex-1 min-h-0 overflow-auto rounded-md border border-transparent p-2 text-sm whitespace-pre-wrap break-words">
-            {value?.trim() ? (
-              value
+          <>
+            {canEdit ? (
+              <button
+                type="button"
+                onClick={beginEdit}
+                className="w-full flex-1 min-h-0 overflow-auto rounded-md border border-transparent p-2 text-left text-sm whitespace-pre-wrap break-words transition hover:bg-gray-50/70 focus:outline-none focus:ring-1 focus:ring-blue-500 dark:hover:bg-gray-900/40"
+              >
+                {content}
+              </button>
             ) : (
-              <span className="text-gray-400">{t("메모가 없습니다", "No memo")}</span>
+              <div className="w-full flex-1 min-h-0 overflow-auto rounded-md border border-transparent p-2 text-sm whitespace-pre-wrap break-words">
+                {content}
+              </div>
             )}
-          </div>
+          </>
         )}
 
         {canEdit ? (
