@@ -19,8 +19,30 @@ type RequestContext = {
 
 export async function createRequestContext(): Promise<RequestContext> {
   const session = await getServerSession(authOptions);
-  const email = session?.user?.email ?? null;
+  const email = session?.user?.email?.trim() ?? null;
   const user = email ? await prisma.user.findUnique({ where: { email } }) : null;
+
+  if (user && email) {
+    try {
+      await prisma.groupMember.updateMany({
+        where: {
+          userId: null,
+          email: {
+            equals: email,
+            mode: "insensitive",
+          },
+        },
+        data: {
+          userId: user.id,
+          displayName: user.name?.trim() || user.email || email,
+          avatarUrl: user.image ?? null,
+        },
+      });
+    } catch {
+      // Ignore membership-link errors to avoid breaking auth.
+    }
+  }
+
   return { session, email, user, userId: user?.id ?? null };
 }
 

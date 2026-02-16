@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import prisma from "@/server/prisma";
 import { jsonError, parseJson } from "@/server/api-response";
 import { isAdminRole, requireUser } from "@/server/api-auth";
-import { parsePositiveIntEnv } from "@/server/request-guards";
+import { enforceRateLimit, parsePositiveIntEnv } from "@/server/request-guards";
 import { detectLanguageFromRequest } from "@/shared/i18n/language";
 
 export const runtime = "nodejs";
@@ -37,12 +37,16 @@ function normalizeRoleInput(value: unknown): "parent" | "child" | null {
   return null;
 }
 
+function isLikelyEmail(value: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
+
 function parseAddMemberBody(body: unknown): AddMemberInput | null {
   if (!isRecord(body)) return null;
   const emailValue = body.email;
   if (typeof emailValue !== "string") return null;
   const email = emailValue.trim();
-  if (!email) return null;
+  if (!email || email.length > 320 || !isLikelyEmail(email)) return null;
 
   let dashboardName: string | undefined;
   if (typeof body.dashboardName === "string") {
@@ -97,6 +101,17 @@ function tr(language: "ko" | "en", ko: string, en: string) {
   return language === "ko" ? ko : en;
 }
 
+async function enforceMembersMutationRateLimit(userId: string, action: string) {
+  return enforceRateLimit({
+    key: `dashboard-members:${action}:${userId}`,
+    limit: parsePositiveIntEnv(process.env.DASHBOARD_MEMBERS_RATE_LIMIT, 60),
+    windowMs: parsePositiveIntEnv(
+      process.env.DASHBOARD_MEMBERS_RATE_WINDOW_MS,
+      60 * 1000
+    ),
+  });
+}
+
 function mapMember(member: {
   id: string;
   groupId: string;
@@ -129,6 +144,8 @@ export async function POST(
   const userResult = await requireUser();
   if (!userResult.ok) return userResult.response;
   const { user: requester, email: sessionEmail } = userResult.context;
+  const rateLimit = await enforceMembersMutationRateLimit(requester.id, "post");
+  if (!rateLimit.ok) return rateLimit.response;
 
   const parsedBody = await parseJson(request, {
     maxBytes: parsePositiveIntEnv(
@@ -208,14 +225,12 @@ export async function POST(
         mode: "insensitive",
       },
     },
+    select: { id: true, email: true, name: true, image: true },
   });
-  if (!targetUser || !targetUser.email) {
-    return jsonError(
-      404,
-      tr(language, "사용자를 찾을 수 없어요.", "User not found"),
-      { email: parsed.email }
-    );
-  }
+
+  const targetEmail = targetUser?.email ?? normalizedEmail;
+  const targetDisplayName = targetUser?.name?.trim() || targetEmail;
+  const targetAvatarUrl = targetUser?.image ?? null;
 
   let groupId = dashboard.groupId;
   if (!groupId) {
@@ -263,22 +278,22 @@ export async function POST(
     where: {
       groupId_email: {
         groupId,
-        email: targetUser.email,
+        email: targetEmail,
       },
     },
     update: {
-      userId: targetUser.id,
+      ...(targetUser ? { userId: targetUser.id } : {}),
       role: parsed.role,
-      displayName: targetUser.name ?? targetUser.email,
-      avatarUrl: targetUser.image,
+      displayName: targetDisplayName,
+      avatarUrl: targetAvatarUrl,
     },
     create: {
       groupId,
-      userId: targetUser.id,
-      email: targetUser.email,
+      userId: targetUser?.id,
+      email: targetEmail,
       role: parsed.role,
-      displayName: targetUser.name ?? targetUser.email,
-      avatarUrl: targetUser.image,
+      displayName: targetDisplayName,
+      avatarUrl: targetAvatarUrl,
     },
   });
 
@@ -306,6 +321,8 @@ export async function PATCH(
   const userResult = await requireUser();
   if (!userResult.ok) return userResult.response;
   const { user: requester } = userResult.context;
+  const rateLimit = await enforceMembersMutationRateLimit(requester.id, "patch");
+  if (!rateLimit.ok) return rateLimit.response;
 
   const parsedBody = await parseJson(request, {
     maxBytes: parsePositiveIntEnv(
@@ -401,6 +418,8 @@ export async function DELETE(
   const userResult = await requireUser();
   if (!userResult.ok) return userResult.response;
   const { user: requester } = userResult.context;
+  const rateLimit = await enforceMembersMutationRateLimit(requester.id, "delete");
+  if (!rateLimit.ok) return rateLimit.response;
 
   const parsedBody = await parseJson(request, {
     maxBytes: parsePositiveIntEnv(
