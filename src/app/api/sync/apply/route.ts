@@ -65,7 +65,7 @@ function requireString(obj: Record<string, unknown>, key: string, fallback?: str
 
 function optionalString(obj: Record<string, unknown>, key: string) {
   const value = obj[key];
-  if (typeof value === "string" && value.trim()) return value;
+  if (typeof value === "string" && value.trim()) return value.trim();
   return undefined;
 }
 
@@ -224,6 +224,13 @@ export async function POST(request: Request) {
     return access.dashboard;
   };
 
+  const ensureGroupAdminAccess = async (groupId: string) => {
+    const member = await getGroupMember(groupId);
+    if (!member || !isAdminRole(member.role)) {
+      throw new Error("Forbidden");
+    }
+  };
+
   const ensureWidgetAccess = async (
     widgetId: string,
     dashboardId?: string,
@@ -301,6 +308,7 @@ export async function POST(request: Request) {
           throw new Error("Forbidden");
         }
         await prisma.dashboard.deleteMany({ where: { id: event.entityId } });
+        dashboardCache.set(event.entityId, null);
       },
       upsert: async (event, payload) => {
         const id = requireString(payload, "id", event.entityId);
@@ -312,11 +320,11 @@ export async function POST(request: Request) {
         const existing = await getDashboard(id);
         if (existing) {
           await ensureDashboardAdminAccess(existing.id);
-        } else if (groupId) {
-          const member = await getGroupMember(groupId);
-          if (!member || !isAdminRole(member.role)) {
-            throw new Error("Forbidden");
+          if (groupId && groupId !== existing.groupId) {
+            await ensureGroupAdminAccess(groupId);
           }
+        } else if (groupId) {
+          await ensureGroupAdminAccess(groupId);
         }
 
         await prisma.dashboard.upsert({
@@ -335,6 +343,11 @@ export async function POST(request: Request) {
             createdAt,
             updatedAt,
           },
+        });
+        dashboardCache.set(id, {
+          id,
+          ownerId: userId,
+          groupId: groupId ?? existing?.groupId ?? null,
         });
       },
     },
