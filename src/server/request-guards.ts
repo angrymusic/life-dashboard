@@ -58,7 +58,23 @@ export function sanitizePathSegment(value: string) {
   return value.replace(/[^a-zA-Z0-9_-]/g, "_");
 }
 
+function parseBooleanEnv(value: string | undefined, fallback: boolean) {
+  if (!value) return fallback;
+  const normalized = value.trim().toLowerCase();
+  if (["1", "true", "yes", "on"].includes(normalized)) return true;
+  if (["0", "false", "no", "off"].includes(normalized)) return false;
+  return fallback;
+}
+
 export function clientIpFromRequest(request: Request) {
+  const trustProxyHeaders = parseBooleanEnv(
+    process.env.TRUST_PROXY_HEADERS,
+    false
+  );
+  if (!trustProxyHeaders) {
+    return null;
+  }
+
   const cfIp = request.headers.get("cf-connecting-ip");
   if (cfIp) return cfIp.trim();
 

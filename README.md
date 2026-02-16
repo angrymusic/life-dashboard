@@ -65,6 +65,7 @@ UPLOAD_DIR=./data/uploads
 UPLOAD_MAX_BYTES=10485760
 RATE_LIMIT_BACKEND=database
 RATE_LIMIT_PRUNE_INTERVAL_MS=300000
+TRUST_PROXY_HEADERS=true
 MIGRATION_STAGING_DIR=./data/migration-staging
 ENABLE_MIGRATION_IMPORT=false
 PHOTO_UPLOAD_RATE_LIMIT=30
@@ -123,6 +124,8 @@ Open http://localhost:3000.
 ## Notes
 
 - Photo uploads are stored under `UPLOAD_DIR` (default `data/uploads`).
+- Set `TRUST_PROXY_HEADERS=true` only when requests are always behind a trusted
+  proxy (for example Cloudflare Tunnel).
 - Migration import API is disabled by default. To use it, set
   `ENABLE_MIGRATION_IMPORT=true`.
 - Migration import stages snapshots on disk under `MIGRATION_STAGING_DIR`.
