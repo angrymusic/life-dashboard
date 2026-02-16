@@ -7,6 +7,7 @@ import { useI18n } from "@/shared/i18n/client";
 
 const STORAGE_KEY = "lifedashboard.weatherLocation";
 const SOURCE_STORAGE_KEY = "lifedashboard.weatherLocationSource";
+const LOCATION_SYNC_EVENT = "lifedashboard:weather-location-changed";
 let geolocationPromise: Promise<WeatherLocation | null> | null = null;
 const CURRENT_LOCATION_LABEL = {
   ko: "현재 위치",
@@ -74,6 +75,45 @@ function buildCoordinateLabel(latitude: number, longitude: number) {
   return `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`;
 }
 
+function parseStoredLocationState(): {
+  location: WeatherLocation;
+  source: WeatherLocationSource;
+} | null {
+  if (typeof window === "undefined") return null;
+  const storedLocation = parseStoredLocation(localStorage.getItem(STORAGE_KEY));
+  if (!storedLocation) return null;
+  const storedSource = parseStoredLocationSource(
+    localStorage.getItem(SOURCE_STORAGE_KEY)
+  );
+  return {
+    location: storedLocation,
+    source: storedSource ?? inferStoredLocationSource(storedLocation),
+  };
+}
+
+function isWeatherLocationSyncDetail(
+  value: unknown
+): value is { location: WeatherLocation; source: WeatherLocationSource } {
+  if (!value || typeof value !== "object") return false;
+  const detail = value as {
+    location?: Partial<WeatherLocation>;
+    source?: WeatherLocationSource;
+  };
+  if (
+    detail.source !== "current" &&
+    detail.source !== "preset" &&
+    detail.source !== "search"
+  ) {
+    return false;
+  }
+  if (!detail.location) return false;
+  return (
+    typeof detail.location.latitude === "number" &&
+    typeof detail.location.longitude === "number" &&
+    typeof detail.location.label === "string"
+  );
+}
+
 function requestGeolocation(
   currentLocationLabel: string,
   options: { force?: boolean } = {}
@@ -126,14 +166,11 @@ export function useWeatherLocation() {
         hasStoredLocation: false,
       };
     }
-    const stored = parseStoredLocation(localStorage.getItem(STORAGE_KEY));
-    const storedSource = parseStoredLocationSource(
-      localStorage.getItem(SOURCE_STORAGE_KEY)
-    );
-    if (stored) {
+    const storedState = parseStoredLocationState();
+    if (storedState) {
       return {
-        location: stored,
-        source: storedSource ?? inferStoredLocationSource(stored),
+        location: storedState.location,
+        source: storedState.source,
         hasStoredLocation: true,
       };
     }
@@ -153,6 +190,11 @@ export function useWeatherLocation() {
       if (typeof window === "undefined") return;
       localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
       localStorage.setItem(SOURCE_STORAGE_KEY, source);
+      window.dispatchEvent(
+        new CustomEvent(LOCATION_SYNC_EVENT, {
+          detail: { location: next, source },
+        })
+      );
     },
     []
   );
@@ -211,6 +253,48 @@ export function useWeatherLocation() {
     persistLocation({ ...result, label }, "current");
     return true;
   }, [currentLocationLabel, persistLocation, resolveLocationLabel]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const syncFromStorage = () => {
+      const storedState = parseStoredLocationState();
+      if (!storedState) return;
+      setState({
+        location: storedState.location,
+        source: storedState.source,
+        hasStoredLocation: true,
+      });
+    };
+
+    const handleStorage = (event: StorageEvent) => {
+      if (
+        event.key !== null &&
+        event.key !== STORAGE_KEY &&
+        event.key !== SOURCE_STORAGE_KEY
+      ) {
+        return;
+      }
+      syncFromStorage();
+    };
+
+    const handleLocationSync = (event: Event) => {
+      if (!(event instanceof CustomEvent)) return;
+      if (!isWeatherLocationSyncDetail(event.detail)) return;
+      setState({
+        location: event.detail.location,
+        source: event.detail.source,
+        hasStoredLocation: true,
+      });
+    };
+
+    window.addEventListener("storage", handleStorage);
+    window.addEventListener(LOCATION_SYNC_EVENT, handleLocationSync);
+    return () => {
+      window.removeEventListener("storage", handleStorage);
+      window.removeEventListener(LOCATION_SYNC_EVENT, handleLocationSync);
+    };
+  }, []);
 
   useEffect(() => {
     if (typeof window === "undefined") return;
