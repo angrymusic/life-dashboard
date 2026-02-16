@@ -38,6 +38,63 @@ function extFromMime(mime: string): string {
   }
 }
 
+function hasBytesAt(source: Uint8Array, signature: number[], offset = 0) {
+  if (source.length < offset + signature.length) return false;
+  for (let index = 0; index < signature.length; index += 1) {
+    if (source[offset + index] !== signature[index]) return false;
+  }
+  return true;
+}
+
+function detectImageMimeFromMagic(bytes: Uint8Array): string | null {
+  if (hasBytesAt(bytes, [0xff, 0xd8, 0xff])) {
+    return "image/jpeg";
+  }
+
+  if (hasBytesAt(bytes, [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])) {
+    return "image/png";
+  }
+
+  if (
+    hasBytesAt(bytes, [0x47, 0x49, 0x46, 0x38, 0x37, 0x61]) ||
+    hasBytesAt(bytes, [0x47, 0x49, 0x46, 0x38, 0x39, 0x61])
+  ) {
+    return "image/gif";
+  }
+
+  if (
+    hasBytesAt(bytes, [0x52, 0x49, 0x46, 0x46]) &&
+    hasBytesAt(bytes, [0x57, 0x45, 0x42, 0x50], 8)
+  ) {
+    return "image/webp";
+  }
+
+  if (hasBytesAt(bytes, [0x66, 0x74, 0x79, 0x70], 4)) {
+    const majorBrand = String.fromCharCode(...bytes.slice(8, 12));
+    const heicBrands = new Set(["heic", "heix", "heim", "heis"]);
+    const heifBrands = new Set(["heif", "hevx", "mif1", "msf1"]);
+    if (heicBrands.has(majorBrand)) {
+      return "image/heic";
+    }
+    if (heifBrands.has(majorBrand)) {
+      return "image/heif";
+    }
+  }
+
+  return null;
+}
+
+function isCompatibleImageMime(declaredMime: string, detectedMime: string) {
+  if (declaredMime === detectedMime) return true;
+  if (
+    (declaredMime === "image/heic" && detectedMime === "image/heif") ||
+    (declaredMime === "image/heif" && detectedMime === "image/heic")
+  ) {
+    return true;
+  }
+  return false;
+}
+
 function safeJoinPosix(...parts: string[]) {
   // storagePath를 항상 "/"로 통일
   return parts.join("/").replaceAll("\\", "/");
@@ -248,9 +305,9 @@ export async function POST(request: Request) {
 
   const file = fileValue;
 
-  const mimeType = file.type || "application/octet-stream";
-  if (!mimeType.startsWith("image/")) {
-    return jsonError(400, "Only image/* is allowed", { mimeType });
+  const declaredMimeType = file.type || "application/octet-stream";
+  if (!declaredMimeType.startsWith("image/")) {
+    return jsonError(400, "Only image/* is allowed", { mimeType: declaredMimeType });
   }
 
   if (file.size > maxBytes) {
@@ -274,6 +331,19 @@ export async function POST(request: Request) {
   }
   await ensureDir(resolvedDir);
 
+  const buffer = Buffer.from(await file.arrayBuffer());
+  const detectedMimeType = detectImageMimeFromMagic(buffer);
+  if (!detectedMimeType) {
+    return jsonError(400, "Unsupported or invalid image file");
+  }
+  if (!isCompatibleImageMime(declaredMimeType, detectedMimeType)) {
+    return jsonError(400, "MIME type mismatch", {
+      mimeType: declaredMimeType,
+      detectedMimeType,
+    });
+  }
+
+  const mimeType = detectedMimeType;
   const uuid = crypto.randomUUID();
   const ext = extFromMime(mimeType);
   const filename = `${uuid}.${ext}`;
@@ -287,7 +357,6 @@ export async function POST(request: Request) {
     return jsonError(400, "Invalid path");
   }
 
-  const buffer = Buffer.from(await file.arrayBuffer());
   await fs.writeFile(resolvedTarget, buffer);
 
   // 앱/DB에 저장할 경로는 "업로드 루트 기준 상대 경로"가 깔끔함
