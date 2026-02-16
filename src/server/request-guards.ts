@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import prisma from "@/server/prisma";
 import { createHash } from "crypto";
 import { isIP } from "net";
@@ -161,41 +162,37 @@ function enforceRateLimitInMemory(
 async function enforceRateLimitInDatabase(
   params: EnforceRateLimitParams
 ): Promise<ResolvedRateLimit> {
-  const now = new Date();
-  const nowMs = now.getTime();
-  const resetAt = new Date(nowMs + params.windowMs);
+  const rows = await prisma.$queryRaw<Array<{ count: number; resetAt: Date }>>(
+    Prisma.sql`
+      INSERT INTO "ApiRateLimit" ("key", "count", "resetAt", "createdAt", "updatedAt")
+      VALUES (
+        ${params.key},
+        1,
+        NOW() + (${params.windowMs} * INTERVAL '1 millisecond'),
+        NOW(),
+        NOW()
+      )
+      ON CONFLICT ("key") DO UPDATE
+      SET
+        "count" = CASE
+          WHEN "ApiRateLimit"."resetAt" <= NOW() THEN 1
+          ELSE "ApiRateLimit"."count" + 1
+        END,
+        "resetAt" = CASE
+          WHEN "ApiRateLimit"."resetAt" <= NOW()
+            THEN NOW() + (${params.windowMs} * INTERVAL '1 millisecond')
+          ELSE "ApiRateLimit"."resetAt"
+        END,
+        "updatedAt" = NOW()
+      RETURNING "count", "resetAt";
+    `
+  );
+  const row = rows[0];
+  if (!row) {
+    throw new Error("Rate limit update failed");
+  }
 
-  const row = await prisma.$transaction(async (tx) => {
-    const existing = await tx.apiRateLimit.findUnique({
-      where: { key: params.key },
-      select: { count: true, resetAt: true },
-    });
-
-    if (!existing || existing.resetAt.getTime() <= nowMs) {
-      return tx.apiRateLimit.upsert({
-        where: { key: params.key },
-        update: {
-          count: 1,
-          resetAt,
-        },
-        create: {
-          key: params.key,
-          count: 1,
-          resetAt,
-        },
-        select: { count: true, resetAt: true },
-      });
-    }
-
-    return tx.apiRateLimit.update({
-      where: { key: params.key },
-      data: {
-        count: { increment: 1 },
-      },
-      select: { count: true, resetAt: true },
-    });
-  });
-
+  const nowMs = Date.now();
   maybePruneDatabaseRateLimits(nowMs);
   return { count: row.count, resetAt: row.resetAt.getTime() };
 }
