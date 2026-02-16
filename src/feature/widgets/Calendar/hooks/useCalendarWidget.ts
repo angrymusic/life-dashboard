@@ -15,6 +15,7 @@ import {
 } from "@/shared/db/db";
 import { useCalendarEvents, useWidget } from "@/shared/db/queries";
 import {
+  COLOR_PRESETS,
   DEFAULT_EVENT_COLOR,
   CalendarEventInstance,
   addDays,
@@ -41,12 +42,18 @@ type DeleteScope = "all" | "future";
 function buildDefaultCyclePattern(
   t: (ko: string, en: string) => string
 ): CalendarRecurrenceCycleItem[] {
-  return [
-    { label: t("주간", "Day shift"), days: 1 },
-    { label: t("야간", "Night shift"), days: 1 },
-    { label: t("비번", "Off"), days: 1 },
-    { label: t("휴무", "Rest"), days: 1 },
+  const labels: Array<[string, string]> = [
+    ["주간", "Day shift"],
+    ["야간", "Night shift"],
+    ["비번", "Off"],
+    ["휴무", "Rest"],
   ];
+
+  return labels.map(([ko, en], index) => ({
+    label: t(ko, en),
+    days: 1,
+    color: COLOR_PRESETS[index] ?? DEFAULT_EVENT_COLOR,
+  }));
 }
 
 export function useCalendarWidget(widgetId: Id) {

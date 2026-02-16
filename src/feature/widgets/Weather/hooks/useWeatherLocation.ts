@@ -6,14 +6,19 @@ import {
 import { useI18n } from "@/shared/i18n/client";
 
 const STORAGE_KEY = "lifedashboard.weatherLocation";
+const SOURCE_STORAGE_KEY = "lifedashboard.weatherLocationSource";
+const LOCATION_SYNC_EVENT = "lifedashboard:weather-location-changed";
 let geolocationPromise: Promise<WeatherLocation | null> | null = null;
 const CURRENT_LOCATION_LABEL = {
   ko: "현재 위치",
   en: "Current location",
 } as const;
 
+export type WeatherLocationSource = "current" | "preset" | "search";
+
 type WeatherLocationState = {
   location: WeatherLocation;
+  source: WeatherLocationSource;
   hasStoredLocation: boolean;
 };
 
@@ -45,24 +50,94 @@ function parseStoredLocation(value: string | null): WeatherLocation | null {
   }
 }
 
+function parseStoredLocationSource(
+  value: string | null
+): WeatherLocationSource | null {
+  if (value === "current" || value === "preset" || value === "search") {
+    return value;
+  }
+  return null;
+}
+
+function inferStoredLocationSource(
+  location: WeatherLocation
+): WeatherLocationSource {
+  if (
+    location.label === CURRENT_LOCATION_LABEL.ko ||
+    location.label === CURRENT_LOCATION_LABEL.en
+  ) {
+    return "current";
+  }
+  return "search";
+}
+
+function buildCoordinateLabel(latitude: number, longitude: number) {
+  return `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`;
+}
+
+function parseStoredLocationState(): {
+  location: WeatherLocation;
+  source: WeatherLocationSource;
+} | null {
+  if (typeof window === "undefined") return null;
+  const storedLocation = parseStoredLocation(localStorage.getItem(STORAGE_KEY));
+  if (!storedLocation) return null;
+  const storedSource = parseStoredLocationSource(
+    localStorage.getItem(SOURCE_STORAGE_KEY)
+  );
+  return {
+    location: storedLocation,
+    source: storedSource ?? inferStoredLocationSource(storedLocation),
+  };
+}
+
+function isWeatherLocationSyncDetail(
+  value: unknown
+): value is { location: WeatherLocation; source: WeatherLocationSource } {
+  if (!value || typeof value !== "object") return false;
+  const detail = value as {
+    location?: Partial<WeatherLocation>;
+    source?: WeatherLocationSource;
+  };
+  if (
+    detail.source !== "current" &&
+    detail.source !== "preset" &&
+    detail.source !== "search"
+  ) {
+    return false;
+  }
+  if (!detail.location) return false;
+  return (
+    typeof detail.location.latitude === "number" &&
+    typeof detail.location.longitude === "number" &&
+    typeof detail.location.label === "string"
+  );
+}
+
 function requestGeolocation(
-  currentLocationLabel: string
+  currentLocationLabel: string,
+  options: { force?: boolean } = {}
 ): Promise<WeatherLocation | null> {
-  if (geolocationPromise) return geolocationPromise;
+  if (!options.force && geolocationPromise) return geolocationPromise;
   geolocationPromise = new Promise((resolve) => {
     if (!navigator.geolocation) {
+      geolocationPromise = null;
       resolve(null);
       return;
     }
     navigator.geolocation.getCurrentPosition(
       (position) => {
+        geolocationPromise = null;
         resolve({
           latitude: position.coords.latitude,
           longitude: position.coords.longitude,
           label: currentLocationLabel,
         });
       },
-      () => resolve(null),
+      () => {
+        geolocationPromise = null;
+        resolve(null);
+      },
       { enableHighAccuracy: false, timeout: 8000 }
     );
   });
@@ -87,20 +162,42 @@ export function useWeatherLocation() {
     if (typeof window === "undefined") {
       return {
         location: defaultLocation,
+        source: "preset",
         hasStoredLocation: false,
       };
     }
-    const stored = parseStoredLocation(localStorage.getItem(STORAGE_KEY));
-    if (stored) {
-      return { location: stored, hasStoredLocation: true };
+    const storedState = parseStoredLocationState();
+    if (storedState) {
+      return {
+        location: storedState.location,
+        source: storedState.source,
+        hasStoredLocation: true,
+      };
     }
     return {
       location: defaultLocation,
+      source: "preset",
       hasStoredLocation: false,
     };
   });
-  const { location: storedLocation, hasStoredLocation } = state;
+  const { location: storedLocation, source: locationSource, hasStoredLocation } =
+    state;
   const location = hasStoredLocation ? storedLocation : defaultLocation;
+
+  const persistLocation = useCallback(
+    (next: WeatherLocation, source: WeatherLocationSource) => {
+      setState({ location: next, source, hasStoredLocation: true });
+      if (typeof window === "undefined") return;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+      localStorage.setItem(SOURCE_STORAGE_KEY, source);
+      window.dispatchEvent(
+        new CustomEvent(LOCATION_SYNC_EVENT, {
+          detail: { location: next, source },
+        })
+      );
+    },
+    []
+  );
 
   const resolveLocationLabel = useCallback(
     async (baseLocation: WeatherLocation) => {
@@ -125,18 +222,85 @@ export function useWeatherLocation() {
     [language]
   );
 
+  const setLocationByCoordinates = useCallback(
+    async (
+      params: { latitude: number; longitude: number; label?: string },
+      source: WeatherLocationSource = "search"
+    ) => {
+      const label = params.label?.trim();
+      const fallbackLabel = buildCoordinateLabel(params.latitude, params.longitude);
+      const baseLocation: WeatherLocation = {
+        latitude: params.latitude,
+        longitude: params.longitude,
+        label: label || fallbackLabel,
+      };
+      const resolvedLabel = label || (await resolveLocationLabel(baseLocation));
+      persistLocation({
+        ...baseLocation,
+        label: resolvedLabel || fallbackLabel,
+      }, source);
+    },
+    [persistLocation, resolveLocationLabel]
+  );
+
+  const refreshCurrentLocation = useCallback(async () => {
+    if (typeof window === "undefined" || !navigator.geolocation) {
+      return false;
+    }
+    const result = await requestGeolocation(currentLocationLabel, { force: true });
+    if (!result) return false;
+    const label = (await resolveLocationLabel(result)) || currentLocationLabel;
+    persistLocation({ ...result, label }, "current");
+    return true;
+  }, [currentLocationLabel, persistLocation, resolveLocationLabel]);
+
   useEffect(() => {
     if (typeof window === "undefined") return;
-    const persistLocation = (next: WeatherLocation) => {
-      setState({ location: next, hasStoredLocation: true });
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+
+    const syncFromStorage = () => {
+      const storedState = parseStoredLocationState();
+      if (!storedState) return;
+      setState({
+        location: storedState.location,
+        source: storedState.source,
+        hasStoredLocation: true,
+      });
     };
 
+    const handleStorage = (event: StorageEvent) => {
+      if (
+        event.key !== null &&
+        event.key !== STORAGE_KEY &&
+        event.key !== SOURCE_STORAGE_KEY
+      ) {
+        return;
+      }
+      syncFromStorage();
+    };
+
+    const handleLocationSync = (event: Event) => {
+      if (!(event instanceof CustomEvent)) return;
+      if (!isWeatherLocationSyncDetail(event.detail)) return;
+      setState({
+        location: event.detail.location,
+        source: event.detail.source,
+        hasStoredLocation: true,
+      });
+    };
+
+    window.addEventListener("storage", handleStorage);
+    window.addEventListener(LOCATION_SYNC_EVENT, handleLocationSync);
+    return () => {
+      window.removeEventListener("storage", handleStorage);
+      window.removeEventListener(LOCATION_SYNC_EVENT, handleLocationSync);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
     if (hasStoredLocation) {
-      const isCurrentLocationLabel =
-        storedLocation.label === CURRENT_LOCATION_LABEL.ko ||
-        storedLocation.label === CURRENT_LOCATION_LABEL.en;
-      if (!isCurrentLocationLabel) return;
+      if (locationSource !== "current") return;
       void (async () => {
         const label =
           (await resolveLocationLabel({
@@ -145,7 +309,7 @@ export function useWeatherLocation() {
           })) ||
           currentLocationLabel;
         if (label === storedLocation.label) return;
-        persistLocation({ ...storedLocation, label });
+        persistLocation({ ...storedLocation, label }, "current");
       })();
       return;
     }
@@ -159,23 +323,29 @@ export function useWeatherLocation() {
       const result = await requestGeolocation(currentLocationLabel);
       if (!result) return;
       const label = await resolveLocationLabel(result);
-      persistLocation({ ...result, label });
+      persistLocation({ ...result, label }, "current");
     })();
   }, [
     currentLocationLabel,
     hasStoredLocation,
+    locationSource,
+    persistLocation,
     resolveLocationLabel,
     storedLocation,
   ]);
 
-  const saveLocation = useCallback((next: WeatherLocation) => {
-    setState({ location: next, hasStoredLocation: true });
-    if (typeof window === "undefined") return;
-    localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-  }, []);
+  const saveLocation = useCallback(
+    (next: WeatherLocation, source: WeatherLocationSource = "search") => {
+      persistLocation(next, source);
+    },
+    [persistLocation]
+  );
 
   return {
     location,
+    locationSource,
     setLocation: saveLocation,
+    setLocationByCoordinates,
+    refreshCurrentLocation,
   };
 }

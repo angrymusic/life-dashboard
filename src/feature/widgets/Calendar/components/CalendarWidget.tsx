@@ -3,6 +3,7 @@ import {
   Calendar,
   ChevronLeft,
   ChevronRight,
+  MapPin,
   Pencil,
   Plus,
   SlidersHorizontal,
@@ -38,6 +39,7 @@ import { CalendarDeleteDialog } from "@/feature/widgets/Calendar/components/Cale
 import { WidgetDeleteDialog } from "@/feature/widgets/shared/components/WidgetDeleteDialog";
 import { WidgetHeader } from "@/feature/widgets/shared/components/WidgetHeader";
 import { useWidgetActionMenu } from "@/feature/widgets/shared/hooks/useWidgetActionMenu";
+import { WeatherLocationDialog } from "@/feature/widgets/Weather/components/WeatherLocationDialog";
 import { WeatherIcon } from "@/feature/widgets/Weather/components/WeatherIcon";
 import { useWeatherForecast } from "@/feature/widgets/Weather/hooks/useWeatherForecast";
 import { useWeatherLocation } from "@/feature/widgets/Weather/hooks/useWeatherLocation";
@@ -155,6 +157,8 @@ export function CalendarWidget({
   } = useCalendarWidget(widgetId);
 
   const [specialDayDialogOpen, setSpecialDayDialogOpen] = useState(false);
+  const [weatherLocationDialogOpen, setWeatherLocationDialogOpen] =
+    useState(false);
   const [draftShowHoliday, setDraftShowHoliday] = useState(showHoliday);
   const [draftShowAnniversary, setDraftShowAnniversary] =
     useState(showAnniversary);
@@ -174,7 +178,10 @@ export function CalendarWidget({
   };
 
   const { location } = useWeatherLocation();
-  const { forecast } = useWeatherForecast(widgetId, { location, days: 7 });
+  const { forecast, isLoading: isWeatherLoading } = useWeatherForecast(widgetId, {
+    location,
+    days: 7,
+  });
   const weatherByYmd = useMemo(() => {
     const map = new Map<string, WeatherForecastDay>();
     for (const day of forecast?.days ?? []) {
@@ -217,6 +224,11 @@ export function CalendarWidget({
       text: t("공휴일/기념일 설정", "Holiday/anniversary settings"),
       icon: <SlidersHorizontal className="size-4" />,
       onClick: openSpecialDayDialog,
+    },
+    {
+      text: t("날씨 위치 설정", "Weather location"),
+      icon: <MapPin className="size-4" />,
+      onClick: () => setWeatherLocationDialogOpen(true),
     },
   ];
   const {
@@ -332,7 +344,7 @@ export function CalendarWidget({
                     : ""
                 )}
               >
-                <div className="flex items-center justify-between min-h-[10px] text-[11px] font-medium leading-none">
+                <div className="flex items-center justify-between min-h-[10px] text-[12px] font-medium leading-none">
                   <div className="flex items-center gap-1">
                     <span className={cn(hasHoliday ? "text-red-600" : "")}>
                       {day.date.getDate()}
@@ -347,7 +359,7 @@ export function CalendarWidget({
                   <div className="flex items-center gap-1">
                     {shouldShowWeather ? (
                       <span
-                        className="flex items-center gap-0.5 text-[10px] text-gray-500"
+                        className="flex items-center gap-0.5 text-[12px] text-gray-500"
                         title={weatherTitle}
                       >
                         <WeatherIcon
@@ -368,7 +380,7 @@ export function CalendarWidget({
                     ) : null}
                   </div>
                 </div>
-                <div className="mt-0.5 space-y-0.5">
+                <div className="mt-1 space-y-0.5">
                   {segments.map((segment, index) => {
                     if (!segment) {
                       return (
@@ -396,7 +408,7 @@ export function CalendarWidget({
                         key={`${segment.event.id}-${day.ymd}`}
                         title={segment.event.title}
                         className={cn(
-                          "pointer-events-none flex h-2.5 items-center truncate px-1 text-[9px] font-medium leading-none @[360px]:h-3 @[360px]:text-[10px]",
+                          "pointer-events-none flex h-3 items-center truncate px-1.5 text-[12px] font-medium leading-none @[360px]:h-4",
                           segment.isStart ? "rounded-l-sm" : "",
                           segment.isEnd ? "rounded-r-sm" : "",
                           segment.isStart ? "" : "-ml-2",
@@ -543,6 +555,11 @@ export function CalendarWidget({
             </DialogFooter>
           </DialogContent>
         </Dialog>
+        <WeatherLocationDialog
+          open={weatherLocationDialogOpen}
+          onOpenChange={setWeatherLocationDialogOpen}
+          disableSave={isWeatherLoading}
+        />
 
         <div className="mt-2 flex-1 min-h-0 overflow-auto">
           {selectedEvents.length === 0 ? (

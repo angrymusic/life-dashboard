@@ -1,11 +1,12 @@
-import { useMemo } from "react";
-import { RefreshCcw } from "lucide-react";
+import { useMemo, useState } from "react";
+import { LocateFixed, MapPin, RefreshCcw } from "lucide-react";
 import type { Id, YMD } from "@/shared/db/schema";
 import { WidgetCard } from "@/feature/widgets/shared/components/WidgetCard";
 import { WidgetHeader } from "@/feature/widgets/shared/components/WidgetHeader";
 import { WidgetDeleteDialog } from "@/feature/widgets/shared/components/WidgetDeleteDialog";
 import { useWidgetActionMenu } from "@/feature/widgets/shared/hooks/useWidgetActionMenu";
 import { WeatherIcon } from "@/feature/widgets/Weather/components/WeatherIcon";
+import { WeatherLocationDialog } from "@/feature/widgets/Weather/components/WeatherLocationDialog";
 import { useWeatherForecast } from "@/feature/widgets/Weather/hooks/useWeatherForecast";
 import { useWeatherLocation } from "@/feature/widgets/Weather/hooks/useWeatherLocation";
 import { useI18n } from "@/shared/i18n/client";
@@ -64,10 +65,40 @@ type WeatherWidgetProps = {
 
 export function WeatherWidget({ widgetId, canEdit = true }: WeatherWidgetProps) {
   const { t, locale } = useI18n();
-  const { location } = useWeatherLocation();
+  const { location, refreshCurrentLocation } = useWeatherLocation();
   const { forecast, isLoading, error, refresh } = useWeatherForecast(widgetId, {
     location,
   });
+  const [isLocationDialogOpen, setIsLocationDialogOpen] = useState(false);
+  const [locationActionError, setLocationActionError] = useState<string | null>(
+    null
+  );
+  const [isUpdatingLocation, setIsUpdatingLocation] = useState(false);
+
+  const openLocationDialog = () => {
+    setLocationActionError(null);
+    setIsLocationDialogOpen(true);
+  };
+
+  const handleRefreshCurrentLocation = async () => {
+    setLocationActionError(null);
+    setIsUpdatingLocation(true);
+    try {
+      const updated = await refreshCurrentLocation();
+      if (!updated) {
+        setLocationActionError(
+          t(
+            "현재 위치를 가져오지 못했어요. 브라우저 위치 권한을 확인해 주세요.",
+            "Couldn't get current location. Check browser location permission."
+          )
+        );
+        return;
+      }
+    } finally {
+      setIsUpdatingLocation(false);
+    }
+  };
+
   const {
     actions,
     deleteDialog: {
@@ -83,8 +114,20 @@ export function WeatherWidget({ widgetId, canEdit = true }: WeatherWidgetProps) 
       {
         text: t("새로고침", "Refresh"),
         icon: <RefreshCcw className="size-4" />,
-        disabled: isLoading,
+        disabled: isLoading || isUpdatingLocation,
         onClick: refresh,
+      },
+      {
+        text: t("현재 위치로 갱신", "Use current location"),
+        icon: <LocateFixed className="size-4" />,
+        disabled: isLoading || isUpdatingLocation,
+        onClick: () => void handleRefreshCurrentLocation(),
+      },
+      {
+        text: t("위치 설정", "Set location"),
+        icon: <MapPin className="size-4" />,
+        disabled: isLoading || isUpdatingLocation,
+        onClick: openLocationDialog,
       },
     ],
   });
@@ -170,6 +213,9 @@ export function WeatherWidget({ widgetId, canEdit = true }: WeatherWidgetProps) 
           {error ? (
             <div className="text-sm text-red-500">{error}</div>
           ) : null}
+          {locationActionError && !isLocationDialogOpen ? (
+            <div className="text-sm text-red-500">{locationActionError}</div>
+          ) : null}
           {forecast ? (
             <div className="mb-3 min-w-0">
               <div className="mb-2 text-xs text-gray-500">{t("이번 주", "This week")}</div>
@@ -211,7 +257,7 @@ export function WeatherWidget({ widgetId, canEdit = true }: WeatherWidgetProps) 
                     )}
                   >
                     <div className="flex items-center gap-3">
-                      <span className="w-10 font-medium">
+                      <span className="w-12 font-medium">
                         {formatHourLabel(hour.hour, locale)}
                       </span>
                       <WeatherIcon
@@ -235,6 +281,15 @@ export function WeatherWidget({ widgetId, canEdit = true }: WeatherWidgetProps) 
             onConfirm={handleDelete}
           />
         ) : null}
+
+        <WeatherLocationDialog
+          open={isLocationDialogOpen}
+          onOpenChange={(nextOpen) => {
+            setIsLocationDialogOpen(nextOpen);
+            if (!nextOpen) setLocationActionError(null);
+          }}
+          disableSave={isLoading || isUpdatingLocation}
+        />
       </div>
     </WidgetCard>
   );

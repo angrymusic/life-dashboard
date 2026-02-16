@@ -280,7 +280,9 @@ export function buildCalendarDays(
       const bMulti = b.days.length > 1;
       if (aMulti !== bMulti) return aMulti ? -1 : 1;
       if (a.startTs !== b.startTs) return a.startTs - b.startTs;
-      return String(getEventKey(a.event)).localeCompare(String(getEventKey(b.event)));
+      return String(getEventKey(a.event)).localeCompare(
+        String(getEventKey(b.event))
+      );
     });
 
     const rowUsage = Array.from({ length: MAX_EVENT_ROWS }, () =>
@@ -291,7 +293,9 @@ export function buildCalendarDays(
     for (const item of sortedEvents) {
       let assignedRow = -1;
       for (let rowIndex = 0; rowIndex < MAX_EVENT_ROWS; rowIndex += 1) {
-        const canPlace = item.days.every((dayIndex) => !rowUsage[rowIndex][dayIndex]);
+        const canPlace = item.days.every(
+          (dayIndex) => !rowUsage[rowIndex][dayIndex]
+        );
         if (canPlace) {
           assignedRow = rowIndex;
           break;
@@ -328,7 +332,11 @@ function daysBetween(start: Date, end: Date) {
 
 function getWeekStart(date: Date) {
   return startOfDay(
-    new Date(date.getFullYear(), date.getMonth(), date.getDate() - date.getDay())
+    new Date(
+      date.getFullYear(),
+      date.getMonth(),
+      date.getDate() - date.getDay()
+    )
   );
 }
 
@@ -355,7 +363,12 @@ function buildDateForYear(base: Date, year: number) {
   return candidate;
 }
 
-function occursInRange(start: Date, end: Date | null, rangeStart: Date, rangeEnd: Date) {
+function occursInRange(
+  start: Date,
+  end: Date | null,
+  rangeStart: Date,
+  rangeEnd: Date
+) {
   const endDate = end ?? start;
   return (
     start.getTime() <= rangeEnd.getTime() &&
@@ -414,7 +427,8 @@ export function expandCalendarEvents(
         if (untilDate && cursor.getTime() > untilDate.getTime()) break;
         if (daysOfWeek.includes(cursor.getDay())) {
           const weekDiff = Math.floor(
-            (getWeekStart(cursor).getTime() - getWeekStart(baseStartDay).getTime()) /
+            (getWeekStart(cursor).getTime() -
+              getWeekStart(baseStartDay).getTime()) /
               (DAY_MS * 7)
           );
           if (weekDiff % intervalWeeks === 0) {
@@ -439,7 +453,9 @@ export function expandCalendarEvents(
               );
               if (baseEnd) {
                 const durationMs = baseEnd.getTime() - baseStart.getTime();
-                occurrenceEnd = new Date(occurrenceStart.getTime() + durationMs);
+                occurrenceEnd = new Date(
+                  occurrenceStart.getTime() + durationMs
+                );
               }
             }
 
@@ -516,17 +532,10 @@ export function expandCalendarEvents(
         const occurrenceStart = startOfDay(cursor);
         const occurrenceAllDay = true;
 
-        if (
-          occursInRange(
-            occurrenceStart,
-            null,
-            rangeStartDay,
-            rangeEndDay
-          )
-        ) {
+        if (occursInRange(occurrenceStart, null, rangeStartDay, rangeEndDay)) {
           results.push({
             ...event,
-            title: patternItem.label.trim() || event.title,
+            title: event.title + " " + patternItem.label.trim() || event.title,
             color: patternItem.color ?? event.color,
             startAt: occurrenceStart.toISOString(),
             endAt: undefined,
