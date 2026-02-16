@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import prisma from "@/server/prisma";
 import { jsonError, parseJson } from "@/server/api-response";
 import { isAdminRole, requireUser } from "@/server/api-auth";
+import { parsePositiveIntEnv } from "@/server/request-guards";
 import {
   persistSnapshot,
   serializeSnapshot,
@@ -169,7 +170,12 @@ export async function POST(
   if (!userResult.ok) return userResult.response;
   const userId = userResult.context.userId;
 
-  const parsedBody = await parseJson(request);
+  const parsedBody = await parseJson(request, {
+    maxBytes: parsePositiveIntEnv(
+      process.env.DASHBOARD_SNAPSHOT_MAX_BYTES,
+      2 * 1024 * 1024
+    ),
+  });
   if (!parsedBody.ok) return parsedBody.response;
   const body = parsedBody.body;
 

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import prisma from "@/server/prisma";
 import { jsonError, parseJson } from "@/server/api-response";
 import { isAdminRole, requireUser } from "@/server/api-auth";
+import { parsePositiveIntEnv } from "@/server/request-guards";
 import { detectLanguageFromRequest } from "@/shared/i18n/language";
 
 export const runtime = "nodejs";
@@ -129,7 +130,12 @@ export async function POST(
   if (!userResult.ok) return userResult.response;
   const { user: requester, email: sessionEmail } = userResult.context;
 
-  const parsedBody = await parseJson(request);
+  const parsedBody = await parseJson(request, {
+    maxBytes: parsePositiveIntEnv(
+      process.env.DASHBOARD_MEMBERS_MAX_BYTES,
+      64 * 1024
+    ),
+  });
   if (!parsedBody.ok) return parsedBody.response;
   const body = parsedBody.body;
 
@@ -301,7 +307,12 @@ export async function PATCH(
   if (!userResult.ok) return userResult.response;
   const { user: requester } = userResult.context;
 
-  const parsedBody = await parseJson(request);
+  const parsedBody = await parseJson(request, {
+    maxBytes: parsePositiveIntEnv(
+      process.env.DASHBOARD_MEMBERS_MAX_BYTES,
+      64 * 1024
+    ),
+  });
   if (!parsedBody.ok) return parsedBody.response;
   const body = parsedBody.body;
 
@@ -391,7 +402,12 @@ export async function DELETE(
   if (!userResult.ok) return userResult.response;
   const { user: requester } = userResult.context;
 
-  const parsedBody = await parseJson(request);
+  const parsedBody = await parseJson(request, {
+    maxBytes: parsePositiveIntEnv(
+      process.env.DASHBOARD_MEMBERS_MAX_BYTES,
+      64 * 1024
+    ),
+  });
   if (!parsedBody.ok) return parsedBody.response;
   const body = parsedBody.body;
 
