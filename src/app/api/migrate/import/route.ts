@@ -449,7 +449,51 @@ async function ensureDir(dirPath: string) {
   await fs.mkdir(dirPath, { recursive: true });
 }
 
-async function stageSnapshotToDisk(params: { userId: string; snapshot: SnapshotWithoutPhotos }) {
+type StagingPruneOptions = {
+  retentionMs: number;
+  maxFiles: number;
+};
+
+async function pruneStagedSnapshots(userDir: string, options: StagingPruneOptions) {
+  const entries = await fs.readdir(userDir, { withFileTypes: true });
+  const files: { path: string; mtimeMs: number }[] = [];
+
+  for (const entry of entries) {
+    if (!entry.isFile()) continue;
+    if (!entry.name.startsWith("snapshot-") || !entry.name.endsWith(".json")) {
+      continue;
+    }
+    const filePath = path.join(userDir, entry.name);
+    try {
+      const stat = await fs.stat(filePath);
+      files.push({ path: filePath, mtimeMs: stat.mtimeMs });
+    } catch {
+      // Ignore per-file stat errors.
+    }
+  }
+
+  files.sort((a, b) => b.mtimeMs - a.mtimeMs);
+  const expireBefore = Date.now() - options.retentionMs;
+
+  await Promise.all(
+    files.map((file, index) => {
+      const overLimit = index >= options.maxFiles;
+      const expired = file.mtimeMs < expireBefore;
+      if (!overLimit && !expired) {
+        return Promise.resolve();
+      }
+      return fs.unlink(file.path).catch(() => {
+        // Ignore per-file delete errors.
+      });
+    })
+  );
+}
+
+async function stageSnapshotToDisk(params: {
+  userId: string;
+  snapshot: SnapshotWithoutPhotos;
+  prune: StagingPruneOptions;
+}) {
   const baseDir =
     process.env.MIGRATION_STAGING_DIR ??
     path.join(process.cwd(), "data", "migration-staging");
@@ -462,6 +506,9 @@ async function stageSnapshotToDisk(params: { userId: string; snapshot: SnapshotW
   const filePath = path.join(userDir, `snapshot-${ts}.json`);
 
   await fs.writeFile(filePath, JSON.stringify(params.snapshot, null, 2), "utf-8");
+  await pruneStagedSnapshots(userDir, params.prune).catch(() => {
+    // Ignore staging prune errors to avoid blocking import.
+  });
   return path.relative(baseDir, filePath);
 }
 
@@ -529,8 +576,24 @@ export async function POST(request: Request) {
     return jsonError(413, "Too many records", { maxRecords });
   }
 
+  const stagingRetentionDays = parsePositiveIntEnv(
+    process.env.MIGRATION_STAGING_RETENTION_DAYS,
+    7
+  );
+  const maxStagingFiles = parsePositiveIntEnv(
+    process.env.MIGRATION_STAGING_MAX_FILES_PER_USER,
+    30
+  );
+
   // ✅ 지금 단계: 디스크 스테이징 저장
-  const stagedPath = await stageSnapshotToDisk({ userId, snapshot });
+  const stagedPath = await stageSnapshotToDisk({
+    userId,
+    snapshot,
+    prune: {
+      retentionMs: stagingRetentionDays * 24 * 60 * 60 * 1000,
+      maxFiles: maxStagingFiles,
+    },
+  });
 
   /**
    * ================================

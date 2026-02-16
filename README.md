@@ -67,6 +67,8 @@ RATE_LIMIT_BACKEND=database
 RATE_LIMIT_PRUNE_INTERVAL_MS=300000
 TRUST_PROXY_HEADERS=true
 MIGRATION_STAGING_DIR=./data/migration-staging
+MIGRATION_STAGING_RETENTION_DAYS=7
+MIGRATION_STAGING_MAX_FILES_PER_USER=30
 ENABLE_MIGRATION_IMPORT=false
 PHOTO_UPLOAD_RATE_LIMIT=30
 PHOTO_UPLOAD_RATE_WINDOW_MS=60000
@@ -131,3 +133,4 @@ Open http://localhost:3000.
 - Migration import API is disabled by default. To use it, set
   `ENABLE_MIGRATION_IMPORT=true`.
 - Migration import stages snapshots on disk under `MIGRATION_STAGING_DIR`.
+  Staged files are pruned by age and count per user.
