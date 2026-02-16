@@ -72,7 +72,7 @@ export function sanitizePathSegment(value: string) {
   return value.replace(/[^a-zA-Z0-9_-]/g, "_");
 }
 
-function parseBooleanEnv(value: string | undefined, fallback: boolean) {
+export function parseBooleanEnv(value: string | undefined, fallback: boolean) {
   if (!value) return fallback;
   const normalized = value.trim().toLowerCase();
   if (["1", "true", "yes", "on"].includes(normalized)) return true;

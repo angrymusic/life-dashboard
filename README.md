@@ -88,6 +88,7 @@ GEOCODE_SEARCH_TIMEOUT_MS=5000
 GEOCODE_REVERSE_RATE_LIMIT=60
 GEOCODE_REVERSE_RATE_WINDOW_MS=60000
 GEOCODE_REVERSE_TIMEOUT_MS=5000
+GEOCODE_REQUIRE_AUTH=true
 SPECIAL_DAYS_RATE_LIMIT=30
 SPECIAL_DAYS_RATE_WINDOW_MS=60000
 SPECIAL_DAYS_TIMEOUT_MS=8000
@@ -136,6 +137,8 @@ Open http://localhost:3000.
   header your proxy controls (`cf-connecting-ip`, `x-real-ip`, or
   `x-forwarded-for`).
 - `CSP_MODE` defaults to `enforce`. Use `report-only` only for temporary tuning.
+- Geocode endpoints require authentication by default. Set
+  `GEOCODE_REQUIRE_AUTH=false` only for trusted/private deployments.
 - Migration import API is disabled by default. To use it, set
   `ENABLE_MIGRATION_IMPORT=true`.
 - Migration import stages snapshots on disk under `MIGRATION_STAGING_DIR`.

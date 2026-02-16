@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
 import {
   enforceRateLimit,
+  parseBooleanEnv,
   parsePositiveIntEnv,
   resolveRateLimitClientKey,
 } from "@/server/request-guards";
+import { requireUser } from "@/server/api-auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -50,7 +52,16 @@ function normalizeLanguage(value: string) {
 }
 
 export async function GET(request: Request) {
-  const clientKey = resolveRateLimitClientKey(request);
+  const requireAuth = parseBooleanEnv(
+    process.env.GEOCODE_REQUIRE_AUTH,
+    true
+  );
+  const userResult = requireAuth ? await requireUser() : null;
+  if (userResult && !userResult.ok) return userResult.response;
+  const clientKey = userResult
+    ? `user:${userResult.context.userId}`
+    : resolveRateLimitClientKey(request);
+
   const rateLimit = await enforceRateLimit({
     key: `geocode-search:${clientKey}`,
     limit: parsePositiveIntEnv(process.env.GEOCODE_SEARCH_RATE_LIMIT, 60),
