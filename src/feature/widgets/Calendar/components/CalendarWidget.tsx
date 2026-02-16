@@ -3,6 +3,7 @@ import {
   Calendar,
   ChevronLeft,
   ChevronRight,
+  MapPin,
   Pencil,
   Plus,
   SlidersHorizontal,
@@ -38,6 +39,7 @@ import { CalendarDeleteDialog } from "@/feature/widgets/Calendar/components/Cale
 import { WidgetDeleteDialog } from "@/feature/widgets/shared/components/WidgetDeleteDialog";
 import { WidgetHeader } from "@/feature/widgets/shared/components/WidgetHeader";
 import { useWidgetActionMenu } from "@/feature/widgets/shared/hooks/useWidgetActionMenu";
+import { WeatherLocationDialog } from "@/feature/widgets/Weather/components/WeatherLocationDialog";
 import { WeatherIcon } from "@/feature/widgets/Weather/components/WeatherIcon";
 import { useWeatherForecast } from "@/feature/widgets/Weather/hooks/useWeatherForecast";
 import { useWeatherLocation } from "@/feature/widgets/Weather/hooks/useWeatherLocation";
@@ -155,6 +157,8 @@ export function CalendarWidget({
   } = useCalendarWidget(widgetId);
 
   const [specialDayDialogOpen, setSpecialDayDialogOpen] = useState(false);
+  const [weatherLocationDialogOpen, setWeatherLocationDialogOpen] =
+    useState(false);
   const [draftShowHoliday, setDraftShowHoliday] = useState(showHoliday);
   const [draftShowAnniversary, setDraftShowAnniversary] =
     useState(showAnniversary);
@@ -174,7 +178,10 @@ export function CalendarWidget({
   };
 
   const { location } = useWeatherLocation();
-  const { forecast } = useWeatherForecast(widgetId, { location, days: 7 });
+  const { forecast, isLoading: isWeatherLoading } = useWeatherForecast(widgetId, {
+    location,
+    days: 7,
+  });
   const weatherByYmd = useMemo(() => {
     const map = new Map<string, WeatherForecastDay>();
     for (const day of forecast?.days ?? []) {
@@ -217,6 +224,11 @@ export function CalendarWidget({
       text: t("공휴일/기념일 설정", "Holiday/anniversary settings"),
       icon: <SlidersHorizontal className="size-4" />,
       onClick: openSpecialDayDialog,
+    },
+    {
+      text: t("날씨 위치 설정", "Weather location"),
+      icon: <MapPin className="size-4" />,
+      onClick: () => setWeatherLocationDialogOpen(true),
     },
   ];
   const {
@@ -543,6 +555,11 @@ export function CalendarWidget({
             </DialogFooter>
           </DialogContent>
         </Dialog>
+        <WeatherLocationDialog
+          open={weatherLocationDialogOpen}
+          onOpenChange={setWeatherLocationDialogOpen}
+          disableSave={isWeatherLoading}
+        />
 
         <div className="mt-2 flex-1 min-h-0 overflow-auto">
           {selectedEvents.length === 0 ? (
