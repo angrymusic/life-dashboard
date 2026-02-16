@@ -9,6 +9,7 @@ import {
 } from "@/server/request-guards";
 import path from "path";
 import fs from "fs/promises";
+import { timingSafeEqual } from "crypto";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -505,7 +506,10 @@ async function stageSnapshotToDisk(params: {
   const ts = new Date().toISOString().replace(/[:.]/g, "-");
   const filePath = path.join(userDir, `snapshot-${ts}.json`);
 
-  await fs.writeFile(filePath, JSON.stringify(params.snapshot, null, 2), "utf-8");
+  await fs.writeFile(filePath, JSON.stringify(params.snapshot, null, 2), {
+    encoding: "utf-8",
+    mode: 0o600,
+  });
   await pruneStagedSnapshots(userDir, params.prune).catch(() => {
     // Ignore staging prune errors to avoid blocking import.
   });
@@ -528,12 +532,33 @@ function countSnapshotRecords(snapshot: SnapshotWithoutPhotos) {
   );
 }
 
+function hasValidImportToken(request: Request, expectedToken: string) {
+  const providedToken =
+    request.headers.get("x-migration-import-token")?.trim() ?? "";
+
+  const expectedBuffer = Buffer.from(expectedToken);
+  const providedBuffer = Buffer.from(providedToken);
+
+  if (expectedBuffer.length === 0 || expectedBuffer.length !== providedBuffer.length) {
+    return false;
+  }
+
+  return timingSafeEqual(expectedBuffer, providedBuffer);
+}
+
 /** =========
  *  Route
  *  ========= */
 export async function POST(request: Request) {
   if (process.env.ENABLE_MIGRATION_IMPORT !== "true") {
     return jsonError(404, "Not found");
+  }
+  const importToken = process.env.MIGRATION_IMPORT_TOKEN?.trim() ?? "";
+  if (!importToken) {
+    return jsonError(503, "Migration import is not configured");
+  }
+  if (!hasValidImportToken(request, importToken)) {
+    return jsonError(403, "Forbidden");
   }
 
   const userResult = await requireUser();
