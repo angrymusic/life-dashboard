@@ -3,6 +3,7 @@ import prisma from "@/server/prisma";
 import { jsonError, parseJson } from "@/server/api-response";
 import { isAdminRole, requireUser } from "@/server/api-auth";
 import { parsePositiveIntEnv } from "@/server/request-guards";
+import { removePhotoFilesIfUnreferenced } from "@/server/photo-file-cleanup";
 import {
   persistSnapshot,
   serializeSnapshot,
@@ -216,6 +217,10 @@ export async function POST(
   }
 
   const serialized = serializeSnapshot(snapshot, dashboardId);
+  const photosToCleanup = await prisma.photo.findMany({
+    where: { dashboardId },
+    select: { dashboardId: true, storagePath: true },
+  });
 
   await prisma.$transaction(async (tx) => {
     await persistSnapshot(tx, serialized, {
@@ -224,6 +229,7 @@ export async function POST(
       resolvedGroupId,
     });
   });
+  await removePhotoFilesIfUnreferenced(photosToCleanup);
 
   return NextResponse.json({ ok: true });
 }

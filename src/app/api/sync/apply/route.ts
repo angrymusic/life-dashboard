@@ -3,6 +3,7 @@ import prisma from "@/server/prisma";
 import { jsonError, parseJson } from "@/server/api-response";
 import { isAdminRole, requireUser } from "@/server/api-auth";
 import { enforceRateLimit, parsePositiveIntEnv } from "@/server/request-guards";
+import { removePhotoFilesIfUnreferenced } from "@/server/photo-file-cleanup";
 import {
   isLegacyPhotoStoragePath,
   isValidPhotoStoragePathForDashboard,
@@ -311,7 +312,13 @@ export async function POST(request: Request) {
         } else if (!dashboard.ownerId || dashboard.ownerId !== userId) {
           throw new Error("Forbidden");
         }
+
+        const photosToCleanup = await prisma.photo.findMany({
+          where: { dashboardId: event.entityId },
+          select: { dashboardId: true, storagePath: true },
+        });
         await prisma.dashboard.deleteMany({ where: { id: event.entityId } });
+        await removePhotoFilesIfUnreferenced(photosToCleanup);
         dashboardCache.set(event.entityId, null);
       },
       upsert: async (event, payload) => {
@@ -361,12 +368,20 @@ export async function POST(request: Request) {
           allowMissing: true,
         });
         if (!widget) return;
+        const photosToCleanup = await prisma.photo.findMany({
+          where: {
+            widgetId: event.entityId,
+            dashboardId: widget.dashboardId,
+          },
+          select: { dashboardId: true, storagePath: true },
+        });
         await prisma.widget.deleteMany({
           where: {
             id: event.entityId,
             dashboardId: widget.dashboardId,
           },
         });
+        await removePhotoFilesIfUnreferenced(photosToCleanup);
       },
       upsert: async (event, payload) => {
         const id = requireString(payload, "id", event.entityId);
@@ -558,13 +573,30 @@ export async function POST(request: Request) {
     photo: {
       delete: async (event) => {
         const scope = await ensureEventWidgetDeleteAccess(event);
-        await prisma.photo.deleteMany({
+        const photo = await prisma.photo.findUnique({
+          where: { id: event.entityId },
+          select: { dashboardId: true, widgetId: true, storagePath: true },
+        });
+        const deleted = await prisma.photo.deleteMany({
           where: {
             id: event.entityId,
             widgetId: scope.widgetId,
             dashboardId: scope.dashboardId,
           },
         });
+        if (
+          deleted.count > 0 &&
+          photo &&
+          photo.dashboardId === scope.dashboardId &&
+          photo.widgetId === scope.widgetId
+        ) {
+          await removePhotoFilesIfUnreferenced([
+            {
+              dashboardId: photo.dashboardId,
+              storagePath: photo.storagePath,
+            },
+          ]);
+        }
       },
       upsert: async (event, payload) => {
         const { id, dashboardId, widgetId } = await ensureScopedEntityUpsertAccess(

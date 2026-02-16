@@ -128,6 +128,7 @@ Open http://localhost:3000.
 ## Notes
 
 - Photo uploads are stored under `UPLOAD_DIR` (default `data/uploads`).
+  Orphaned photo files are cleaned up when related photo records are removed.
 - Set `TRUST_PROXY_HEADERS=true` only when requests are always behind a trusted
   proxy (for example Cloudflare Tunnel).
 - Migration import API is disabled by default. To use it, set
