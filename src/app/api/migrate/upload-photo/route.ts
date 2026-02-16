@@ -4,7 +4,6 @@ import { jsonError } from "@/server/api-response";
 import { isAdminRole, requireUser } from "@/server/api-auth";
 import prisma from "@/server/prisma";
 import {
-  contentLengthExceeds,
   enforceRateLimit,
   parsePositiveIntEnv,
 } from "@/server/request-guards";
@@ -47,6 +46,91 @@ function readTextField(form: FormData, key: string) {
   if (typeof value !== "string") return null;
   const trimmed = value.trim();
   return trimmed || null;
+}
+
+function parseContentLength(request: Request) {
+  const raw = request.headers.get("content-length");
+  if (!raw) return null;
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed < 0) return null;
+  return parsed;
+}
+
+function concatChunks(chunks: Uint8Array[], totalBytes: number) {
+  const merged = new Uint8Array(totalBytes);
+  let offset = 0;
+  for (const chunk of chunks) {
+    merged.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return merged;
+}
+
+async function parseMultipartFormDataWithLimit(
+  request: Request,
+  maxBytes: number,
+  contentType: string
+) {
+  const contentLength = parseContentLength(request);
+  if (contentLength !== null && contentLength > maxBytes) {
+    return {
+      ok: false as const,
+      response: jsonError(413, "File too large", { maxBytes }),
+    };
+  }
+
+  if (!request.body) {
+    return {
+      ok: false as const,
+      response: jsonError(400, "Invalid multipart body"),
+    };
+  }
+
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let totalBytes = 0;
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value) continue;
+      totalBytes += value.byteLength;
+      if (totalBytes > maxBytes) {
+        try {
+          await reader.cancel();
+        } catch {
+          // Ignore cancel errors.
+        }
+        return {
+          ok: false as const,
+          response: jsonError(413, "File too large", { maxBytes }),
+        };
+      }
+      chunks.push(value);
+    }
+  } catch {
+    return {
+      ok: false as const,
+      response: jsonError(400, "Invalid multipart body"),
+    };
+  }
+
+  try {
+    const body = concatChunks(chunks, totalBytes);
+    const multipartRequest = new Request("http://localhost/_internal/upload", {
+      method: "POST",
+      headers: { "content-type": contentType },
+      body,
+    });
+    const form = await multipartRequest.formData();
+    return { ok: true as const, form };
+  } catch {
+    return {
+      ok: false as const,
+      response: jsonError(400, "Invalid multipart form data"),
+    };
+  }
 }
 
 async function ensureDashboardUploadAccess(params: {
@@ -115,18 +199,18 @@ export async function POST(request: Request) {
     10 * 1024 * 1024
   );
   const maxMultipartBytes = maxBytes + 64 * 1024;
-  if (contentLengthExceeds(request, maxMultipartBytes)) {
-    return jsonError(413, "File too large", {
-      maxBytes,
-    });
-  }
 
   const contentType = request.headers.get("content-type") ?? "";
   if (!contentType.includes("multipart/form-data")) {
     return jsonError(400, "Content-Type must be multipart/form-data");
   }
-
-  const form = await request.formData();
+  const parsedForm = await parseMultipartFormDataWithLimit(
+    request,
+    maxMultipartBytes,
+    contentType
+  );
+  if (!parsedForm.ok) return parsedForm.response;
+  const form = parsedForm.form;
   const dashboardId = readTextField(form, "dashboardId");
   const widgetId = readTextField(form, "widgetId");
   if (!dashboardId || !widgetId) {
