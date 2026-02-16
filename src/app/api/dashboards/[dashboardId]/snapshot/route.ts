@@ -184,6 +184,7 @@ export async function POST(
     where: { id: dashboardId },
     select: { id: true, ownerId: true, groupId: true },
   });
+  let resolvedGroupId: string | null = existing?.groupId ?? null;
 
   if (existing) {
     if (existing.groupId) {
@@ -197,12 +198,25 @@ export async function POST(
     } else if (existing.ownerId && existing.ownerId !== userId) {
       return jsonError(403, "Forbidden");
     }
+  } else if (snapshot.dashboard.groupId) {
+    const member = await prisma.groupMember.findFirst({
+      where: { groupId: snapshot.dashboard.groupId, userId },
+      select: { id: true, role: true },
+    });
+    if (!member || !isAdminRole(member.role)) {
+      return jsonError(403, "Forbidden");
+    }
+    resolvedGroupId = snapshot.dashboard.groupId;
   }
 
   const serialized = serializeSnapshot(snapshot, dashboardId);
 
   await prisma.$transaction(async (tx) => {
-    await persistSnapshot(tx, serialized, { userId, existing });
+    await persistSnapshot(tx, serialized, {
+      userId,
+      existing,
+      resolvedGroupId,
+    });
   });
 
   return NextResponse.json({ ok: true });

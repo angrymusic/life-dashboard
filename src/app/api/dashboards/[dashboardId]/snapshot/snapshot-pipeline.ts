@@ -254,10 +254,14 @@ export function serializeSnapshot(
 export async function persistSnapshot(
   tx: Prisma.TransactionClient,
   serialized: SerializedSnapshot,
-  context: { userId: string; existing: { ownerId: string | null; groupId: string | null } | null }
+  context: {
+    userId: string;
+    existing: { ownerId: string | null; groupId: string | null } | null;
+    resolvedGroupId: string | null;
+  }
 ) {
   const dashboardId = serialized.dashboardId;
-  const groupId = context.existing?.groupId ?? serialized.groupId ?? null;
+  const groupId = context.resolvedGroupId;
 
   await tx.metricEntry.deleteMany({ where: { dashboardId } });
   await tx.metric.deleteMany({ where: { dashboardId } });
