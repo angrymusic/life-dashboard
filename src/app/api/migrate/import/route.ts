@@ -1,6 +1,12 @@
 // app/api/migrate/import/route.ts
 import { NextResponse } from "next/server";
 import { jsonError, parseJson } from "@/server/api-response";
+import { requireUser } from "@/server/api-auth";
+import {
+  enforceRateLimit,
+  parsePositiveIntEnv,
+  sanitizePathSegment,
+} from "@/server/request-guards";
 import path from "path";
 import fs from "fs/promises";
 
@@ -420,27 +426,20 @@ function isSnapshotWithoutPhotos(v: unknown): v is SnapshotWithoutPhotos {
 }
 
 type ParsedImport = {
-  userId: string;
   snapshot: SnapshotWithoutPhotos;
 };
 
-function parseImportBody(body: unknown, headerUserId?: string | null): ParsedImport | null {
-  // 케이스 1) { userId, snapshot }
+function parseImportBody(body: unknown): ParsedImport | null {
+  // 케이스 1) { snapshot } (legacy { userId, snapshot }도 허용)
   if (isRecord(body) && "snapshot" in body) {
-    const userId = body.userId;
     const snapshot = body.snapshot;
-
-    if (!isString(userId)) return null;
     if (!isSnapshotWithoutPhotos(snapshot)) return null;
-
-    return { userId, snapshot };
+    return { snapshot };
   }
 
-  // 케이스 2) snapshot만 통째로 + userId는 헤더(x-user-id)로
+  // 케이스 2) snapshot만 통째로
   if (isSnapshotWithoutPhotos(body)) {
-    const userId = headerUserId ?? null;
-    if (!userId || !isString(userId)) return null;
-    return { userId, snapshot: body };
+    return { snapshot: body };
   }
 
   return null;
@@ -455,34 +454,80 @@ async function stageSnapshotToDisk(params: { userId: string; snapshot: SnapshotW
     process.env.MIGRATION_STAGING_DIR ??
     path.join(process.cwd(), "data", "migration-staging");
 
-  const userDir = path.join(baseDir, params.userId);
+  const safeUserId = sanitizePathSegment(params.userId);
+  const userDir = path.join(baseDir, safeUserId);
   await ensureDir(userDir);
 
   const ts = new Date().toISOString().replace(/[:.]/g, "-");
   const filePath = path.join(userDir, `snapshot-${ts}.json`);
 
   await fs.writeFile(filePath, JSON.stringify(params.snapshot, null, 2), "utf-8");
-  return path.relative(process.cwd(), filePath);
+  return path.relative(baseDir, filePath);
+}
+
+function countSnapshotRecords(snapshot: SnapshotWithoutPhotos) {
+  return (
+    snapshot.dashboards.length +
+    snapshot.widgets.length +
+    snapshot.memos.length +
+    snapshot.todos.length +
+    snapshot.ddays.length +
+    snapshot.moods.length +
+    snapshot.notices.length +
+    snapshot.metrics.length +
+    snapshot.metricEntries.length +
+    snapshot.calendarEvents.length +
+    snapshot.weatherCache.length
+  );
 }
 
 /** =========
  *  Route
  *  ========= */
 export async function POST(request: Request) {
-  const headerUserId = request.headers.get("x-user-id");
+  if (process.env.ENABLE_MIGRATION_IMPORT !== "true") {
+    return jsonError(404, "Not found");
+  }
 
-  const parsedBody = await parseJson(request);
+  const userResult = await requireUser();
+  if (!userResult.ok) return userResult.response;
+  const { userId } = userResult.context;
+
+  const rateLimit = enforceRateLimit({
+    key: `migrate-import:${userId}`,
+    limit: parsePositiveIntEnv(process.env.MIGRATION_IMPORT_RATE_LIMIT, 5),
+    windowMs: parsePositiveIntEnv(
+      process.env.MIGRATION_IMPORT_RATE_WINDOW_MS,
+      10 * 60 * 1000
+    ),
+  });
+  if (!rateLimit.ok) return rateLimit.response;
+
+  const maxBytes = parsePositiveIntEnv(
+    process.env.MIGRATION_IMPORT_MAX_BYTES,
+    5 * 1024 * 1024
+  );
+
+  const parsedBody = await parseJson(request, { maxBytes });
   if (!parsedBody.ok) return parsedBody.response;
   const body = parsedBody.body;
 
-  const parsed = parseImportBody(body, headerUserId);
+  const parsed = parseImportBody(body);
   if (!parsed) {
     return jsonError(400, "Invalid request body", {
-      hint: "Send { userId, snapshot } or send snapshot directly with header x-user-id",
+      hint: "Send { snapshot } or send snapshot directly",
     });
   }
 
-  const { userId, snapshot } = parsed;
+  const { snapshot } = parsed;
+  const maxRecords = parsePositiveIntEnv(
+    process.env.MIGRATION_IMPORT_MAX_RECORDS,
+    20000
+  );
+  const recordCount = countSnapshotRecords(snapshot);
+  if (recordCount > maxRecords) {
+    return jsonError(413, "Too many records", { maxRecords });
+  }
 
   // ✅ 지금 단계: 디스크 스테이징 저장
   const stagedPath = await stageSnapshotToDisk({ userId, snapshot });
