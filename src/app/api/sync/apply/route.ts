@@ -249,6 +249,36 @@ export async function POST(request: Request) {
     await ensureWidgetAccess(widgetId, dashboardId);
   };
 
+  type ScopedEntity = {
+    widgetId: string;
+    dashboardId: string;
+  };
+
+  const ensureScopedEntityUpsertAccess = async (
+    event: SyncEvent,
+    payload: Record<string, unknown>,
+    loadExisting: (entityId: string) => Promise<ScopedEntity | null>
+  ) => {
+    const id = requireString(payload, "id", event.entityId);
+    const dashboardId = requireString(payload, "dashboardId", event.dashboardId);
+    const widgetId = requireString(payload, "widgetId", event.widgetId);
+
+    const existing = await loadExisting(id);
+    if (existing) {
+      if (
+        existing.dashboardId !== dashboardId ||
+        existing.widgetId !== widgetId
+      ) {
+        throw new Error("Entity scope mismatch");
+      }
+      await ensureWidgetEditAccess(existing.widgetId, existing.dashboardId);
+      return { id, dashboardId, widgetId };
+    }
+
+    await ensureWidgetEditAccess(widgetId, dashboardId);
+    return { id, dashboardId, widgetId };
+  };
+
   const ensureEventWidgetDeleteAccess = async (event: SyncEvent) => {
     if (!event.widgetId) throw new Error("Missing widgetId");
     const widget = await ensureWidgetAccess(event.widgetId, event.dashboardId, {
@@ -370,10 +400,15 @@ export async function POST(request: Request) {
         });
       },
       upsert: async (event, payload) => {
-        const id = requireString(payload, "id", event.entityId);
-        const dashboardId = requireString(payload, "dashboardId", event.dashboardId);
-        const widgetId = requireString(payload, "widgetId", event.widgetId);
-        await ensureWidgetEditAccess(widgetId, dashboardId);
+        const { id, dashboardId, widgetId } = await ensureScopedEntityUpsertAccess(
+          event,
+          payload,
+          async (entityId) =>
+            prisma.memo.findUnique({
+              where: { id: entityId },
+              select: { widgetId: true, dashboardId: true },
+            })
+        );
         const text = requireString(payload, "text");
         const color = optionalString(payload, "color");
         const createdAt = parseDate(payload.createdAt ?? event.createdAt);
@@ -412,10 +447,15 @@ export async function POST(request: Request) {
         });
       },
       upsert: async (event, payload) => {
-        const id = requireString(payload, "id", event.entityId);
-        const dashboardId = requireString(payload, "dashboardId", event.dashboardId);
-        const widgetId = requireString(payload, "widgetId", event.widgetId);
-        await ensureWidgetEditAccess(widgetId, dashboardId);
+        const { id, dashboardId, widgetId } = await ensureScopedEntityUpsertAccess(
+          event,
+          payload,
+          async (entityId) =>
+            prisma.todo.findUnique({
+              where: { id: entityId },
+              select: { widgetId: true, dashboardId: true },
+            })
+        );
         const date = requireString(payload, "date");
         const title = requireString(payload, "title");
         const done = Boolean(payload.done);
@@ -460,10 +500,15 @@ export async function POST(request: Request) {
         });
       },
       upsert: async (event, payload) => {
-        const id = requireString(payload, "id", event.entityId);
-        const dashboardId = requireString(payload, "dashboardId", event.dashboardId);
-        const widgetId = requireString(payload, "widgetId", event.widgetId);
-        await ensureWidgetEditAccess(widgetId, dashboardId);
+        const { id, dashboardId, widgetId } = await ensureScopedEntityUpsertAccess(
+          event,
+          payload,
+          async (entityId) =>
+            prisma.dday.findUnique({
+              where: { id: entityId },
+              select: { widgetId: true, dashboardId: true },
+            })
+        );
         const title = requireString(payload, "title");
         const date = requireString(payload, "date");
         const color = optionalString(payload, "color");
@@ -505,10 +550,15 @@ export async function POST(request: Request) {
         });
       },
       upsert: async (event, payload) => {
-        const id = requireString(payload, "id", event.entityId);
-        const dashboardId = requireString(payload, "dashboardId", event.dashboardId);
-        const widgetId = requireString(payload, "widgetId", event.widgetId);
-        await ensureWidgetEditAccess(widgetId, dashboardId);
+        const { id, dashboardId, widgetId } = await ensureScopedEntityUpsertAccess(
+          event,
+          payload,
+          async (entityId) =>
+            prisma.photo.findUnique({
+              where: { id: entityId },
+              select: { widgetId: true, dashboardId: true },
+            })
+        );
         const storagePath = requireString(payload, "storagePath");
         const mimeType = requireString(payload, "mimeType");
         const caption = optionalString(payload, "caption");
@@ -553,10 +603,15 @@ export async function POST(request: Request) {
         });
       },
       upsert: async (event, payload) => {
-        const id = requireString(payload, "id", event.entityId);
-        const dashboardId = requireString(payload, "dashboardId", event.dashboardId);
-        const widgetId = requireString(payload, "widgetId", event.widgetId);
-        await ensureWidgetEditAccess(widgetId, dashboardId);
+        const { id, dashboardId, widgetId } = await ensureScopedEntityUpsertAccess(
+          event,
+          payload,
+          async (entityId) =>
+            prisma.mood.findUnique({
+              where: { id: entityId },
+              select: { widgetId: true, dashboardId: true },
+            })
+        );
         const date = requireString(payload, "date");
         const mood = requireString(payload, "mood");
         const note = optionalString(payload, "note");
@@ -598,10 +653,15 @@ export async function POST(request: Request) {
         });
       },
       upsert: async (event, payload) => {
-        const id = requireString(payload, "id", event.entityId);
-        const dashboardId = requireString(payload, "dashboardId", event.dashboardId);
-        const widgetId = requireString(payload, "widgetId", event.widgetId);
-        await ensureWidgetEditAccess(widgetId, dashboardId);
+        const { id, dashboardId, widgetId } = await ensureScopedEntityUpsertAccess(
+          event,
+          payload,
+          async (entityId) =>
+            prisma.notice.findUnique({
+              where: { id: entityId },
+              select: { widgetId: true, dashboardId: true },
+            })
+        );
         const title = requireString(payload, "title");
         const bodyText = requireString(payload, "body");
         const pinned = typeof payload.pinned === "boolean" ? payload.pinned : undefined;
@@ -643,10 +703,15 @@ export async function POST(request: Request) {
         });
       },
       upsert: async (event, payload) => {
-        const id = requireString(payload, "id", event.entityId);
-        const dashboardId = requireString(payload, "dashboardId", event.dashboardId);
-        const widgetId = requireString(payload, "widgetId", event.widgetId);
-        await ensureWidgetEditAccess(widgetId, dashboardId);
+        const { id, dashboardId, widgetId } = await ensureScopedEntityUpsertAccess(
+          event,
+          payload,
+          async (entityId) =>
+            prisma.metric.findUnique({
+              where: { id: entityId },
+              select: { widgetId: true, dashboardId: true },
+            })
+        );
         const name = requireString(payload, "name");
         const unit = optionalString(payload, "unit");
         const chartType = optionalString(payload, "chartType");
@@ -688,11 +753,27 @@ export async function POST(request: Request) {
         });
       },
       upsert: async (event, payload) => {
-        const id = requireString(payload, "id", event.entityId);
-        const dashboardId = requireString(payload, "dashboardId", event.dashboardId);
-        const widgetId = requireString(payload, "widgetId", event.widgetId);
-        await ensureWidgetEditAccess(widgetId, dashboardId);
+        const { id, dashboardId, widgetId } = await ensureScopedEntityUpsertAccess(
+          event,
+          payload,
+          async (entityId) =>
+            prisma.metricEntry.findUnique({
+              where: { id: entityId },
+              select: { widgetId: true, dashboardId: true },
+            })
+        );
         const metricId = requireString(payload, "metricId");
+        const metric = await prisma.metric.findUnique({
+          where: { id: metricId },
+          select: { widgetId: true, dashboardId: true },
+        });
+        if (
+          !metric ||
+          metric.dashboardId !== dashboardId ||
+          metric.widgetId !== widgetId
+        ) {
+          throw new Error("Metric scope mismatch");
+        }
         const date = requireString(payload, "date");
         const value = Number(payload.value);
         if (!Number.isFinite(value)) throw new Error("Invalid value");
@@ -734,10 +815,15 @@ export async function POST(request: Request) {
         });
       },
       upsert: async (event, payload) => {
-        const id = requireString(payload, "id", event.entityId);
-        const dashboardId = requireString(payload, "dashboardId", event.dashboardId);
-        const widgetId = requireString(payload, "widgetId", event.widgetId);
-        await ensureWidgetEditAccess(widgetId, dashboardId);
+        const { id, dashboardId, widgetId } = await ensureScopedEntityUpsertAccess(
+          event,
+          payload,
+          async (entityId) =>
+            prisma.calendarEvent.findUnique({
+              where: { id: entityId },
+              select: { widgetId: true, dashboardId: true },
+            })
+        );
         const title = requireString(payload, "title");
         const startAt = parseDate(payload.startAt);
         const endAt = parseOptionalDate(payload.endAt);
@@ -794,10 +880,15 @@ export async function POST(request: Request) {
         });
       },
       upsert: async (event, payload) => {
-        const id = requireString(payload, "id", event.entityId);
-        const dashboardId = requireString(payload, "dashboardId", event.dashboardId);
-        const widgetId = requireString(payload, "widgetId", event.widgetId);
-        await ensureWidgetEditAccess(widgetId, dashboardId);
+        const { id, dashboardId, widgetId } = await ensureScopedEntityUpsertAccess(
+          event,
+          payload,
+          async (entityId) =>
+            prisma.weatherCache.findUnique({
+              where: { id: entityId },
+              select: { widgetId: true, dashboardId: true },
+            })
+        );
         const locationKey = requireString(payload, "locationKey");
         const fetchedAt = parseDate(payload.fetchedAt);
         const payloadValue = payload.payload ?? {};
