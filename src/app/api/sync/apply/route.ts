@@ -210,7 +210,7 @@ export async function POST(request: Request) {
       if (!member) throw new Error("Forbidden");
       return { dashboard, role: member.role };
     }
-    if (dashboard.ownerId && dashboard.ownerId !== userId) {
+    if (!dashboard.ownerId || dashboard.ownerId !== userId) {
       throw new Error("Forbidden");
     }
     return { dashboard, role: "parent" };
@@ -297,7 +297,7 @@ export async function POST(request: Request) {
         if (dashboard.groupId) {
           const member = await getGroupMember(dashboard.groupId);
           if (!member || !isAdminRole(member.role)) throw new Error("Forbidden");
-        } else if (dashboard.ownerId && dashboard.ownerId !== userId) {
+        } else if (!dashboard.ownerId || dashboard.ownerId !== userId) {
           throw new Error("Forbidden");
         }
         await prisma.dashboard.deleteMany({ where: { id: event.entityId } });

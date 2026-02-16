@@ -34,7 +34,7 @@ async function ensureAccess(dashboardId: string, userId: string) {
       select: { id: true },
     });
     if (!member) return null;
-  } else if (dashboard.ownerId && dashboard.ownerId !== userId) {
+  } else if (!dashboard.ownerId || dashboard.ownerId !== userId) {
     return null;
   }
   return dashboard;
@@ -195,7 +195,7 @@ export async function POST(
       if (!member || !isAdminRole(member.role)) {
         return jsonError(403, "Forbidden");
       }
-    } else if (existing.ownerId && existing.ownerId !== userId) {
+    } else if (!existing.ownerId || existing.ownerId !== userId) {
       return jsonError(403, "Forbidden");
     }
   } else if (snapshot.dashboard.groupId) {

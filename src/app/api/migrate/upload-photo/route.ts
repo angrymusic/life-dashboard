@@ -72,7 +72,7 @@ async function ensureDashboardUploadAccess(params: {
       throw new Error("Forbidden");
     }
     role = member.role;
-  } else if (dashboard.ownerId && dashboard.ownerId !== params.userId) {
+  } else if (!dashboard.ownerId || dashboard.ownerId !== params.userId) {
     throw new Error("Forbidden");
   }
 

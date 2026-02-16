@@ -79,7 +79,7 @@ export async function GET(request: Request) {
     if (!member) {
       return jsonError(404, "File not found");
     }
-  } else if (photo.dashboard.ownerId && photo.dashboard.ownerId !== userId) {
+  } else if (!photo.dashboard.ownerId || photo.dashboard.ownerId !== userId) {
     return jsonError(404, "File not found");
   }
 

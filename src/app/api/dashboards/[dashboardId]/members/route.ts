@@ -178,7 +178,7 @@ export async function POST(
     if (!member || !isAdminRole(member.role)) {
       return jsonError(403, tr(language, "권한이 없어요.", "Forbidden"));
     }
-  } else if (dashboard.ownerId && dashboard.ownerId !== requester.id) {
+  } else if (!dashboard.ownerId || dashboard.ownerId !== requester.id) {
     return jsonError(403, tr(language, "권한이 없어요.", "Forbidden"));
   }
 

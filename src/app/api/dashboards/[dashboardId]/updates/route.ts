@@ -18,7 +18,7 @@ async function ensureAccess(dashboardId: string, userId: string) {
       select: { id: true },
     });
     if (!member) return null;
-  } else if (dashboard.ownerId && dashboard.ownerId !== userId) {
+  } else if (!dashboard.ownerId || dashboard.ownerId !== userId) {
     return null;
   }
   return dashboard;
