@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
+import { requireUser } from "@/server/api-auth";
 import {
-  clientIpFromRequest,
   enforceRateLimit,
   parsePositiveIntEnv,
 } from "@/server/request-guards";
@@ -201,9 +201,12 @@ async function fetchSpecialDays(
 }
 
 export async function GET(request: Request) {
-  const clientIp = clientIpFromRequest(request) ?? "unknown";
+  const userResult = await requireUser();
+  if (!userResult.ok) return userResult.response;
+  const userId = userResult.context.userId;
+
   const rateLimit = await enforceRateLimit({
-    key: `special-days:${clientIp}`,
+    key: `special-days:${userId}`,
     limit: parsePositiveIntEnv(process.env.SPECIAL_DAYS_RATE_LIMIT, 30),
     windowMs: parsePositiveIntEnv(
       process.env.SPECIAL_DAYS_RATE_WINDOW_MS,
