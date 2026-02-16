@@ -121,7 +121,7 @@ export async function POST(request: Request) {
   if (!userResult.ok) return userResult.response;
   const userId = userResult.context.userId;
 
-  const rateLimit = enforceRateLimit({
+  const rateLimit = await enforceRateLimit({
     key: `sync-apply:${userId}`,
     limit: parsePositiveIntEnv(process.env.SYNC_APPLY_RATE_LIMIT, 120),
     windowMs: parsePositiveIntEnv(

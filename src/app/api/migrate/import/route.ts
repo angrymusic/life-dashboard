@@ -493,7 +493,7 @@ export async function POST(request: Request) {
   if (!userResult.ok) return userResult.response;
   const { userId } = userResult.context;
 
-  const rateLimit = enforceRateLimit({
+  const rateLimit = await enforceRateLimit({
     key: `migrate-import:${userId}`,
     limit: parsePositiveIntEnv(process.env.MIGRATION_IMPORT_RATE_LIMIT, 5),
     windowMs: parsePositiveIntEnv(

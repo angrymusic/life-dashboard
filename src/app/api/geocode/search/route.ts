@@ -51,7 +51,7 @@ function normalizeLanguage(value: string) {
 
 export async function GET(request: Request) {
   const clientIp = clientIpFromRequest(request) ?? "unknown";
-  const rateLimit = enforceRateLimit({
+  const rateLimit = await enforceRateLimit({
     key: `geocode-search:${clientIp}`,
     limit: parsePositiveIntEnv(process.env.GEOCODE_SEARCH_RATE_LIMIT, 60),
     windowMs: parsePositiveIntEnv(

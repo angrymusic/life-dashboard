@@ -63,7 +63,7 @@ function parseReverseGeocodeLabel(payload: unknown): string | null {
 
 export async function GET(request: Request) {
   const clientIp = clientIpFromRequest(request) ?? "unknown";
-  const rateLimit = enforceRateLimit({
+  const rateLimit = await enforceRateLimit({
     key: `geocode-reverse:${clientIp}`,
     limit: parsePositiveIntEnv(process.env.GEOCODE_REVERSE_RATE_LIMIT, 60),
     windowMs: parsePositiveIntEnv(

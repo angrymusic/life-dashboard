@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import prisma from "@/server/prisma";
 
 type RateLimitBucket = {
   count: number;
@@ -7,6 +8,7 @@ type RateLimitBucket = {
 
 const globalForRateLimit = globalThis as {
   __lifedashboardRateLimitStore?: Map<string, RateLimitBucket>;
+  __lifedashboardRateLimitPrunedAt?: number;
 };
 
 const rateLimitStore =
@@ -22,6 +24,28 @@ function pruneRateLimitStore(now: number) {
       rateLimitStore.delete(key);
     }
   }
+}
+
+function maybePruneDatabaseRateLimits(nowMs: number) {
+  const pruneIntervalMs = parsePositiveIntEnv(
+    process.env.RATE_LIMIT_PRUNE_INTERVAL_MS,
+    5 * 60 * 1000
+  );
+  const lastPrunedAt = globalForRateLimit.__lifedashboardRateLimitPrunedAt ?? 0;
+  if (nowMs - lastPrunedAt < pruneIntervalMs) return;
+
+  globalForRateLimit.__lifedashboardRateLimitPrunedAt = nowMs;
+  void prisma.apiRateLimit
+    .deleteMany({
+      where: {
+        resetAt: {
+          lte: new Date(nowMs),
+        },
+      },
+    })
+    .catch(() => {
+      // Ignore prune errors.
+    });
 }
 
 export function parsePositiveIntEnv(value: string | undefined, fallback: number) {
@@ -60,9 +84,14 @@ type EnforceRateLimitResult =
   | { ok: true }
   | { ok: false; response: NextResponse };
 
-export function enforceRateLimit(
+type ResolvedRateLimit = {
+  count: number;
+  resetAt: number;
+};
+
+function enforceRateLimitInMemory(
   params: EnforceRateLimitParams
-): EnforceRateLimitResult {
+): ResolvedRateLimit {
   const now = Date.now();
   pruneRateLimitStore(now);
 
@@ -75,14 +104,79 @@ export function enforceRateLimit(
 
   activeBucket.count += 1;
   rateLimitStore.set(bucketKey, activeBucket);
+  return { count: activeBucket.count, resetAt: activeBucket.resetAt };
+}
 
-  if (activeBucket.count <= params.limit) {
+async function enforceRateLimitInDatabase(
+  params: EnforceRateLimitParams
+): Promise<ResolvedRateLimit> {
+  const now = new Date();
+  const nowMs = now.getTime();
+  const resetAt = new Date(nowMs + params.windowMs);
+
+  const row = await prisma.$transaction(async (tx) => {
+    const existing = await tx.apiRateLimit.findUnique({
+      where: { key: params.key },
+      select: { count: true, resetAt: true },
+    });
+
+    if (!existing || existing.resetAt.getTime() <= nowMs) {
+      return tx.apiRateLimit.upsert({
+        where: { key: params.key },
+        update: {
+          count: 1,
+          resetAt,
+        },
+        create: {
+          key: params.key,
+          count: 1,
+          resetAt,
+        },
+        select: { count: true, resetAt: true },
+      });
+    }
+
+    return tx.apiRateLimit.update({
+      where: { key: params.key },
+      data: {
+        count: { increment: 1 },
+      },
+      select: { count: true, resetAt: true },
+    });
+  });
+
+  maybePruneDatabaseRateLimits(nowMs);
+  return { count: row.count, resetAt: row.resetAt.getTime() };
+}
+
+function shouldUseDatabaseRateLimitBackend() {
+  const backend = (process.env.RATE_LIMIT_BACKEND ?? "database")
+    .trim()
+    .toLowerCase();
+  return backend !== "memory";
+}
+
+export async function enforceRateLimit(
+  params: EnforceRateLimitParams
+): Promise<EnforceRateLimitResult> {
+  let resolved: ResolvedRateLimit;
+  if (shouldUseDatabaseRateLimitBackend()) {
+    try {
+      resolved = await enforceRateLimitInDatabase(params);
+    } catch {
+      resolved = enforceRateLimitInMemory(params);
+    }
+  } else {
+    resolved = enforceRateLimitInMemory(params);
+  }
+
+  if (resolved.count <= params.limit) {
     return { ok: true };
   }
 
   const retryAfterSeconds = Math.max(
     1,
-    Math.ceil((activeBucket.resetAt - now) / 1000)
+    Math.ceil((resolved.resetAt - Date.now()) / 1000)
   );
 
   return {

@@ -100,7 +100,7 @@ export async function POST(request: Request) {
   if (!userResult.ok) return userResult.response;
   const { userId } = userResult.context;
 
-  const rateLimit = enforceRateLimit({
+  const rateLimit = await enforceRateLimit({
     key: `photo-upload:${userId}`,
     limit: parsePositiveIntEnv(process.env.PHOTO_UPLOAD_RATE_LIMIT, 30),
     windowMs: parsePositiveIntEnv(

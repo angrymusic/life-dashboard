@@ -202,7 +202,7 @@ async function fetchSpecialDays(
 
 export async function GET(request: Request) {
   const clientIp = clientIpFromRequest(request) ?? "unknown";
-  const rateLimit = enforceRateLimit({
+  const rateLimit = await enforceRateLimit({
     key: `special-days:${clientIp}`,
     limit: parsePositiveIntEnv(process.env.SPECIAL_DAYS_RATE_LIMIT, 30),
     windowMs: parsePositiveIntEnv(

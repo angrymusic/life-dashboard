@@ -318,3 +318,13 @@ model WeatherCache {
   @@unique([widgetId])
   @@index([dashboardId])
 }
+
+model ApiRateLimit {
+  key       String   @id
+  count     Int
+  resetAt   DateTime
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([resetAt])
+}
