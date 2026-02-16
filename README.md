@@ -64,6 +64,17 @@ Optional (add to either env file):
 UPLOAD_DIR=./data/uploads
 UPLOAD_MAX_BYTES=10485760
 MIGRATION_STAGING_DIR=./data/migration-staging
+ENABLE_MIGRATION_IMPORT=false
+PHOTO_UPLOAD_RATE_LIMIT=30
+PHOTO_UPLOAD_RATE_WINDOW_MS=60000
+SYNC_APPLY_RATE_LIMIT=120
+SYNC_APPLY_RATE_WINDOW_MS=60000
+SYNC_APPLY_MAX_BYTES=1048576
+SYNC_APPLY_MAX_EVENTS=2000
+MIGRATION_IMPORT_RATE_LIMIT=5
+MIGRATION_IMPORT_RATE_WINDOW_MS=600000
+MIGRATION_IMPORT_MAX_BYTES=5242880
+MIGRATION_IMPORT_MAX_RECORDS=20000
 ```
 
 3. Apply database migrations:
@@ -99,5 +110,6 @@ Open http://localhost:3000.
 ## Notes
 
 - Photo uploads are stored under `UPLOAD_DIR` (default `data/uploads`).
-- Migration import currently stages snapshots on disk under
-  `MIGRATION_STAGING_DIR`.
+- Migration import API is disabled by default. To use it, set
+  `ENABLE_MIGRATION_IMPORT=true`.
+- Migration import stages snapshots on disk under `MIGRATION_STAGING_DIR`.
