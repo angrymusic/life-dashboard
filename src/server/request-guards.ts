@@ -1,10 +1,19 @@
 import { NextResponse } from "next/server";
 import prisma from "@/server/prisma";
+import { createHash } from "crypto";
+import { isIP } from "net";
 
 type RateLimitBucket = {
   count: number;
   resetAt: number;
 };
+
+const SAFE_IDENTIFIER_PATTERN = /^[a-z0-9_-]{1,128}$/;
+const trustedProxyIpHeaders = new Set([
+  "cf-connecting-ip",
+  "x-real-ip",
+  "x-forwarded-for",
+]);
 
 const globalForRateLimit = globalThis as {
   __lifedashboardRateLimitStore?: Map<string, RateLimitBucket>;
@@ -54,6 +63,10 @@ export function parsePositiveIntEnv(value: string | undefined, fallback: number)
   return Math.floor(parsed);
 }
 
+export function isSafeIdentifier(value: string) {
+  return SAFE_IDENTIFIER_PATTERN.test(value);
+}
+
 export function sanitizePathSegment(value: string) {
   return value.replace(/[^a-zA-Z0-9_-]/g, "_");
 }
@@ -75,19 +88,41 @@ export function clientIpFromRequest(request: Request) {
     return null;
   }
 
-  const cfIp = request.headers.get("cf-connecting-ip");
-  if (cfIp) return cfIp.trim();
+  const requestedHeader = (process.env.TRUST_PROXY_IP_HEADER ?? "cf-connecting-ip")
+    .trim()
+    .toLowerCase();
+  const trustedHeader = trustedProxyIpHeaders.has(requestedHeader)
+    ? requestedHeader
+    : "cf-connecting-ip";
+  const headerValue = request.headers.get(trustedHeader);
+  if (!headerValue) return null;
 
-  const realIp = request.headers.get("x-real-ip");
-  if (realIp) return realIp.trim();
-
-  const forwarded = request.headers.get("x-forwarded-for");
-  if (forwarded) {
-    const first = forwarded.split(",")[0]?.trim();
-    if (first) return first;
+  const parsedIp =
+    trustedHeader === "x-forwarded-for"
+      ? headerValue.split(",")[0]?.trim()
+      : headerValue.trim();
+  if (!parsedIp) return null;
+  if (!isIP(parsedIp)) {
+    return null;
   }
 
-  return null;
+  return parsedIp;
+}
+
+function hashRateLimitFingerprint(value: string) {
+  return createHash("sha256").update(value).digest("hex").slice(0, 24);
+}
+
+export function resolveRateLimitClientKey(request: Request) {
+  const ip = clientIpFromRequest(request);
+  if (ip) return `ip:${ip}`;
+
+  const userAgent = request.headers.get("user-agent")?.trim() ?? "";
+  const language = request.headers.get("accept-language")?.trim() ?? "";
+  const fingerprint = [userAgent, language].filter(Boolean).join("|");
+  if (!fingerprint) return "unknown";
+
+  return `ua:${hashRateLimitFingerprint(fingerprint)}`;
 }
 
 type EnforceRateLimitParams = {

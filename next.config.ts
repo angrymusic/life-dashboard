@@ -1,6 +1,7 @@
 import type { NextConfig } from "next";
 
-const cspMode = (process.env.CSP_MODE ?? "report-only").trim().toLowerCase();
+const rawCspMode = (process.env.CSP_MODE ?? "enforce").trim().toLowerCase();
+const cspMode = rawCspMode === "report-only" ? "report-only" : "enforce";
 
 function buildCspValue() {
   const scriptSrc = ["'self'", "'unsafe-inline'"];
@@ -18,6 +19,7 @@ function buildCspValue() {
     "form-action 'self'",
     "object-src 'none'",
     `script-src ${scriptSrc.join(" ")}`,
+    "script-src-attr 'none'",
     "style-src 'self' 'unsafe-inline'",
     "img-src 'self' data: blob: https://*.googleusercontent.com",
     "font-src 'self' data:",

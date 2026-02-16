@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import prisma from "@/server/prisma";
 import { jsonError, parseJson } from "@/server/api-response";
 import { isAdminRole, requireUser } from "@/server/api-auth";
-import { parsePositiveIntEnv } from "@/server/request-guards";
+import { isSafeIdentifier, parsePositiveIntEnv } from "@/server/request-guards";
 import { removePhotoFilesIfUnreferenced } from "@/server/photo-file-cleanup";
 import {
   persistSnapshot,
@@ -51,6 +51,9 @@ export async function GET(
   const userId = userResult.context.userId;
 
   const { dashboardId } = await params;
+  if (!isSafeIdentifier(dashboardId)) {
+    return jsonError(400, "Invalid dashboard ID");
+  }
   const dashboard = await ensureAccess(dashboardId, userId);
   if (!dashboard) return jsonError(404, "Dashboard not found");
 
@@ -181,6 +184,9 @@ export async function POST(
   const body = parsedBody.body;
 
   const { dashboardId } = await params;
+  if (!isSafeIdentifier(dashboardId)) {
+    return jsonError(400, "Invalid dashboard ID");
+  }
   const validation = validateSnapshotPayload(body, dashboardId);
   if (!validation.ok) {
     return jsonError(validation.status, validation.error);

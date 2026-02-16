@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import prisma from "@/server/prisma";
 import { jsonError } from "@/server/api-response";
 import { requireUser } from "@/server/api-auth";
+import { isSafeIdentifier } from "@/server/request-guards";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -33,6 +34,9 @@ export async function GET(
   const userId = userResult.context.userId;
 
   const { dashboardId } = await params;
+  if (!isSafeIdentifier(dashboardId)) {
+    return jsonError(400, "Invalid dashboard ID");
+  }
   const dashboard = await ensureAccess(dashboardId, userId);
   if (!dashboard) return jsonError(404, "Dashboard not found");
 

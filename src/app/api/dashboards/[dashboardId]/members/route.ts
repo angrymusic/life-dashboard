@@ -2,7 +2,11 @@ import { NextResponse } from "next/server";
 import prisma from "@/server/prisma";
 import { jsonError, parseJson } from "@/server/api-response";
 import { isAdminRole, requireUser } from "@/server/api-auth";
-import { enforceRateLimit, parsePositiveIntEnv } from "@/server/request-guards";
+import {
+  enforceRateLimit,
+  isSafeIdentifier,
+  parsePositiveIntEnv,
+} from "@/server/request-guards";
 import { detectLanguageFromRequest } from "@/shared/i18n/language";
 
 export const runtime = "nodejs";
@@ -101,6 +105,14 @@ function tr(language: "ko" | "en", ko: string, en: string) {
   return language === "ko" ? ko : en;
 }
 
+function validateDashboardId(
+  dashboardId: string,
+  language: "ko" | "en"
+): ReturnType<typeof jsonError> | null {
+  if (isSafeIdentifier(dashboardId)) return null;
+  return jsonError(400, tr(language, "대시보드 ID 형식이 올바르지 않아요.", "Invalid dashboard ID"));
+}
+
 async function enforceMembersMutationRateLimit(userId: string, action: string) {
   return enforceRateLimit({
     key: `dashboard-members:${action}:${userId}`,
@@ -168,6 +180,9 @@ export async function POST(
   }
 
   const { dashboardId } = await params;
+  const dashboardIdError = validateDashboardId(dashboardId, language);
+  if (dashboardIdError) return dashboardIdError;
+
   let dashboard = await prisma.dashboard.findUnique({
     where: { id: dashboardId },
   });
@@ -218,19 +233,8 @@ export async function POST(
     );
   }
 
-  const targetUser = await prisma.user.findFirst({
-    where: {
-      email: {
-        equals: normalizedEmail,
-        mode: "insensitive",
-      },
-    },
-    select: { id: true, email: true, name: true, image: true },
-  });
-
-  const targetEmail = targetUser?.email ?? normalizedEmail;
-  const targetDisplayName = targetUser?.name?.trim() || targetEmail;
-  const targetAvatarUrl = targetUser?.image ?? null;
+  const targetEmail = normalizedEmail;
+  const targetDisplayName = targetEmail;
 
   let groupId = dashboard.groupId;
   if (!groupId) {
@@ -282,18 +286,14 @@ export async function POST(
       },
     },
     update: {
-      ...(targetUser ? { userId: targetUser.id } : {}),
       role: parsed.role,
-      displayName: targetDisplayName,
-      avatarUrl: targetAvatarUrl,
     },
     create: {
       groupId,
-      userId: targetUser?.id,
       email: targetEmail,
       role: parsed.role,
       displayName: targetDisplayName,
-      avatarUrl: targetAvatarUrl,
+      avatarUrl: null,
     },
   });
 
@@ -345,6 +345,9 @@ export async function PATCH(
   }
 
   const { dashboardId } = await params;
+  const dashboardIdError = validateDashboardId(dashboardId, language);
+  if (dashboardIdError) return dashboardIdError;
+
   const dashboard = await prisma.dashboard.findUnique({
     where: { id: dashboardId },
   });
@@ -442,6 +445,8 @@ export async function DELETE(
   }
 
   const { dashboardId } = await params;
+  const dashboardIdError = validateDashboardId(dashboardId, language);
+  if (dashboardIdError) return dashboardIdError;
 
   const dashboard = await prisma.dashboard.findUnique({
     where: { id: dashboardId },

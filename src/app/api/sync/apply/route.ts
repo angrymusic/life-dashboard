@@ -2,7 +2,11 @@ import { NextResponse } from "next/server";
 import prisma from "@/server/prisma";
 import { jsonError, parseJson } from "@/server/api-response";
 import { isAdminRole, requireUser } from "@/server/api-auth";
-import { enforceRateLimit, parsePositiveIntEnv } from "@/server/request-guards";
+import {
+  enforceRateLimit,
+  isSafeIdentifier,
+  parsePositiveIntEnv,
+} from "@/server/request-guards";
 import { removePhotoFilesIfUnreferenced } from "@/server/photo-file-cleanup";
 import {
   isLegacyPhotoStoragePath,
@@ -74,6 +78,28 @@ function optionalString(obj: Record<string, unknown>, key: string) {
   return undefined;
 }
 
+function requireIdentifier(
+  obj: Record<string, unknown>,
+  key: string,
+  fallback?: string
+) {
+  const value = requireString(obj, key, fallback);
+  const normalized = value.trim();
+  if (!isSafeIdentifier(normalized)) {
+    throw new Error(`Invalid field: ${key}`);
+  }
+  return normalized;
+}
+
+function optionalIdentifier(obj: Record<string, unknown>, key: string) {
+  const value = optionalString(obj, key);
+  if (!value) return undefined;
+  if (!isSafeIdentifier(value)) {
+    throw new Error(`Invalid field: ${key}`);
+  }
+  return value;
+}
+
 function parseDate(value: unknown, fallback?: Date) {
   if (typeof value !== "string") return fallback ?? new Date();
   const parsed = new Date(value);
@@ -100,15 +126,22 @@ function parseEvents(body: unknown): SyncEvent[] | null {
     if (typeof id !== "string" || typeof entityType !== "string" || typeof entityId !== "string") {
       return null;
     }
+    if (!isSafeIdentifier(entityId)) return null;
     if (operation !== "upsert" && operation !== "delete") return null;
+    const dashboardId =
+      typeof item.dashboardId === "string" ? item.dashboardId : undefined;
+    const widgetId = typeof item.widgetId === "string" ? item.widgetId : undefined;
+    if (dashboardId && !isSafeIdentifier(dashboardId)) return null;
+    if (widgetId && !isSafeIdentifier(widgetId)) return null;
+
     events.push({
       id,
       entityType,
       entityId,
       operation,
       payload: isRecord(item.payload) ? item.payload : undefined,
-      dashboardId: typeof item.dashboardId === "string" ? item.dashboardId : undefined,
-      widgetId: typeof item.widgetId === "string" ? item.widgetId : undefined,
+      dashboardId,
+      widgetId,
       createdAt: typeof item.createdAt === "string" ? item.createdAt : undefined,
       updatedAt: typeof item.updatedAt === "string" ? item.updatedAt : undefined,
     });
@@ -271,9 +304,13 @@ export async function POST(request: Request) {
     payload: Record<string, unknown>,
     loadExisting: (entityId: string) => Promise<ScopedEntity | null>
   ) => {
-    const id = requireString(payload, "id", event.entityId);
-    const dashboardId = requireString(payload, "dashboardId", event.dashboardId);
-    const widgetId = requireString(payload, "widgetId", event.widgetId);
+    const id = requireIdentifier(payload, "id", event.entityId);
+    const dashboardId = requireIdentifier(
+      payload,
+      "dashboardId",
+      event.dashboardId
+    );
+    const widgetId = requireIdentifier(payload, "widgetId", event.widgetId);
 
     const existing = await loadExisting(id);
     if (existing) {
@@ -322,9 +359,9 @@ export async function POST(request: Request) {
         dashboardCache.set(event.entityId, null);
       },
       upsert: async (event, payload) => {
-        const id = requireString(payload, "id", event.entityId);
+        const id = requireIdentifier(payload, "id", event.entityId);
         const name = requireString(payload, "name", "Dashboard");
-        const groupId = optionalString(payload, "groupId");
+        const groupId = optionalIdentifier(payload, "groupId");
         const createdAt = parseDate(payload.createdAt ?? event.createdAt);
         const updatedAt = parseDate(payload.updatedAt ?? event.updatedAt);
 
@@ -384,8 +421,12 @@ export async function POST(request: Request) {
         await removePhotoFilesIfUnreferenced(photosToCleanup);
       },
       upsert: async (event, payload) => {
-        const id = requireString(payload, "id", event.entityId);
-        const dashboardId = requireString(payload, "dashboardId", event.dashboardId);
+        const id = requireIdentifier(payload, "id", event.entityId);
+        const dashboardId = requireIdentifier(
+          payload,
+          "dashboardId",
+          event.dashboardId
+        );
         const existingWidget = await getWidget(id);
         if (existingWidget) {
           await ensureWidgetEditAccess(id, dashboardId);
@@ -825,7 +866,7 @@ export async function POST(request: Request) {
               select: { widgetId: true, dashboardId: true },
             })
         );
-        const metricId = requireString(payload, "metricId");
+        const metricId = requireIdentifier(payload, "metricId");
         const metric = await prisma.metric.findUnique({
           where: { id: metricId },
           select: { widgetId: true, dashboardId: true },

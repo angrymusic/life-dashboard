@@ -66,6 +66,8 @@ UPLOAD_MAX_BYTES=10485760
 RATE_LIMIT_BACKEND=database
 RATE_LIMIT_PRUNE_INTERVAL_MS=300000
 TRUST_PROXY_HEADERS=true
+TRUST_PROXY_IP_HEADER=cf-connecting-ip
+CSP_MODE=enforce
 MIGRATION_STAGING_DIR=./data/migration-staging
 MIGRATION_STAGING_RETENTION_DAYS=7
 MIGRATION_STAGING_MAX_FILES_PER_USER=30
@@ -130,7 +132,10 @@ Open http://localhost:3000.
 - Photo uploads are stored under `UPLOAD_DIR` (default `data/uploads`).
   Orphaned photo files are cleaned up when related photo records are removed.
 - Set `TRUST_PROXY_HEADERS=true` only when requests are always behind a trusted
-  proxy (for example Cloudflare Tunnel).
+  proxy (for example Cloudflare Tunnel), and set `TRUST_PROXY_IP_HEADER` to the
+  header your proxy controls (`cf-connecting-ip`, `x-real-ip`, or
+  `x-forwarded-for`).
+- `CSP_MODE` defaults to `enforce`. Use `report-only` only for temporary tuning.
 - Migration import API is disabled by default. To use it, set
   `ENABLE_MIGRATION_IMPORT=true`.
 - Migration import stages snapshots on disk under `MIGRATION_STAGING_DIR`.

@@ -5,6 +5,7 @@ import { isAdminRole, requireUser } from "@/server/api-auth";
 import prisma from "@/server/prisma";
 import {
   enforceRateLimit,
+  isSafeIdentifier,
   parsePositiveIntEnv,
 } from "@/server/request-guards";
 import { isValidPhotoStoragePathForDashboard } from "@/server/photo-path";
@@ -217,6 +218,9 @@ export async function POST(request: Request) {
   if (!dashboardId || !widgetId) {
     return jsonError(400, 'Missing form field "dashboardId" or "widgetId"');
   }
+  if (!isSafeIdentifier(dashboardId) || !isSafeIdentifier(widgetId)) {
+    return jsonError(400, "Invalid dashboardId or widgetId");
+  }
 
   try {
     await ensureDashboardUploadAccess({ dashboardId, widgetId, userId });
@@ -259,18 +263,22 @@ export async function POST(request: Request) {
   const mm = String(now.getMonth() + 1).padStart(2, "0");
 
   const baseDir = process.env.UPLOAD_DIR ?? path.join(process.cwd(), "data", "uploads");
-  const relDir = path.join("photos", dashboardId, yyyy, mm); // OS path
-  const absDir = path.join(baseDir, relDir);
-
-  await ensureDir(absDir);
+  const absDir = path.join(baseDir, "photos", dashboardId, yyyy, mm);
+  const resolvedBase = path.resolve(baseDir);
+  const resolvedDir = path.resolve(absDir);
+  if (
+    resolvedDir !== resolvedBase &&
+    !resolvedDir.startsWith(`${resolvedBase}${path.sep}`)
+  ) {
+    return jsonError(400, "Invalid path");
+  }
+  await ensureDir(resolvedDir);
 
   const uuid = crypto.randomUUID();
   const ext = extFromMime(mimeType);
   const filename = `${uuid}.${ext}`;
 
-  const absPath = path.join(absDir, filename);
-
-  const resolvedBase = path.resolve(baseDir);
+  const absPath = path.join(resolvedDir, filename);
   const resolvedTarget = path.resolve(absPath);
   if (
     resolvedTarget !== resolvedBase &&
@@ -280,7 +288,7 @@ export async function POST(request: Request) {
   }
 
   const buffer = Buffer.from(await file.arrayBuffer());
-  await fs.writeFile(absPath, buffer);
+  await fs.writeFile(resolvedTarget, buffer);
 
   // 앱/DB에 저장할 경로는 "업로드 루트 기준 상대 경로"가 깔끔함
   // 예: photos/2026/01/uuid.jpg

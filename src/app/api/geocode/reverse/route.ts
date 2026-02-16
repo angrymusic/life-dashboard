@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
 import {
-  clientIpFromRequest,
   enforceRateLimit,
   parsePositiveIntEnv,
+  resolveRateLimitClientKey,
 } from "@/server/request-guards";
 
 export const runtime = "nodejs";
@@ -62,9 +62,9 @@ function parseReverseGeocodeLabel(payload: unknown): string | null {
 }
 
 export async function GET(request: Request) {
-  const clientIp = clientIpFromRequest(request) ?? "unknown";
+  const clientKey = resolveRateLimitClientKey(request);
   const rateLimit = await enforceRateLimit({
-    key: `geocode-reverse:${clientIp}`,
+    key: `geocode-reverse:${clientKey}`,
     limit: parsePositiveIntEnv(process.env.GEOCODE_REVERSE_RATE_LIMIT, 60),
     windowMs: parsePositiveIntEnv(
       process.env.GEOCODE_REVERSE_RATE_WINDOW_MS,
