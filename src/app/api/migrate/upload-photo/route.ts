@@ -165,7 +165,7 @@ async function ensureDashboardUploadAccess(params: {
     select: { dashboardId: true, createdBy: true },
   });
   if (!widget) {
-    return;
+    throw new Error("Widget not found");
   }
 
   if (widget.dashboardId !== params.dashboardId) {
@@ -222,6 +222,9 @@ export async function POST(request: Request) {
   } catch (err) {
     const message = err instanceof Error ? err.message : "Forbidden";
     if (message === "Dashboard not found") {
+      return jsonError(404, message);
+    }
+    if (message === "Widget not found") {
       return jsonError(404, message);
     }
     if (message === "Widget dashboard mismatch") {
