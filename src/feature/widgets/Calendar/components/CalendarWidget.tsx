@@ -344,7 +344,7 @@ export function CalendarWidget({
                     : ""
                 )}
               >
-                <div className="flex items-center justify-between min-h-[10px] text-[11px] font-medium leading-none">
+                <div className="flex items-center justify-between min-h-[10px] text-[12px] font-medium leading-none">
                   <div className="flex items-center gap-1">
                     <span className={cn(hasHoliday ? "text-red-600" : "")}>
                       {day.date.getDate()}
@@ -359,7 +359,7 @@ export function CalendarWidget({
                   <div className="flex items-center gap-1">
                     {shouldShowWeather ? (
                       <span
-                        className="flex items-center gap-0.5 text-[10px] text-gray-500"
+                        className="flex items-center gap-0.5 text-[12px] text-gray-500"
                         title={weatherTitle}
                       >
                         <WeatherIcon
@@ -380,7 +380,7 @@ export function CalendarWidget({
                     ) : null}
                   </div>
                 </div>
-                <div className="mt-0.5 space-y-0.5">
+                <div className="mt-1 space-y-0.5">
                   {segments.map((segment, index) => {
                     if (!segment) {
                       return (
@@ -408,7 +408,7 @@ export function CalendarWidget({
                         key={`${segment.event.id}-${day.ymd}`}
                         title={segment.event.title}
                         className={cn(
-                          "pointer-events-none flex h-2.5 items-center truncate px-1 text-[9px] font-medium leading-none @[360px]:h-3 @[360px]:text-[10px]",
+                          "pointer-events-none flex h-3 items-center truncate px-1.5 text-[12px] font-medium leading-none @[360px]:h-4",
                           segment.isStart ? "rounded-l-sm" : "",
                           segment.isEnd ? "rounded-r-sm" : "",
                           segment.isStart ? "" : "-ml-2",
