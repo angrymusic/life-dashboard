@@ -1,4 +1,9 @@
 import { NextResponse } from "next/server";
+import {
+  clientIpFromRequest,
+  enforceRateLimit,
+  parsePositiveIntEnv,
+} from "@/server/request-guards";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -38,19 +43,44 @@ function toLocationLabel(item: OpenMeteoGeocodingResult) {
   return parts.join(", ");
 }
 
+function normalizeLanguage(value: string) {
+  const normalized = value.trim().toLowerCase();
+  if (/^[a-z]{2,8}$/.test(normalized)) return normalized;
+  return "ko";
+}
+
 export async function GET(request: Request) {
+  const clientIp = clientIpFromRequest(request) ?? "unknown";
+  const rateLimit = enforceRateLimit({
+    key: `geocode-search:${clientIp}`,
+    limit: parsePositiveIntEnv(process.env.GEOCODE_SEARCH_RATE_LIMIT, 60),
+    windowMs: parsePositiveIntEnv(
+      process.env.GEOCODE_SEARCH_RATE_WINDOW_MS,
+      60 * 1000
+    ),
+  });
+  if (!rateLimit.ok) return rateLimit.response;
+
   const { searchParams } = new URL(request.url);
   const query = (searchParams.get("q") ?? "").trim();
-  const language = (searchParams.get("language") ?? "ko").trim() || "ko";
+  const language = normalizeLanguage(searchParams.get("language") ?? "ko");
 
   if (query.length < 2) {
     return NextResponse.json({ results: [] });
   }
+  if (query.length > 120) {
+    return NextResponse.json({ error: "Query too long." }, { status: 400 });
+  }
 
   try {
     const url = buildSearchUrl(query, language);
+    const timeoutMs = parsePositiveIntEnv(
+      process.env.GEOCODE_SEARCH_TIMEOUT_MS,
+      5000
+    );
     const response = await fetch(url, {
       headers: { "User-Agent": "lifedashboard" },
+      signal: AbortSignal.timeout(timeoutMs),
     });
     if (!response.ok) {
       return NextResponse.json({ error: "Geocode search failed." }, { status: 502 });
