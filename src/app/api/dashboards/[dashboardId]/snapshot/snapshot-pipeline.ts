@@ -1,4 +1,5 @@
 import type { Prisma } from "@prisma/client";
+import { isValidPhotoStoragePathForDashboard } from "@/server/photo-path";
 
 export type SnapshotPayload = {
   dashboard: {
@@ -100,6 +101,21 @@ export function validateSnapshotPayload(
     if (value === null || value === undefined) continue;
     if (!Array.isArray(value) || value.some((item) => !isRecord(item))) {
       return { ok: false, status: 400, error: "Invalid snapshot payload" };
+    }
+  }
+
+  const photos = snapshot.photos ?? [];
+  for (const photo of photos) {
+    const storagePath = photo.storagePath;
+    if (typeof storagePath !== "string") {
+      return { ok: false, status: 400, error: "Invalid snapshot payload" };
+    }
+    if (
+      !isValidPhotoStoragePathForDashboard(storagePath, dashboardId, {
+        allowLegacy: true,
+      })
+    ) {
+      return { ok: false, status: 400, error: "Invalid photo path" };
     }
   }
 

@@ -7,6 +7,7 @@ import {
   enforceRateLimit,
   parsePositiveIntEnv,
 } from "@/server/request-guards";
+import { isValidPhotoStoragePathForDashboard } from "@/server/photo-path";
 import path from "path";
 import fs from "fs/promises";
 
@@ -252,13 +253,13 @@ export async function POST(request: Request) {
     return jsonError(413, "File too large", { size: file.size, maxBytes });
   }
 
-  // 저장 경로: {UPLOAD_DIR}/photos/YYYY/MM/<uuid>.<ext>
+  // 저장 경로: {UPLOAD_DIR}/photos/{dashboardId}/YYYY/MM/<uuid>.<ext>
   const now = new Date();
   const yyyy = String(now.getFullYear());
   const mm = String(now.getMonth() + 1).padStart(2, "0");
 
   const baseDir = process.env.UPLOAD_DIR ?? path.join(process.cwd(), "data", "uploads");
-  const relDir = path.join("photos", yyyy, mm); // OS path
+  const relDir = path.join("photos", dashboardId, yyyy, mm); // OS path
   const absDir = path.join(baseDir, relDir);
 
   await ensureDir(absDir);
@@ -269,12 +270,24 @@ export async function POST(request: Request) {
 
   const absPath = path.join(absDir, filename);
 
+  const resolvedBase = path.resolve(baseDir);
+  const resolvedTarget = path.resolve(absPath);
+  if (
+    resolvedTarget !== resolvedBase &&
+    !resolvedTarget.startsWith(`${resolvedBase}${path.sep}`)
+  ) {
+    return jsonError(400, "Invalid path");
+  }
+
   const buffer = Buffer.from(await file.arrayBuffer());
   await fs.writeFile(absPath, buffer);
 
   // 앱/DB에 저장할 경로는 "업로드 루트 기준 상대 경로"가 깔끔함
   // 예: photos/2026/01/uuid.jpg
-  const storagePath = safeJoinPosix("photos", yyyy, mm, filename);
+  const storagePath = safeJoinPosix("photos", dashboardId, yyyy, mm, filename);
+  if (!isValidPhotoStoragePathForDashboard(storagePath, dashboardId)) {
+    return jsonError(500, "Failed to generate storage path");
+  }
 
   return NextResponse.json({
     ok: true,

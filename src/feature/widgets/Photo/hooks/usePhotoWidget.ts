@@ -26,7 +26,7 @@ export function usePhotoWidget(widgetId: Id) {
     if (!photo) return null;
     if (photo.blob) return URL.createObjectURL(photo.blob);
     if (photo.serverStoragePath) {
-      return `/api/photos?path=${encodeURIComponent(photo.serverStoragePath)}`;
+      return `/api/photos?id=${encodeURIComponent(photo.id)}`;
     }
     return null;
   }, [photo]);

@@ -3,6 +3,10 @@ import prisma from "@/server/prisma";
 import { jsonError, parseJson } from "@/server/api-response";
 import { isAdminRole, requireUser } from "@/server/api-auth";
 import { enforceRateLimit, parsePositiveIntEnv } from "@/server/request-guards";
+import {
+  isLegacyPhotoStoragePath,
+  isValidPhotoStoragePathForDashboard,
+} from "@/server/photo-path";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -573,6 +577,20 @@ export async function POST(request: Request) {
             })
         );
         const storagePath = requireString(payload, "storagePath");
+        const existingPhoto = await prisma.photo.findUnique({
+          where: { id },
+          select: { storagePath: true },
+        });
+        const allowLegacyPath =
+          Boolean(existingPhoto) &&
+          existingPhoto?.storagePath === storagePath &&
+          isLegacyPhotoStoragePath(storagePath);
+        if (
+          !allowLegacyPath &&
+          !isValidPhotoStoragePathForDashboard(storagePath, dashboardId)
+        ) {
+          throw new Error("Invalid photo path");
+        }
         const mimeType = requireString(payload, "mimeType");
         const caption = optionalString(payload, "caption");
         const takenAt = parseOptionalDate(payload.takenAt);

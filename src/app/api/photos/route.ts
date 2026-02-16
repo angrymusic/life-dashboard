@@ -2,6 +2,10 @@ import { NextResponse } from "next/server";
 import { jsonError } from "@/server/api-response";
 import { requireUser } from "@/server/api-auth";
 import prisma from "@/server/prisma";
+import {
+  isValidPhotoStoragePathForDashboard,
+  normalizeStoragePath,
+} from "@/server/photo-path";
 import path from "path";
 import fs from "fs/promises";
 
@@ -28,32 +32,21 @@ function contentTypeFromExt(ext: string) {
   }
 }
 
-function normalizeStoragePath(value: string) {
-  const normalized = path.posix.normalize(value.replaceAll("\\", "/"));
-  const trimmed = normalized.replace(/^\/+/, "");
-  if (!trimmed) return null;
-  if (trimmed.startsWith("..")) return null;
-  return trimmed;
-}
-
 export async function GET(request: Request) {
   const userResult = await requireUser();
   if (!userResult.ok) return userResult.response;
   const userId = userResult.context.userId;
 
   const { searchParams } = new URL(request.url);
-  const rawPath = searchParams.get("path");
-  if (!rawPath) {
-    return jsonError(400, "Missing path");
+  const rawPhotoId = searchParams.get("id");
+  const photoId = rawPhotoId?.trim();
+  if (!photoId) {
+    return jsonError(400, "Missing id");
   }
-  const storagePath = normalizeStoragePath(rawPath);
-  if (!storagePath) {
-    return jsonError(400, "Invalid path");
-  }
-
-  const photo = await prisma.photo.findFirst({
-    where: { storagePath },
+  const photo = await prisma.photo.findUnique({
+    where: { id: photoId },
     select: {
+      id: true,
       storagePath: true,
       dashboard: {
         select: {
@@ -84,11 +77,27 @@ export async function GET(request: Request) {
   }
 
   const baseDir = process.env.UPLOAD_DIR ?? path.join(process.cwd(), "data", "uploads");
-  const absPath = path.join(baseDir, photo.storagePath);
+  if (
+    !isValidPhotoStoragePathForDashboard(photo.storagePath, photo.dashboard.id, {
+      allowLegacy: true,
+    })
+  ) {
+    return jsonError(404, "File not found");
+  }
+
+  const normalizedStoragePath = normalizeStoragePath(photo.storagePath);
+  if (!normalizedStoragePath) {
+    return jsonError(404, "File not found");
+  }
+
+  const absPath = path.join(baseDir, normalizedStoragePath);
 
   const resolvedBase = path.resolve(baseDir);
   const resolvedTarget = path.resolve(absPath);
-  if (!resolvedTarget.startsWith(resolvedBase)) {
+  if (
+    resolvedTarget !== resolvedBase &&
+    !resolvedTarget.startsWith(`${resolvedBase}${path.sep}`)
+  ) {
     return jsonError(400, "Invalid path");
   }
 
