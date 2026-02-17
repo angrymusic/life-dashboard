@@ -1,4 +1,9 @@
 import { NextResponse } from "next/server";
+import { requireUser } from "@/server/api-auth";
+import {
+  enforceRateLimit,
+  parsePositiveIntEnv,
+} from "@/server/request-guards";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -160,7 +165,8 @@ async function fetchSpecialDays(
   kind: SpecialDayKind,
   year: number,
   month: number,
-  serviceKey: string
+  serviceKey: string,
+  timeoutMs: number
 ) {
   const cacheKey = buildCacheKey(operation, year, month);
   const cached = readCache(cacheKey);
@@ -179,6 +185,7 @@ async function fetchSpecialDays(
   const response = await fetch(url, {
     headers: { "User-Agent": "lifedashboard" },
     cache: "no-store",
+    signal: AbortSignal.timeout(timeoutMs),
   });
   if (!response.ok) {
     throw new Error("Failed to fetch special days.");
@@ -194,6 +201,20 @@ async function fetchSpecialDays(
 }
 
 export async function GET(request: Request) {
+  const userResult = await requireUser();
+  if (!userResult.ok) return userResult.response;
+  const userId = userResult.context.userId;
+
+  const rateLimit = await enforceRateLimit({
+    key: `special-days:${userId}`,
+    limit: parsePositiveIntEnv(process.env.SPECIAL_DAYS_RATE_LIMIT, 30),
+    windowMs: parsePositiveIntEnv(
+      process.env.SPECIAL_DAYS_RATE_WINDOW_MS,
+      60 * 1000
+    ),
+  });
+  if (!rateLimit.ok) return rateLimit.response;
+
   const { searchParams } = new URL(request.url);
   const year = parseNumber(searchParams.get("year"));
   const month = parseNumber(searchParams.get("month"));
@@ -221,14 +242,26 @@ export async function GET(request: Request) {
   }
 
   try {
+    const timeoutMs = parsePositiveIntEnv(
+      process.env.SPECIAL_DAYS_TIMEOUT_MS,
+      8000
+    );
     const [holidays, anniversaries] = await Promise.all([
-      fetchSpecialDays("getRestDeInfo", "holiday", year, month, serviceKey),
+      fetchSpecialDays(
+        "getRestDeInfo",
+        "holiday",
+        year,
+        month,
+        serviceKey,
+        timeoutMs
+      ),
       fetchSpecialDays(
         "getAnniversaryInfo",
         "anniversary",
         year,
         month,
-        serviceKey
+        serviceKey,
+        timeoutMs
       ),
     ]);
 

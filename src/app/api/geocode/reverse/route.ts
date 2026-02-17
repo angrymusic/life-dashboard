@@ -1,4 +1,11 @@
 import { NextResponse } from "next/server";
+import {
+  enforceRateLimit,
+  parseBooleanEnv,
+  parsePositiveIntEnv,
+  resolveRateLimitClientKey,
+} from "@/server/request-guards";
+import { requireUser } from "@/server/api-auth";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -15,6 +22,12 @@ function parseNumber(value: string | null) {
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) return null;
   return parsed;
+}
+
+function normalizeLanguage(value: string) {
+  const normalized = value.trim().toLowerCase();
+  if (/^[a-z]{2,8}$/.test(normalized)) return normalized;
+  return "ko";
 }
 
 function buildReverseGeocodeUrl(
@@ -51,10 +64,30 @@ function parseReverseGeocodeLabel(payload: unknown): string | null {
 }
 
 export async function GET(request: Request) {
+  const requireAuth = parseBooleanEnv(
+    process.env.GEOCODE_REQUIRE_AUTH,
+    true
+  );
+  const userResult = requireAuth ? await requireUser() : null;
+  if (userResult && !userResult.ok) return userResult.response;
+  const clientKey = userResult
+    ? `user:${userResult.context.userId}`
+    : resolveRateLimitClientKey(request);
+
+  const rateLimit = await enforceRateLimit({
+    key: `geocode-reverse:${clientKey}`,
+    limit: parsePositiveIntEnv(process.env.GEOCODE_REVERSE_RATE_LIMIT, 60),
+    windowMs: parsePositiveIntEnv(
+      process.env.GEOCODE_REVERSE_RATE_WINDOW_MS,
+      60 * 1000
+    ),
+  });
+  if (!rateLimit.ok) return rateLimit.response;
+
   const { searchParams } = new URL(request.url);
   const latitude = parseNumber(searchParams.get("lat"));
   const longitude = parseNumber(searchParams.get("lon"));
-  const language = searchParams.get("language") ?? "ko";
+  const language = normalizeLanguage(searchParams.get("language") ?? "ko");
 
   if (latitude === null || longitude === null) {
     return NextResponse.json(
@@ -77,10 +110,15 @@ export async function GET(request: Request) {
 
   try {
     const url = buildReverseGeocodeUrl(latitude, longitude, language);
+    const timeoutMs = parsePositiveIntEnv(
+      process.env.GEOCODE_REVERSE_TIMEOUT_MS,
+      5000
+    );
     const response = await fetch(url, {
       headers: {
         "User-Agent": "lifedashboard",
       },
+      signal: AbortSignal.timeout(timeoutMs),
     });
     if (!response.ok) {
       return NextResponse.json(

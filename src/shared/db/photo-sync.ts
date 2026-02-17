@@ -1,13 +1,19 @@
 import type { LocalPhoto, Photo } from "./schema";
 import { db } from "./core";
 
-async function uploadPhotoFile(file: Blob, mimeType: string) {
+async function uploadPhotoFile(
+  file: Blob,
+  mimeType: string,
+  context: { dashboardId: string; widgetId: string }
+) {
   const uploadFile =
     file instanceof File
       ? file
       : new File([file], `photo-${crypto.randomUUID()}`, { type: mimeType });
   const form = new FormData();
   form.append("file", uploadFile);
+  form.append("dashboardId", context.dashboardId);
+  form.append("widgetId", context.widgetId);
 
   const response = await fetch("/api/migrate/upload-photo", {
     method: "POST",
@@ -47,7 +53,11 @@ export async function ensureServerStoragePath(localPhoto: LocalPhoto) {
   }
   const { storagePath } = await uploadPhotoFile(
     localPhoto.blob,
-    localPhoto.mimeType
+    localPhoto.mimeType,
+    {
+      dashboardId: localPhoto.dashboardId,
+      widgetId: localPhoto.widgetId,
+    }
   );
   await db.localPhotos.update(localPhoto.id, {
     serverStoragePath: storagePath,
