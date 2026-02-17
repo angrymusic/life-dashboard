@@ -1,6 +1,10 @@
 import { useCallback, useMemo } from "react";
 import { useMembers } from "@/shared/db/queries";
 import type { Dashboard, Id, Widget } from "@/shared/db/schema";
+import {
+  canEditWidgetByPermission,
+  resolveDashboardPermissionState,
+} from "@/feature/dashboard/libs/permissions";
 
 type PermissionsParams = {
   activeDashboard?: Dashboard;
@@ -30,24 +34,24 @@ export function useDashboardPermissions({
     );
   }, [activeDashboard, members, authEmail]);
 
-  const isAdmin = !activeDashboard?.groupId || currentMember?.role === "parent";
-  const currentUserId = currentMember?.userId ?? undefined;
-  const canCreateWidget = !activeDashboard?.groupId
-    ? true
-    : Boolean(isSignedIn && currentMember);
-
-  const canEditWidget = useCallback(
-    (widget: Widget) => {
-      if (!activeDashboard?.groupId) return true;
-      if (!isSignedIn) return false;
-      if (isAdmin) return true;
-      if (!currentUserId) return false;
-      return widget.createdBy === currentUserId;
-    },
-    [activeDashboard?.groupId, isSignedIn, isAdmin, currentUserId]
+  const permissionState = useMemo(
+    () =>
+      resolveDashboardPermissionState({
+        isSharedDashboard: Boolean(activeDashboard?.groupId),
+        isSignedIn,
+        member: currentMember,
+      }),
+    [activeDashboard?.groupId, currentMember, isSignedIn]
   );
 
-  const widgetCreatorId = activeDashboard?.groupId ? currentUserId : undefined;
+  const canEditWidget = useCallback(
+    (widget: Widget) => canEditWidgetByPermission(permissionState, widget),
+    [permissionState]
+  );
 
-  return { canCreateWidget, canEditWidget, widgetCreatorId };
+  return {
+    canCreateWidget: permissionState.canCreateWidget,
+    canEditWidget,
+    widgetCreatorId: permissionState.widgetCreatorId,
+  };
 }

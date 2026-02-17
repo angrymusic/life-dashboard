@@ -176,6 +176,15 @@ pnpm dev
 - `pnpm build` - 운영 빌드
 - `pnpm start` - 운영 서버 실행
 - `pnpm lint` - ESLint 실행
+- `pnpm test` - Vitest 단위/라우트 테스트 실행
+- `pnpm test:watch` - Vitest watch 모드 실행
+
+## 테스트 전략
+
+- 권한 로직: `src/feature/dashboard/libs/permissions.test.ts`
+  - 공유/개인 대시보드, parent/child, 작성자 일치 여부를 단위 테스트로 검증합니다.
+- 동기화 적용 로직: `src/app/api/sync/apply/route.test.ts`
+  - 비인증(401), 권한 거부(207), 허용(200), 혼합 배치(부분 성공 207) 흐름을 검증합니다.
 
 ## 프로젝트 구조
 
