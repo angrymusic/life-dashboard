@@ -181,6 +181,7 @@ export function useDashboardSync({
     const syncClientId = getSyncClientId();
     let cancelled = false;
     let timeoutId: number | undefined;
+
     const consumeSelfEcho = (updatedAt: string, sourceClientId?: string) => {
       if (!sourceClientId || sourceClientId !== syncClientId) return false;
       syncLastSeenUpdatedAt(updatedAt);
@@ -192,6 +193,18 @@ export function useDashboardSync({
       return true;
     };
 
+    const handleBaselineUpdatedAt = (updatedAt: string, sourceClientId?: string) => {
+      if (consumeSelfEcho(updatedAt, sourceClientId)) return;
+
+      const lastSeen = lastRemoteUpdatedAtRef.current;
+      if (lastSeen && updatedAt > lastSeen) {
+        handleRemoteUpdatedAt(updatedAt);
+        return;
+      }
+
+      syncLastSeenUpdatedAt(updatedAt);
+    };
+
     const parseAndHandleUpdatedAt = (
       data: string,
       options?: { baseline?: boolean }
@@ -200,7 +213,7 @@ export function useDashboardSync({
         const payload = JSON.parse(data) as { updatedAt?: string; clientId?: string };
         if (typeof payload.updatedAt === "string") {
           if (options?.baseline) {
-            syncLastSeenUpdatedAt(payload.updatedAt);
+            handleBaselineUpdatedAt(payload.updatedAt, payload.clientId);
           } else {
             if (consumeSelfEcho(payload.updatedAt, payload.clientId)) return;
             handleRemoteUpdatedAt(payload.updatedAt);
