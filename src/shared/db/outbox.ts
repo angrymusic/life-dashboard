@@ -7,6 +7,7 @@ import type {
 } from "./schema";
 import { db, nowIso } from "./core";
 import { ensureServerStoragePath, toPhotoRecord } from "./photo-sync";
+import { getSyncClientId } from "./sync-client";
 
 export type WriteOptions = {
   skipOutbox?: boolean;
@@ -259,9 +260,13 @@ export async function applyEventsToServer(events: OutboxEvent[]) {
   if (events.length === 0) {
     return { ok: true, appliedIds: [] } satisfies ServerSyncResponse;
   }
+  const syncClientId = getSyncClientId();
   const response = await fetch("/api/sync/apply", {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      "x-sync-client-id": syncClientId,
+    },
     body: JSON.stringify({ events }),
   });
   const payload = (await response.json()) as ServerSyncResponse | null;
