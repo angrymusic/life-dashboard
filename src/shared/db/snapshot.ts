@@ -37,7 +37,25 @@ type DashboardSnapshot = {
   members?: Member[];
 };
 
-export async function exportDashboardSnapshot(dashboardId: Id) {
+type ExportDashboardSnapshotOptions = {
+  uploadLocalPhotos?: boolean;
+};
+
+async function postDashboardSnapshot(dashboardId: Id, snapshot: DashboardSnapshot) {
+  const response = await fetch(`/api/dashboards/${dashboardId}/snapshot`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(snapshot),
+  });
+  if (!response.ok) {
+    throw new Error("Snapshot sync failed");
+  }
+}
+
+export async function exportDashboardSnapshot(
+  dashboardId: Id,
+  options: ExportDashboardSnapshotOptions = {}
+) {
   const dashboard = await db.dashboards.get(dashboardId);
   if (!dashboard) return null;
   const [
@@ -66,13 +84,16 @@ export async function exportDashboardSnapshot(dashboardId: Id) {
     db.localPhotos.where("dashboardId").equals(dashboardId).toArray(),
   ]);
 
+  const shouldUploadLocalPhotos = options.uploadLocalPhotos !== false;
   const photos: Photo[] = [];
   for (const localPhoto of localPhotos) {
-    if (!localPhoto.serverStoragePath && localPhoto.blob) {
+    if (localPhoto.serverStoragePath) {
+      photos.push(toPhotoRecord(localPhoto, localPhoto.serverStoragePath));
+      continue;
+    }
+    if (shouldUploadLocalPhotos && localPhoto.blob) {
       const storagePath = await ensureServerStoragePath(localPhoto);
       photos.push(toPhotoRecord(localPhoto, storagePath));
-    } else if (localPhoto.serverStoragePath) {
-      photos.push(toPhotoRecord(localPhoto, localPhoto.serverStoragePath));
     }
   }
 
@@ -93,16 +114,21 @@ export async function exportDashboardSnapshot(dashboardId: Id) {
 }
 
 export async function pushDashboardSnapshot(dashboardId: Id) {
-  const snapshot = await exportDashboardSnapshot(dashboardId);
-  if (!snapshot) return;
-  const response = await fetch(`/api/dashboards/${dashboardId}/snapshot`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(snapshot),
+  const bootstrapSnapshot = await exportDashboardSnapshot(dashboardId, {
+    uploadLocalPhotos: false,
   });
-  if (!response.ok) {
-    throw new Error("Snapshot sync failed");
-  }
+  if (!bootstrapSnapshot) return;
+  await postDashboardSnapshot(dashboardId, bootstrapSnapshot);
+
+  const localPhotos = await db.localPhotos.where("dashboardId").equals(dashboardId).toArray();
+  const hasPendingPhotoUpload = localPhotos.some(
+    (localPhoto) => !localPhoto.serverStoragePath && Boolean(localPhoto.blob)
+  );
+  if (!hasPendingPhotoUpload) return;
+
+  const completeSnapshot = await exportDashboardSnapshot(dashboardId);
+  if (!completeSnapshot) return;
+  await postDashboardSnapshot(dashboardId, completeSnapshot);
 }
 
 export async function applyDashboardSnapshot(snapshot: DashboardSnapshot) {

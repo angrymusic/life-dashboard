@@ -2,6 +2,16 @@ import { NextResponse } from "next/server";
 import prisma from "@/server/prisma";
 import { jsonError, parseJson } from "@/server/api-response";
 import { isAdminRole, requireUser } from "@/server/api-auth";
+import {
+  enforceRateLimit,
+  isSafeIdentifier,
+  parsePositiveIntEnv,
+} from "@/server/request-guards";
+import { removePhotoFilesIfUnreferenced } from "@/server/photo-file-cleanup";
+import {
+  isLegacyPhotoStoragePath,
+  isValidPhotoStoragePathForDashboard,
+} from "@/server/photo-path";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -64,8 +74,30 @@ function requireString(obj: Record<string, unknown>, key: string, fallback?: str
 
 function optionalString(obj: Record<string, unknown>, key: string) {
   const value = obj[key];
-  if (typeof value === "string" && value.trim()) return value;
+  if (typeof value === "string" && value.trim()) return value.trim();
   return undefined;
+}
+
+function requireIdentifier(
+  obj: Record<string, unknown>,
+  key: string,
+  fallback?: string
+) {
+  const value = requireString(obj, key, fallback);
+  const normalized = value.trim();
+  if (!isSafeIdentifier(normalized)) {
+    throw new Error(`Invalid field: ${key}`);
+  }
+  return normalized;
+}
+
+function optionalIdentifier(obj: Record<string, unknown>, key: string) {
+  const value = optionalString(obj, key);
+  if (!value) return undefined;
+  if (!isSafeIdentifier(value)) {
+    throw new Error(`Invalid field: ${key}`);
+  }
+  return value;
 }
 
 function parseDate(value: unknown, fallback?: Date) {
@@ -94,15 +126,22 @@ function parseEvents(body: unknown): SyncEvent[] | null {
     if (typeof id !== "string" || typeof entityType !== "string" || typeof entityId !== "string") {
       return null;
     }
+    if (!isSafeIdentifier(entityId)) return null;
     if (operation !== "upsert" && operation !== "delete") return null;
+    const dashboardId =
+      typeof item.dashboardId === "string" ? item.dashboardId : undefined;
+    const widgetId = typeof item.widgetId === "string" ? item.widgetId : undefined;
+    if (dashboardId && !isSafeIdentifier(dashboardId)) return null;
+    if (widgetId && !isSafeIdentifier(widgetId)) return null;
+
     events.push({
       id,
       entityType,
       entityId,
       operation,
       payload: isRecord(item.payload) ? item.payload : undefined,
-      dashboardId: typeof item.dashboardId === "string" ? item.dashboardId : undefined,
-      widgetId: typeof item.widgetId === "string" ? item.widgetId : undefined,
+      dashboardId,
+      widgetId,
       createdAt: typeof item.createdAt === "string" ? item.createdAt : undefined,
       updatedAt: typeof item.updatedAt === "string" ? item.updatedAt : undefined,
     });
@@ -120,7 +159,22 @@ export async function POST(request: Request) {
   if (!userResult.ok) return userResult.response;
   const userId = userResult.context.userId;
 
-  const parsedBody = await parseJson(request);
+  const rateLimit = await enforceRateLimit({
+    key: `sync-apply:${userId}`,
+    limit: parsePositiveIntEnv(process.env.SYNC_APPLY_RATE_LIMIT, 120),
+    windowMs: parsePositiveIntEnv(
+      process.env.SYNC_APPLY_RATE_WINDOW_MS,
+      60 * 1000
+    ),
+  });
+  if (!rateLimit.ok) return rateLimit.response;
+
+  const parsedBody = await parseJson(request, {
+    maxBytes: parsePositiveIntEnv(
+      process.env.SYNC_APPLY_MAX_BYTES,
+      1024 * 1024
+    ),
+  });
   if (!parsedBody.ok) return parsedBody.response;
   const body = parsedBody.body;
 
@@ -129,6 +183,13 @@ export async function POST(request: Request) {
     return jsonError(400, "Invalid request body", {
       hint: "Send { events: SyncEvent[] }",
     });
+  }
+  const maxEvents = parsePositiveIntEnv(
+    process.env.SYNC_APPLY_MAX_EVENTS,
+    2000
+  );
+  if (events.length > maxEvents) {
+    return jsonError(413, "Too many events", { maxEvents });
   }
 
   const dashboardCache = new Map<
@@ -165,11 +226,6 @@ export async function POST(request: Request) {
     return member ?? null;
   };
 
-  const hasGroupAccess = async (groupId: string) => {
-    const member = await getGroupMember(groupId);
-    return Boolean(member);
-  };
-
   const getWidget = async (widgetId: string) => {
     if (widgetCache.has(widgetId)) {
       return widgetCache.get(widgetId) ?? null;
@@ -192,7 +248,7 @@ export async function POST(request: Request) {
       if (!member) throw new Error("Forbidden");
       return { dashboard, role: member.role };
     }
-    if (dashboard.ownerId && dashboard.ownerId !== userId) {
+    if (!dashboard.ownerId || dashboard.ownerId !== userId) {
       throw new Error("Forbidden");
     }
     return { dashboard, role: "parent" };
@@ -204,6 +260,13 @@ export async function POST(request: Request) {
       throw new Error("Forbidden");
     }
     return access.dashboard;
+  };
+
+  const ensureGroupAdminAccess = async (groupId: string) => {
+    const member = await getGroupMember(groupId);
+    if (!member || !isAdminRole(member.role)) {
+      throw new Error("Forbidden");
+    }
   };
 
   const ensureWidgetAccess = async (
@@ -231,38 +294,85 @@ export async function POST(request: Request) {
     await ensureWidgetAccess(widgetId, dashboardId);
   };
 
+  type ScopedEntity = {
+    widgetId: string;
+    dashboardId: string;
+  };
+
+  const ensureScopedEntityUpsertAccess = async (
+    event: SyncEvent,
+    payload: Record<string, unknown>,
+    loadExisting: (entityId: string) => Promise<ScopedEntity | null>
+  ) => {
+    const id = requireIdentifier(payload, "id", event.entityId);
+    const dashboardId = requireIdentifier(
+      payload,
+      "dashboardId",
+      event.dashboardId
+    );
+    const widgetId = requireIdentifier(payload, "widgetId", event.widgetId);
+
+    const existing = await loadExisting(id);
+    if (existing) {
+      if (
+        existing.dashboardId !== dashboardId ||
+        existing.widgetId !== widgetId
+      ) {
+        throw new Error("Entity scope mismatch");
+      }
+      await ensureWidgetEditAccess(existing.widgetId, existing.dashboardId);
+      return { id, dashboardId, widgetId };
+    }
+
+    await ensureWidgetEditAccess(widgetId, dashboardId);
+    return { id, dashboardId, widgetId };
+  };
+
   const ensureEventWidgetDeleteAccess = async (event: SyncEvent) => {
     if (!event.widgetId) throw new Error("Missing widgetId");
-    await ensureWidgetAccess(event.widgetId, event.dashboardId, { allowMissing: true });
+    const widget = await ensureWidgetAccess(event.widgetId, event.dashboardId, {
+      allowMissing: true,
+    });
+    const dashboardId = event.dashboardId ?? widget?.dashboardId;
+    if (!dashboardId) throw new Error("Missing dashboardId");
+    return { widgetId: event.widgetId, dashboardId };
   };
 
   const handlers: Record<EntityType, EntityHandler> = {
     dashboard: {
       delete: async (event) => {
         const dashboard = await getDashboard(event.entityId);
-        if (dashboard?.groupId) {
-          const allowed = await hasGroupAccess(dashboard.groupId);
-          if (!allowed) throw new Error("Forbidden");
-        } else if (dashboard?.ownerId && dashboard.ownerId !== userId) {
+        if (!dashboard) return;
+        if (dashboard.groupId) {
+          const member = await getGroupMember(dashboard.groupId);
+          if (!member || !isAdminRole(member.role)) throw new Error("Forbidden");
+        } else if (!dashboard.ownerId || dashboard.ownerId !== userId) {
           throw new Error("Forbidden");
         }
+
+        const photosToCleanup = await prisma.photo.findMany({
+          where: { dashboardId: event.entityId },
+          select: { dashboardId: true, storagePath: true },
+        });
         await prisma.dashboard.deleteMany({ where: { id: event.entityId } });
+        await removePhotoFilesIfUnreferenced(photosToCleanup);
+        dashboardCache.set(event.entityId, null);
       },
       upsert: async (event, payload) => {
-        const id = requireString(payload, "id", event.entityId);
+        const id = requireIdentifier(payload, "id", event.entityId);
         const name = requireString(payload, "name", "Dashboard");
-        const groupId = optionalString(payload, "groupId");
+        const groupId = optionalIdentifier(payload, "groupId");
         const createdAt = parseDate(payload.createdAt ?? event.createdAt);
         const updatedAt = parseDate(payload.updatedAt ?? event.updatedAt);
 
         const existing = await getDashboard(id);
         if (existing) {
           await ensureDashboardAdminAccess(existing.id);
-        } else if (groupId) {
-          const member = await getGroupMember(groupId);
-          if (!member || !isAdminRole(member.role)) {
-            throw new Error("Forbidden");
+          if (groupId && groupId !== existing.groupId) {
+            await ensureGroupAdminAccess(groupId);
           }
+        } else if (groupId) {
+          await ensureGroupAdminAccess(groupId);
         }
 
         await prisma.dashboard.upsert({
@@ -282,6 +392,11 @@ export async function POST(request: Request) {
             updatedAt,
           },
         });
+        dashboardCache.set(id, {
+          id,
+          ownerId: userId,
+          groupId: groupId ?? existing?.groupId ?? null,
+        });
       },
     },
     widget: {
@@ -290,11 +405,28 @@ export async function POST(request: Request) {
           allowMissing: true,
         });
         if (!widget) return;
-        await prisma.widget.deleteMany({ where: { id: event.entityId } });
+        const photosToCleanup = await prisma.photo.findMany({
+          where: {
+            widgetId: event.entityId,
+            dashboardId: widget.dashboardId,
+          },
+          select: { dashboardId: true, storagePath: true },
+        });
+        await prisma.widget.deleteMany({
+          where: {
+            id: event.entityId,
+            dashboardId: widget.dashboardId,
+          },
+        });
+        await removePhotoFilesIfUnreferenced(photosToCleanup);
       },
       upsert: async (event, payload) => {
-        const id = requireString(payload, "id", event.entityId);
-        const dashboardId = requireString(payload, "dashboardId", event.dashboardId);
+        const id = requireIdentifier(payload, "id", event.entityId);
+        const dashboardId = requireIdentifier(
+          payload,
+          "dashboardId",
+          event.dashboardId
+        );
         const existingWidget = await getWidget(id);
         if (existingWidget) {
           await ensureWidgetEditAccess(id, dashboardId);
@@ -331,14 +463,25 @@ export async function POST(request: Request) {
     },
     memo: {
       delete: async (event) => {
-        await ensureEventWidgetDeleteAccess(event);
-        await prisma.memo.deleteMany({ where: { id: event.entityId } });
+        const scope = await ensureEventWidgetDeleteAccess(event);
+        await prisma.memo.deleteMany({
+          where: {
+            id: event.entityId,
+            widgetId: scope.widgetId,
+            dashboardId: scope.dashboardId,
+          },
+        });
       },
       upsert: async (event, payload) => {
-        const id = requireString(payload, "id", event.entityId);
-        const dashboardId = requireString(payload, "dashboardId", event.dashboardId);
-        const widgetId = requireString(payload, "widgetId", event.widgetId);
-        await ensureWidgetEditAccess(widgetId, dashboardId);
+        const { id, dashboardId, widgetId } = await ensureScopedEntityUpsertAccess(
+          event,
+          payload,
+          async (entityId) =>
+            prisma.memo.findUnique({
+              where: { id: entityId },
+              select: { widgetId: true, dashboardId: true },
+            })
+        );
         const text = requireString(payload, "text");
         const color = optionalString(payload, "color");
         const createdAt = parseDate(payload.createdAt ?? event.createdAt);
@@ -367,14 +510,25 @@ export async function POST(request: Request) {
     },
     todo: {
       delete: async (event) => {
-        await ensureEventWidgetDeleteAccess(event);
-        await prisma.todo.deleteMany({ where: { id: event.entityId } });
+        const scope = await ensureEventWidgetDeleteAccess(event);
+        await prisma.todo.deleteMany({
+          where: {
+            id: event.entityId,
+            widgetId: scope.widgetId,
+            dashboardId: scope.dashboardId,
+          },
+        });
       },
       upsert: async (event, payload) => {
-        const id = requireString(payload, "id", event.entityId);
-        const dashboardId = requireString(payload, "dashboardId", event.dashboardId);
-        const widgetId = requireString(payload, "widgetId", event.widgetId);
-        await ensureWidgetEditAccess(widgetId, dashboardId);
+        const { id, dashboardId, widgetId } = await ensureScopedEntityUpsertAccess(
+          event,
+          payload,
+          async (entityId) =>
+            prisma.todo.findUnique({
+              where: { id: entityId },
+              select: { widgetId: true, dashboardId: true },
+            })
+        );
         const date = requireString(payload, "date");
         const title = requireString(payload, "title");
         const done = Boolean(payload.done);
@@ -409,14 +563,25 @@ export async function POST(request: Request) {
     },
     dday: {
       delete: async (event) => {
-        await ensureEventWidgetDeleteAccess(event);
-        await prisma.dday.deleteMany({ where: { id: event.entityId } });
+        const scope = await ensureEventWidgetDeleteAccess(event);
+        await prisma.dday.deleteMany({
+          where: {
+            id: event.entityId,
+            widgetId: scope.widgetId,
+            dashboardId: scope.dashboardId,
+          },
+        });
       },
       upsert: async (event, payload) => {
-        const id = requireString(payload, "id", event.entityId);
-        const dashboardId = requireString(payload, "dashboardId", event.dashboardId);
-        const widgetId = requireString(payload, "widgetId", event.widgetId);
-        await ensureWidgetEditAccess(widgetId, dashboardId);
+        const { id, dashboardId, widgetId } = await ensureScopedEntityUpsertAccess(
+          event,
+          payload,
+          async (entityId) =>
+            prisma.dday.findUnique({
+              where: { id: entityId },
+              select: { widgetId: true, dashboardId: true },
+            })
+        );
         const title = requireString(payload, "title");
         const date = requireString(payload, "date");
         const color = optionalString(payload, "color");
@@ -448,15 +613,57 @@ export async function POST(request: Request) {
     },
     photo: {
       delete: async (event) => {
-        await ensureEventWidgetDeleteAccess(event);
-        await prisma.photo.deleteMany({ where: { id: event.entityId } });
+        const scope = await ensureEventWidgetDeleteAccess(event);
+        const photo = await prisma.photo.findUnique({
+          where: { id: event.entityId },
+          select: { dashboardId: true, widgetId: true, storagePath: true },
+        });
+        const deleted = await prisma.photo.deleteMany({
+          where: {
+            id: event.entityId,
+            widgetId: scope.widgetId,
+            dashboardId: scope.dashboardId,
+          },
+        });
+        if (
+          deleted.count > 0 &&
+          photo &&
+          photo.dashboardId === scope.dashboardId &&
+          photo.widgetId === scope.widgetId
+        ) {
+          await removePhotoFilesIfUnreferenced([
+            {
+              dashboardId: photo.dashboardId,
+              storagePath: photo.storagePath,
+            },
+          ]);
+        }
       },
       upsert: async (event, payload) => {
-        const id = requireString(payload, "id", event.entityId);
-        const dashboardId = requireString(payload, "dashboardId", event.dashboardId);
-        const widgetId = requireString(payload, "widgetId", event.widgetId);
-        await ensureWidgetEditAccess(widgetId, dashboardId);
+        const { id, dashboardId, widgetId } = await ensureScopedEntityUpsertAccess(
+          event,
+          payload,
+          async (entityId) =>
+            prisma.photo.findUnique({
+              where: { id: entityId },
+              select: { widgetId: true, dashboardId: true },
+            })
+        );
         const storagePath = requireString(payload, "storagePath");
+        const existingPhoto = await prisma.photo.findUnique({
+          where: { id },
+          select: { storagePath: true },
+        });
+        const allowLegacyPath =
+          Boolean(existingPhoto) &&
+          existingPhoto?.storagePath === storagePath &&
+          isLegacyPhotoStoragePath(storagePath);
+        if (
+          !allowLegacyPath &&
+          !isValidPhotoStoragePathForDashboard(storagePath, dashboardId)
+        ) {
+          throw new Error("Invalid photo path");
+        }
         const mimeType = requireString(payload, "mimeType");
         const caption = optionalString(payload, "caption");
         const takenAt = parseOptionalDate(payload.takenAt);
@@ -490,14 +697,25 @@ export async function POST(request: Request) {
     },
     mood: {
       delete: async (event) => {
-        await ensureEventWidgetDeleteAccess(event);
-        await prisma.mood.deleteMany({ where: { id: event.entityId } });
+        const scope = await ensureEventWidgetDeleteAccess(event);
+        await prisma.mood.deleteMany({
+          where: {
+            id: event.entityId,
+            widgetId: scope.widgetId,
+            dashboardId: scope.dashboardId,
+          },
+        });
       },
       upsert: async (event, payload) => {
-        const id = requireString(payload, "id", event.entityId);
-        const dashboardId = requireString(payload, "dashboardId", event.dashboardId);
-        const widgetId = requireString(payload, "widgetId", event.widgetId);
-        await ensureWidgetEditAccess(widgetId, dashboardId);
+        const { id, dashboardId, widgetId } = await ensureScopedEntityUpsertAccess(
+          event,
+          payload,
+          async (entityId) =>
+            prisma.mood.findUnique({
+              where: { id: entityId },
+              select: { widgetId: true, dashboardId: true },
+            })
+        );
         const date = requireString(payload, "date");
         const mood = requireString(payload, "mood");
         const note = optionalString(payload, "note");
@@ -529,14 +747,25 @@ export async function POST(request: Request) {
     },
     notice: {
       delete: async (event) => {
-        await ensureEventWidgetDeleteAccess(event);
-        await prisma.notice.deleteMany({ where: { id: event.entityId } });
+        const scope = await ensureEventWidgetDeleteAccess(event);
+        await prisma.notice.deleteMany({
+          where: {
+            id: event.entityId,
+            widgetId: scope.widgetId,
+            dashboardId: scope.dashboardId,
+          },
+        });
       },
       upsert: async (event, payload) => {
-        const id = requireString(payload, "id", event.entityId);
-        const dashboardId = requireString(payload, "dashboardId", event.dashboardId);
-        const widgetId = requireString(payload, "widgetId", event.widgetId);
-        await ensureWidgetEditAccess(widgetId, dashboardId);
+        const { id, dashboardId, widgetId } = await ensureScopedEntityUpsertAccess(
+          event,
+          payload,
+          async (entityId) =>
+            prisma.notice.findUnique({
+              where: { id: entityId },
+              select: { widgetId: true, dashboardId: true },
+            })
+        );
         const title = requireString(payload, "title");
         const bodyText = requireString(payload, "body");
         const pinned = typeof payload.pinned === "boolean" ? payload.pinned : undefined;
@@ -568,14 +797,25 @@ export async function POST(request: Request) {
     },
     metric: {
       delete: async (event) => {
-        await ensureEventWidgetDeleteAccess(event);
-        await prisma.metric.deleteMany({ where: { id: event.entityId } });
+        const scope = await ensureEventWidgetDeleteAccess(event);
+        await prisma.metric.deleteMany({
+          where: {
+            id: event.entityId,
+            widgetId: scope.widgetId,
+            dashboardId: scope.dashboardId,
+          },
+        });
       },
       upsert: async (event, payload) => {
-        const id = requireString(payload, "id", event.entityId);
-        const dashboardId = requireString(payload, "dashboardId", event.dashboardId);
-        const widgetId = requireString(payload, "widgetId", event.widgetId);
-        await ensureWidgetEditAccess(widgetId, dashboardId);
+        const { id, dashboardId, widgetId } = await ensureScopedEntityUpsertAccess(
+          event,
+          payload,
+          async (entityId) =>
+            prisma.metric.findUnique({
+              where: { id: entityId },
+              select: { widgetId: true, dashboardId: true },
+            })
+        );
         const name = requireString(payload, "name");
         const unit = optionalString(payload, "unit");
         const chartType = optionalString(payload, "chartType");
@@ -607,15 +847,37 @@ export async function POST(request: Request) {
     },
     metricEntry: {
       delete: async (event) => {
-        await ensureEventWidgetDeleteAccess(event);
-        await prisma.metricEntry.deleteMany({ where: { id: event.entityId } });
+        const scope = await ensureEventWidgetDeleteAccess(event);
+        await prisma.metricEntry.deleteMany({
+          where: {
+            id: event.entityId,
+            widgetId: scope.widgetId,
+            dashboardId: scope.dashboardId,
+          },
+        });
       },
       upsert: async (event, payload) => {
-        const id = requireString(payload, "id", event.entityId);
-        const dashboardId = requireString(payload, "dashboardId", event.dashboardId);
-        const widgetId = requireString(payload, "widgetId", event.widgetId);
-        await ensureWidgetEditAccess(widgetId, dashboardId);
-        const metricId = requireString(payload, "metricId");
+        const { id, dashboardId, widgetId } = await ensureScopedEntityUpsertAccess(
+          event,
+          payload,
+          async (entityId) =>
+            prisma.metricEntry.findUnique({
+              where: { id: entityId },
+              select: { widgetId: true, dashboardId: true },
+            })
+        );
+        const metricId = requireIdentifier(payload, "metricId");
+        const metric = await prisma.metric.findUnique({
+          where: { id: metricId },
+          select: { widgetId: true, dashboardId: true },
+        });
+        if (
+          !metric ||
+          metric.dashboardId !== dashboardId ||
+          metric.widgetId !== widgetId
+        ) {
+          throw new Error("Metric scope mismatch");
+        }
         const date = requireString(payload, "date");
         const value = Number(payload.value);
         if (!Number.isFinite(value)) throw new Error("Invalid value");
@@ -647,14 +909,25 @@ export async function POST(request: Request) {
     },
     calendarEvent: {
       delete: async (event) => {
-        await ensureEventWidgetDeleteAccess(event);
-        await prisma.calendarEvent.deleteMany({ where: { id: event.entityId } });
+        const scope = await ensureEventWidgetDeleteAccess(event);
+        await prisma.calendarEvent.deleteMany({
+          where: {
+            id: event.entityId,
+            widgetId: scope.widgetId,
+            dashboardId: scope.dashboardId,
+          },
+        });
       },
       upsert: async (event, payload) => {
-        const id = requireString(payload, "id", event.entityId);
-        const dashboardId = requireString(payload, "dashboardId", event.dashboardId);
-        const widgetId = requireString(payload, "widgetId", event.widgetId);
-        await ensureWidgetEditAccess(widgetId, dashboardId);
+        const { id, dashboardId, widgetId } = await ensureScopedEntityUpsertAccess(
+          event,
+          payload,
+          async (entityId) =>
+            prisma.calendarEvent.findUnique({
+              where: { id: entityId },
+              select: { widgetId: true, dashboardId: true },
+            })
+        );
         const title = requireString(payload, "title");
         const startAt = parseDate(payload.startAt);
         const endAt = parseOptionalDate(payload.endAt);
@@ -701,14 +974,25 @@ export async function POST(request: Request) {
     },
     weatherCache: {
       delete: async (event) => {
-        await ensureEventWidgetDeleteAccess(event);
-        await prisma.weatherCache.deleteMany({ where: { id: event.entityId } });
+        const scope = await ensureEventWidgetDeleteAccess(event);
+        await prisma.weatherCache.deleteMany({
+          where: {
+            id: event.entityId,
+            widgetId: scope.widgetId,
+            dashboardId: scope.dashboardId,
+          },
+        });
       },
       upsert: async (event, payload) => {
-        const id = requireString(payload, "id", event.entityId);
-        const dashboardId = requireString(payload, "dashboardId", event.dashboardId);
-        const widgetId = requireString(payload, "widgetId", event.widgetId);
-        await ensureWidgetEditAccess(widgetId, dashboardId);
+        const { id, dashboardId, widgetId } = await ensureScopedEntityUpsertAccess(
+          event,
+          payload,
+          async (entityId) =>
+            prisma.weatherCache.findUnique({
+              where: { id: entityId },
+              select: { widgetId: true, dashboardId: true },
+            })
+        );
         const locationKey = requireString(payload, "locationKey");
         const fetchedAt = parseDate(payload.fetchedAt);
         const payloadValue = payload.payload ?? {};

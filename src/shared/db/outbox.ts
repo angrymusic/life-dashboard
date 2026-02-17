@@ -255,6 +255,59 @@ type ServerSyncResponse = {
   errors?: { id: string; error: string }[];
 };
 
+async function clearAppliedOutboxEntries(
+  appliedIds: string[],
+  outboxIdByServerId: Map<string, string>
+) {
+  if (!appliedIds.length) return;
+  const outboxIds = appliedIds
+    .map((id) => outboxIdByServerId.get(id))
+    .filter((id): id is string => Boolean(id));
+  if (outboxIds.length) {
+    await db.outbox.bulkDelete(outboxIds);
+  }
+}
+
+function mergeServerSyncResponses(
+  responses: ServerSyncResponse[]
+): ServerSyncResponse {
+  const appliedIds: string[] = [];
+  const appliedSeen = new Set<string>();
+  const dashboardUpdates = new Map<Id, ISODate>();
+  const errors: { id: string; error: string }[] = [];
+
+  for (const response of responses) {
+    for (const id of response.appliedIds ?? []) {
+      if (appliedSeen.has(id)) continue;
+      appliedSeen.add(id);
+      appliedIds.push(id);
+    }
+    for (const dashboard of response.dashboards ?? []) {
+      const existing = dashboardUpdates.get(dashboard.id);
+      if (!existing || existing < dashboard.updatedAt) {
+        dashboardUpdates.set(dashboard.id, dashboard.updatedAt);
+      }
+    }
+    if (response.errors?.length) {
+      errors.push(...response.errors);
+    }
+  }
+
+  return {
+    ok: errors.length === 0 && responses.every((response) => response.ok),
+    appliedIds,
+    ...(dashboardUpdates.size
+      ? {
+          dashboards: [...dashboardUpdates.entries()].map(([id, updatedAt]) => ({
+            id,
+            updatedAt,
+          })),
+        }
+      : {}),
+    ...(errors.length ? { errors } : {}),
+  };
+}
+
 export async function applyEventsToServer(events: OutboxEvent[]) {
   if (events.length === 0) {
     return { ok: true, appliedIds: [] } satisfies ServerSyncResponse;
@@ -296,7 +349,8 @@ export async function flushOutbox() {
     return { ok: true, appliedIds: [] } satisfies ServerSyncResponse;
   }
 
-  const toSend: OutboxEvent[] = [];
+  const nonPhotoEvents: OutboxEvent[] = [];
+  const pendingPhotoUpserts: OutboxEvent[] = [];
   const outboxIdByServerId = new Map<string, string>();
 
   for (const event of events) {
@@ -310,42 +364,43 @@ export async function flushOutbox() {
           widgetId: event.widgetId,
           now: event.updatedAt,
         });
-        toSend.push(deleteEvent);
+        nonPhotoEvents.push(deleteEvent);
         outboxIdByServerId.set(deleteEvent.id, event.id);
         continue;
       }
-
-      const localPhoto = await db.localPhotos.get(event.entityId);
-      if (!localPhoto) continue;
-      if (!localPhoto.serverStoragePath && !localPhoto.blob) continue;
-      const storagePath = await ensureServerStoragePath(localPhoto);
-      const serverPhoto = toPhotoRecord(localPhoto, storagePath);
-      const upsertEvent = buildUpsertEventForRecord(
-        "photo",
-        serverPhoto,
-        event.updatedAt
-      );
-      if (!upsertEvent) continue;
-      toSend.push(upsertEvent);
-      outboxIdByServerId.set(upsertEvent.id, event.id);
+      pendingPhotoUpserts.push(event);
       continue;
     }
 
-    toSend.push(event);
+    nonPhotoEvents.push(event);
     outboxIdByServerId.set(event.id, event.id);
   }
 
   const dashboardEventIds = new Set<Id>();
-  const dashboardIds = new Set<Id>();
-  for (const event of toSend) {
+  const widgetEventIds = new Set<Id>();
+  const dashboardIdsToEnsure = new Set<Id>();
+  const widgetIdsToEnsure = new Set<Id>();
+  for (const event of nonPhotoEvents) {
     if (event.entityType === "dashboard") {
       dashboardEventIds.add(event.entityId);
-      dashboardIds.add(event.entityId);
     }
-    if (event.dashboardId) dashboardIds.add(event.dashboardId);
+    if (event.entityType === "widget") {
+      widgetEventIds.add(event.entityId);
+    }
+  }
+  for (const event of pendingPhotoUpserts) {
+    if (event.dashboardId) dashboardIdsToEnsure.add(event.dashboardId);
+    if (event.widgetId) widgetIdsToEnsure.add(event.widgetId);
+  }
+  for (const widgetId of widgetIdsToEnsure) {
+    if (widgetEventIds.has(widgetId)) continue;
+    const widget = await db.widgets.get(widgetId);
+    if (widget?.dashboardId) {
+      dashboardIdsToEnsure.add(widget.dashboardId);
+    }
   }
 
-  for (const dashboardId of dashboardIds) {
+  for (const dashboardId of dashboardIdsToEnsure) {
     if (dashboardEventIds.has(dashboardId)) continue;
     const dashboard = await db.dashboards.get(dashboardId);
     if (!dashboard) continue;
@@ -355,20 +410,108 @@ export async function flushOutbox() {
       dashboard.updatedAt
     );
     if (ensureEvent) {
-      toSend.push(ensureEvent);
+      nonPhotoEvents.push(ensureEvent);
       dashboardEventIds.add(dashboardId);
     }
   }
 
-  const response = await applyEventsToServer(sortOutboxEvents(toSend));
-  const applied = response.appliedIds ?? [];
-  if (applied.length) {
-    const outboxIds = applied
-      .map((id) => outboxIdByServerId.get(id))
-      .filter((id): id is string => Boolean(id));
-    if (outboxIds.length) {
-      await db.outbox.bulkDelete(outboxIds);
+  for (const widgetId of widgetIdsToEnsure) {
+    if (widgetEventIds.has(widgetId)) continue;
+    const widget = await db.widgets.get(widgetId);
+    if (!widget) continue;
+    const ensureEvent = buildUpsertEventForRecord(
+      "widget",
+      widget,
+      widget.updatedAt
+    );
+    if (ensureEvent) {
+      nonPhotoEvents.push(ensureEvent);
+      widgetEventIds.add(widgetId);
     }
   }
-  return response;
+
+  const phaseResponses: ServerSyncResponse[] = [];
+  const firstPhaseResponse = await applyEventsToServer(
+    sortOutboxEvents(nonPhotoEvents)
+  );
+  phaseResponses.push(firstPhaseResponse);
+  await clearAppliedOutboxEntries(
+    firstPhaseResponse.appliedIds ?? [],
+    outboxIdByServerId
+  );
+
+  const firstPhaseFailedIds = new Set(
+    (firstPhaseResponse.errors ?? []).map((error) => error.id)
+  );
+  const blockedDashboardIds = new Set<Id>();
+  const blockedWidgetIds = new Set<Id>();
+  for (const event of nonPhotoEvents) {
+    if (event.operation !== "delete") continue;
+    if (event.entityType === "dashboard") blockedDashboardIds.add(event.entityId);
+    if (event.entityType === "widget") blockedWidgetIds.add(event.entityId);
+  }
+
+  const photoEvents: OutboxEvent[] = [];
+  const photoPreparationErrors: { id: string; error: string }[] = [];
+  for (const event of pendingPhotoUpserts) {
+    const dashboardId = event.dashboardId;
+    const widgetId = event.widgetId;
+    if (
+      (dashboardId && blockedDashboardIds.has(dashboardId)) ||
+      (widgetId && blockedWidgetIds.has(widgetId))
+    ) {
+      continue;
+    }
+    if (
+      (dashboardId &&
+        firstPhaseFailedIds.has(buildOutboxId("dashboard", dashboardId))) ||
+      (widgetId && firstPhaseFailedIds.has(buildOutboxId("widget", widgetId)))
+    ) {
+      photoPreparationErrors.push({
+        id: event.id,
+        error: "Deferred photo upload until dashboard/widget sync succeeds",
+      });
+      continue;
+    }
+
+    const localPhoto = await db.localPhotos.get(event.entityId);
+    if (!localPhoto) continue;
+    if (!localPhoto.serverStoragePath && !localPhoto.blob) continue;
+
+    try {
+      const storagePath = await ensureServerStoragePath(localPhoto);
+      const serverPhoto = toPhotoRecord(localPhoto, storagePath);
+      const upsertEvent = buildUpsertEventForRecord(
+        "photo",
+        serverPhoto,
+        event.updatedAt
+      );
+      if (!upsertEvent) continue;
+      photoEvents.push(upsertEvent);
+      outboxIdByServerId.set(upsertEvent.id, event.id);
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Photo upload failed";
+      photoPreparationErrors.push({ id: event.id, error: message });
+    }
+  }
+
+  if (photoEvents.length) {
+    const photoPhaseResponse = await applyEventsToServer(sortOutboxEvents(photoEvents));
+    phaseResponses.push(photoPhaseResponse);
+    await clearAppliedOutboxEntries(
+      photoPhaseResponse.appliedIds ?? [],
+      outboxIdByServerId
+    );
+  }
+
+  if (photoPreparationErrors.length) {
+    phaseResponses.push({
+      ok: false,
+      appliedIds: [],
+      errors: photoPreparationErrors,
+    });
+  }
+
+  return mergeServerSyncResponses(phaseResponses);
 }

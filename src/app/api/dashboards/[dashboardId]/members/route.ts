@@ -2,6 +2,11 @@ import { NextResponse } from "next/server";
 import prisma from "@/server/prisma";
 import { jsonError, parseJson } from "@/server/api-response";
 import { isAdminRole, requireUser } from "@/server/api-auth";
+import {
+  enforceRateLimit,
+  isSafeIdentifier,
+  parsePositiveIntEnv,
+} from "@/server/request-guards";
 import { detectLanguageFromRequest } from "@/shared/i18n/language";
 
 export const runtime = "nodejs";
@@ -36,12 +41,16 @@ function normalizeRoleInput(value: unknown): "parent" | "child" | null {
   return null;
 }
 
+function isLikelyEmail(value: string) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
+
 function parseAddMemberBody(body: unknown): AddMemberInput | null {
   if (!isRecord(body)) return null;
   const emailValue = body.email;
   if (typeof emailValue !== "string") return null;
   const email = emailValue.trim();
-  if (!email) return null;
+  if (!email || email.length > 320 || !isLikelyEmail(email)) return null;
 
   let dashboardName: string | undefined;
   if (typeof body.dashboardName === "string") {
@@ -96,6 +105,25 @@ function tr(language: "ko" | "en", ko: string, en: string) {
   return language === "ko" ? ko : en;
 }
 
+function validateDashboardId(
+  dashboardId: string,
+  language: "ko" | "en"
+): ReturnType<typeof jsonError> | null {
+  if (isSafeIdentifier(dashboardId)) return null;
+  return jsonError(400, tr(language, "대시보드 ID 형식이 올바르지 않아요.", "Invalid dashboard ID"));
+}
+
+async function enforceMembersMutationRateLimit(userId: string, action: string) {
+  return enforceRateLimit({
+    key: `dashboard-members:${action}:${userId}`,
+    limit: parsePositiveIntEnv(process.env.DASHBOARD_MEMBERS_RATE_LIMIT, 60),
+    windowMs: parsePositiveIntEnv(
+      process.env.DASHBOARD_MEMBERS_RATE_WINDOW_MS,
+      60 * 1000
+    ),
+  });
+}
+
 function mapMember(member: {
   id: string;
   groupId: string;
@@ -128,8 +156,15 @@ export async function POST(
   const userResult = await requireUser();
   if (!userResult.ok) return userResult.response;
   const { user: requester, email: sessionEmail } = userResult.context;
+  const rateLimit = await enforceMembersMutationRateLimit(requester.id, "post");
+  if (!rateLimit.ok) return rateLimit.response;
 
-  const parsedBody = await parseJson(request);
+  const parsedBody = await parseJson(request, {
+    maxBytes: parsePositiveIntEnv(
+      process.env.DASHBOARD_MEMBERS_MAX_BYTES,
+      64 * 1024
+    ),
+  });
   if (!parsedBody.ok) return parsedBody.response;
   const body = parsedBody.body;
 
@@ -145,6 +180,9 @@ export async function POST(
   }
 
   const { dashboardId } = await params;
+  const dashboardIdError = validateDashboardId(dashboardId, language);
+  if (dashboardIdError) return dashboardIdError;
+
   let dashboard = await prisma.dashboard.findUnique({
     where: { id: dashboardId },
   });
@@ -178,7 +216,7 @@ export async function POST(
     if (!member || !isAdminRole(member.role)) {
       return jsonError(403, tr(language, "권한이 없어요.", "Forbidden"));
     }
-  } else if (dashboard.ownerId && dashboard.ownerId !== requester.id) {
+  } else if (!dashboard.ownerId || dashboard.ownerId !== requester.id) {
     return jsonError(403, tr(language, "권한이 없어요.", "Forbidden"));
   }
 
@@ -195,21 +233,8 @@ export async function POST(
     );
   }
 
-  const targetUser = await prisma.user.findFirst({
-    where: {
-      email: {
-        equals: normalizedEmail,
-        mode: "insensitive",
-      },
-    },
-  });
-  if (!targetUser || !targetUser.email) {
-    return jsonError(
-      404,
-      tr(language, "사용자를 찾을 수 없어요.", "User not found"),
-      { email: parsed.email }
-    );
-  }
+  const targetEmail = normalizedEmail;
+  const targetDisplayName = targetEmail;
 
   let groupId = dashboard.groupId;
   if (!groupId) {
@@ -257,22 +282,18 @@ export async function POST(
     where: {
       groupId_email: {
         groupId,
-        email: targetUser.email,
+        email: targetEmail,
       },
     },
     update: {
-      userId: targetUser.id,
       role: parsed.role,
-      displayName: targetUser.name ?? targetUser.email,
-      avatarUrl: targetUser.image,
     },
     create: {
       groupId,
-      userId: targetUser.id,
-      email: targetUser.email,
+      email: targetEmail,
       role: parsed.role,
-      displayName: targetUser.name ?? targetUser.email,
-      avatarUrl: targetUser.image,
+      displayName: targetDisplayName,
+      avatarUrl: null,
     },
   });
 
@@ -300,8 +321,15 @@ export async function PATCH(
   const userResult = await requireUser();
   if (!userResult.ok) return userResult.response;
   const { user: requester } = userResult.context;
+  const rateLimit = await enforceMembersMutationRateLimit(requester.id, "patch");
+  if (!rateLimit.ok) return rateLimit.response;
 
-  const parsedBody = await parseJson(request);
+  const parsedBody = await parseJson(request, {
+    maxBytes: parsePositiveIntEnv(
+      process.env.DASHBOARD_MEMBERS_MAX_BYTES,
+      64 * 1024
+    ),
+  });
   if (!parsedBody.ok) return parsedBody.response;
   const body = parsedBody.body;
 
@@ -317,6 +345,9 @@ export async function PATCH(
   }
 
   const { dashboardId } = await params;
+  const dashboardIdError = validateDashboardId(dashboardId, language);
+  if (dashboardIdError) return dashboardIdError;
+
   const dashboard = await prisma.dashboard.findUnique({
     where: { id: dashboardId },
   });
@@ -390,8 +421,15 @@ export async function DELETE(
   const userResult = await requireUser();
   if (!userResult.ok) return userResult.response;
   const { user: requester } = userResult.context;
+  const rateLimit = await enforceMembersMutationRateLimit(requester.id, "delete");
+  if (!rateLimit.ok) return rateLimit.response;
 
-  const parsedBody = await parseJson(request);
+  const parsedBody = await parseJson(request, {
+    maxBytes: parsePositiveIntEnv(
+      process.env.DASHBOARD_MEMBERS_MAX_BYTES,
+      64 * 1024
+    ),
+  });
   if (!parsedBody.ok) return parsedBody.response;
   const body = parsedBody.body;
 
@@ -407,6 +445,8 @@ export async function DELETE(
   }
 
   const { dashboardId } = await params;
+  const dashboardIdError = validateDashboardId(dashboardId, language);
+  if (dashboardIdError) return dashboardIdError;
 
   const dashboard = await prisma.dashboard.findUnique({
     where: { id: dashboardId },

@@ -1,4 +1,5 @@
 import type { Prisma } from "@prisma/client";
+import { isValidPhotoStoragePathForDashboard } from "@/server/photo-path";
 
 export type SnapshotPayload = {
   dashboard: {
@@ -100,6 +101,21 @@ export function validateSnapshotPayload(
     if (value === null || value === undefined) continue;
     if (!Array.isArray(value) || value.some((item) => !isRecord(item))) {
       return { ok: false, status: 400, error: "Invalid snapshot payload" };
+    }
+  }
+
+  const photos = snapshot.photos ?? [];
+  for (const photo of photos) {
+    const storagePath = photo.storagePath;
+    if (typeof storagePath !== "string") {
+      return { ok: false, status: 400, error: "Invalid snapshot payload" };
+    }
+    if (
+      !isValidPhotoStoragePathForDashboard(storagePath, dashboardId, {
+        allowLegacy: true,
+      })
+    ) {
+      return { ok: false, status: 400, error: "Invalid photo path" };
     }
   }
 
@@ -254,10 +270,14 @@ export function serializeSnapshot(
 export async function persistSnapshot(
   tx: Prisma.TransactionClient,
   serialized: SerializedSnapshot,
-  context: { userId: string; existing: { ownerId: string | null; groupId: string | null } | null }
+  context: {
+    userId: string;
+    existing: { ownerId: string | null; groupId: string | null } | null;
+    resolvedGroupId: string | null;
+  }
 ) {
   const dashboardId = serialized.dashboardId;
-  const groupId = context.existing?.groupId ?? serialized.groupId ?? null;
+  const groupId = context.resolvedGroupId;
 
   await tx.metricEntry.deleteMany({ where: { dashboardId } });
   await tx.metric.deleteMany({ where: { dashboardId } });

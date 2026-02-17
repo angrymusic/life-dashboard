@@ -1,6 +1,14 @@
 // app/api/migrate/upload-photo/route.ts
 import { NextResponse } from "next/server";
 import { jsonError } from "@/server/api-response";
+import { isAdminRole, requireUser } from "@/server/api-auth";
+import prisma from "@/server/prisma";
+import {
+  enforceRateLimit,
+  isSafeIdentifier,
+  parsePositiveIntEnv,
+} from "@/server/request-guards";
+import { isValidPhotoStoragePathForDashboard } from "@/server/photo-path";
 import path from "path";
 import fs from "fs/promises";
 
@@ -30,18 +38,262 @@ function extFromMime(mime: string): string {
   }
 }
 
+function hasBytesAt(source: Uint8Array, signature: number[], offset = 0) {
+  if (source.length < offset + signature.length) return false;
+  for (let index = 0; index < signature.length; index += 1) {
+    if (source[offset + index] !== signature[index]) return false;
+  }
+  return true;
+}
+
+function detectImageMimeFromMagic(bytes: Uint8Array): string | null {
+  if (hasBytesAt(bytes, [0xff, 0xd8, 0xff])) {
+    return "image/jpeg";
+  }
+
+  if (hasBytesAt(bytes, [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a])) {
+    return "image/png";
+  }
+
+  if (
+    hasBytesAt(bytes, [0x47, 0x49, 0x46, 0x38, 0x37, 0x61]) ||
+    hasBytesAt(bytes, [0x47, 0x49, 0x46, 0x38, 0x39, 0x61])
+  ) {
+    return "image/gif";
+  }
+
+  if (
+    hasBytesAt(bytes, [0x52, 0x49, 0x46, 0x46]) &&
+    hasBytesAt(bytes, [0x57, 0x45, 0x42, 0x50], 8)
+  ) {
+    return "image/webp";
+  }
+
+  if (hasBytesAt(bytes, [0x66, 0x74, 0x79, 0x70], 4)) {
+    const majorBrand = String.fromCharCode(...bytes.slice(8, 12));
+    const heicBrands = new Set(["heic", "heix", "heim", "heis"]);
+    const heifBrands = new Set(["heif", "hevx", "mif1", "msf1"]);
+    if (heicBrands.has(majorBrand)) {
+      return "image/heic";
+    }
+    if (heifBrands.has(majorBrand)) {
+      return "image/heif";
+    }
+  }
+
+  return null;
+}
+
+function isCompatibleImageMime(declaredMime: string, detectedMime: string) {
+  if (declaredMime === detectedMime) return true;
+  if (
+    (declaredMime === "image/heic" && detectedMime === "image/heif") ||
+    (declaredMime === "image/heif" && detectedMime === "image/heic")
+  ) {
+    return true;
+  }
+  return false;
+}
+
 function safeJoinPosix(...parts: string[]) {
   // storagePath를 항상 "/"로 통일
   return parts.join("/").replaceAll("\\", "/");
 }
 
+function readTextField(form: FormData, key: string) {
+  const value = form.get(key);
+  if (typeof value !== "string") return null;
+  const trimmed = value.trim();
+  return trimmed || null;
+}
+
+function parseContentLength(request: Request) {
+  const raw = request.headers.get("content-length");
+  if (!raw) return null;
+  const parsed = Number(raw);
+  if (!Number.isFinite(parsed) || parsed < 0) return null;
+  return parsed;
+}
+
+function concatChunks(chunks: Uint8Array[], totalBytes: number) {
+  const merged = new Uint8Array(totalBytes);
+  let offset = 0;
+  for (const chunk of chunks) {
+    merged.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return merged;
+}
+
+async function parseMultipartFormDataWithLimit(
+  request: Request,
+  maxBytes: number,
+  contentType: string
+) {
+  const contentLength = parseContentLength(request);
+  if (contentLength !== null && contentLength > maxBytes) {
+    return {
+      ok: false as const,
+      response: jsonError(413, "File too large", { maxBytes }),
+    };
+  }
+
+  if (!request.body) {
+    return {
+      ok: false as const,
+      response: jsonError(400, "Invalid multipart body"),
+    };
+  }
+
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let totalBytes = 0;
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      if (!value) continue;
+      totalBytes += value.byteLength;
+      if (totalBytes > maxBytes) {
+        try {
+          await reader.cancel();
+        } catch {
+          // Ignore cancel errors.
+        }
+        return {
+          ok: false as const,
+          response: jsonError(413, "File too large", { maxBytes }),
+        };
+      }
+      chunks.push(value);
+    }
+  } catch {
+    return {
+      ok: false as const,
+      response: jsonError(400, "Invalid multipart body"),
+    };
+  }
+
+  try {
+    const body = concatChunks(chunks, totalBytes);
+    const multipartRequest = new Request("http://localhost/_internal/upload", {
+      method: "POST",
+      headers: { "content-type": contentType },
+      body,
+    });
+    const form = await multipartRequest.formData();
+    return { ok: true as const, form };
+  } catch {
+    return {
+      ok: false as const,
+      response: jsonError(400, "Invalid multipart form data"),
+    };
+  }
+}
+
+async function ensureDashboardUploadAccess(params: {
+  dashboardId: string;
+  widgetId: string;
+  userId: string;
+}) {
+  const dashboard = await prisma.dashboard.findUnique({
+    where: { id: params.dashboardId },
+    select: { id: true, ownerId: true, groupId: true },
+  });
+  if (!dashboard) {
+    throw new Error("Dashboard not found");
+  }
+
+  let role: string | null = null;
+  if (dashboard.groupId) {
+    const member = await prisma.groupMember.findFirst({
+      where: { groupId: dashboard.groupId, userId: params.userId },
+      select: { role: true },
+    });
+    if (!member) {
+      throw new Error("Forbidden");
+    }
+    role = member.role;
+  } else if (!dashboard.ownerId || dashboard.ownerId !== params.userId) {
+    throw new Error("Forbidden");
+  }
+
+  const widget = await prisma.widget.findUnique({
+    where: { id: params.widgetId },
+    select: { dashboardId: true, createdBy: true },
+  });
+  if (!widget) {
+    throw new Error("Widget not found");
+  }
+
+  if (widget.dashboardId !== params.dashboardId) {
+    throw new Error("Widget dashboard mismatch");
+  }
+
+  if (dashboard.groupId && !isAdminRole(role)) {
+    if (widget.createdBy !== params.userId) {
+      throw new Error("Forbidden");
+    }
+  }
+}
+
 export async function POST(request: Request) {
+  const userResult = await requireUser();
+  if (!userResult.ok) return userResult.response;
+  const { userId } = userResult.context;
+
+  const rateLimit = await enforceRateLimit({
+    key: `photo-upload:${userId}`,
+    limit: parsePositiveIntEnv(process.env.PHOTO_UPLOAD_RATE_LIMIT, 30),
+    windowMs: parsePositiveIntEnv(
+      process.env.PHOTO_UPLOAD_RATE_WINDOW_MS,
+      60 * 1000
+    ),
+  });
+  if (!rateLimit.ok) return rateLimit.response;
+
+  const maxBytes = parsePositiveIntEnv(
+    process.env.UPLOAD_MAX_BYTES,
+    10 * 1024 * 1024
+  );
+  const maxMultipartBytes = maxBytes + 64 * 1024;
+
   const contentType = request.headers.get("content-type") ?? "";
   if (!contentType.includes("multipart/form-data")) {
     return jsonError(400, "Content-Type must be multipart/form-data");
   }
+  const parsedForm = await parseMultipartFormDataWithLimit(
+    request,
+    maxMultipartBytes,
+    contentType
+  );
+  if (!parsedForm.ok) return parsedForm.response;
+  const form = parsedForm.form;
+  const dashboardId = readTextField(form, "dashboardId");
+  const widgetId = readTextField(form, "widgetId");
+  if (!dashboardId || !widgetId) {
+    return jsonError(400, 'Missing form field "dashboardId" or "widgetId"');
+  }
+  if (!isSafeIdentifier(dashboardId) || !isSafeIdentifier(widgetId)) {
+    return jsonError(400, "Invalid dashboardId or widgetId");
+  }
 
-  const form = await request.formData();
+  try {
+    await ensureDashboardUploadAccess({ dashboardId, widgetId, userId });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : "Forbidden";
+    if (message === "Dashboard not found") {
+      return jsonError(404, message);
+    }
+    if (message === "Widget not found") {
+      return jsonError(404, message);
+    }
+    if (message === "Widget dashboard mismatch") {
+      return jsonError(400, message);
+    }
+    return jsonError(403, "Forbidden");
+  }
 
   const fileValue: FormDataEntryValue | null = form.get("file");
   if (!fileValue) {
@@ -53,42 +305,66 @@ export async function POST(request: Request) {
 
   const file = fileValue;
 
-  const mimeType = file.type || "application/octet-stream";
-  if (!mimeType.startsWith("image/")) {
-    return jsonError(400, "Only image/* is allowed", { mimeType });
+  const declaredMimeType = file.type || "application/octet-stream";
+  if (!declaredMimeType.startsWith("image/")) {
+    return jsonError(400, "Only image/* is allowed", { mimeType: declaredMimeType });
   }
 
-  const maxBytes = Number(process.env.UPLOAD_MAX_BYTES ?? 10 * 1024 * 1024); // 기본 10MB
-  if (!Number.isFinite(maxBytes) || maxBytes <= 0) {
-    return jsonError(500, "Invalid UPLOAD_MAX_BYTES env");
-  }
   if (file.size > maxBytes) {
     return jsonError(413, "File too large", { size: file.size, maxBytes });
   }
 
-  // 저장 경로: {UPLOAD_DIR}/photos/YYYY/MM/<uuid>.<ext>
+  // 저장 경로: {UPLOAD_DIR}/photos/{dashboardId}/YYYY/MM/<uuid>.<ext>
   const now = new Date();
   const yyyy = String(now.getFullYear());
   const mm = String(now.getMonth() + 1).padStart(2, "0");
 
   const baseDir = process.env.UPLOAD_DIR ?? path.join(process.cwd(), "data", "uploads");
-  const relDir = path.join("photos", yyyy, mm); // OS path
-  const absDir = path.join(baseDir, relDir);
+  const absDir = path.join(baseDir, "photos", dashboardId, yyyy, mm);
+  const resolvedBase = path.resolve(baseDir);
+  const resolvedDir = path.resolve(absDir);
+  if (
+    resolvedDir !== resolvedBase &&
+    !resolvedDir.startsWith(`${resolvedBase}${path.sep}`)
+  ) {
+    return jsonError(400, "Invalid path");
+  }
+  await ensureDir(resolvedDir);
 
-  await ensureDir(absDir);
+  const buffer = Buffer.from(await file.arrayBuffer());
+  const detectedMimeType = detectImageMimeFromMagic(buffer);
+  if (!detectedMimeType) {
+    return jsonError(400, "Unsupported or invalid image file");
+  }
+  if (!isCompatibleImageMime(declaredMimeType, detectedMimeType)) {
+    return jsonError(400, "MIME type mismatch", {
+      mimeType: declaredMimeType,
+      detectedMimeType,
+    });
+  }
 
+  const mimeType = detectedMimeType;
   const uuid = crypto.randomUUID();
   const ext = extFromMime(mimeType);
   const filename = `${uuid}.${ext}`;
 
-  const absPath = path.join(absDir, filename);
+  const absPath = path.join(resolvedDir, filename);
+  const resolvedTarget = path.resolve(absPath);
+  if (
+    resolvedTarget !== resolvedBase &&
+    !resolvedTarget.startsWith(`${resolvedBase}${path.sep}`)
+  ) {
+    return jsonError(400, "Invalid path");
+  }
 
-  const buffer = Buffer.from(await file.arrayBuffer());
-  await fs.writeFile(absPath, buffer);
+  await fs.writeFile(resolvedTarget, buffer);
 
   // 앱/DB에 저장할 경로는 "업로드 루트 기준 상대 경로"가 깔끔함
   // 예: photos/2026/01/uuid.jpg
-  const storagePath = safeJoinPosix("photos", yyyy, mm, filename);
+  const storagePath = safeJoinPosix("photos", dashboardId, yyyy, mm, filename);
+  if (!isValidPhotoStoragePathForDashboard(storagePath, dashboardId)) {
+    return jsonError(500, "Failed to generate storage path");
+  }
 
   return NextResponse.json({
     ok: true,

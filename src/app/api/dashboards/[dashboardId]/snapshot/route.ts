@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import prisma from "@/server/prisma";
 import { jsonError, parseJson } from "@/server/api-response";
 import { isAdminRole, requireUser } from "@/server/api-auth";
+import { isSafeIdentifier, parsePositiveIntEnv } from "@/server/request-guards";
+import { removePhotoFilesIfUnreferenced } from "@/server/photo-file-cleanup";
 import {
   persistSnapshot,
   serializeSnapshot,
@@ -34,7 +36,7 @@ async function ensureAccess(dashboardId: string, userId: string) {
       select: { id: true },
     });
     if (!member) return null;
-  } else if (dashboard.ownerId && dashboard.ownerId !== userId) {
+  } else if (!dashboard.ownerId || dashboard.ownerId !== userId) {
     return null;
   }
   return dashboard;
@@ -49,6 +51,9 @@ export async function GET(
   const userId = userResult.context.userId;
 
   const { dashboardId } = await params;
+  if (!isSafeIdentifier(dashboardId)) {
+    return jsonError(400, "Invalid dashboard ID");
+  }
   const dashboard = await ensureAccess(dashboardId, userId);
   if (!dashboard) return jsonError(404, "Dashboard not found");
 
@@ -169,11 +174,19 @@ export async function POST(
   if (!userResult.ok) return userResult.response;
   const userId = userResult.context.userId;
 
-  const parsedBody = await parseJson(request);
+  const parsedBody = await parseJson(request, {
+    maxBytes: parsePositiveIntEnv(
+      process.env.DASHBOARD_SNAPSHOT_MAX_BYTES,
+      2 * 1024 * 1024
+    ),
+  });
   if (!parsedBody.ok) return parsedBody.response;
   const body = parsedBody.body;
 
   const { dashboardId } = await params;
+  if (!isSafeIdentifier(dashboardId)) {
+    return jsonError(400, "Invalid dashboard ID");
+  }
   const validation = validateSnapshotPayload(body, dashboardId);
   if (!validation.ok) {
     return jsonError(validation.status, validation.error);
@@ -184,6 +197,7 @@ export async function POST(
     where: { id: dashboardId },
     select: { id: true, ownerId: true, groupId: true },
   });
+  let resolvedGroupId: string | null = existing?.groupId ?? null;
 
   if (existing) {
     if (existing.groupId) {
@@ -194,16 +208,34 @@ export async function POST(
       if (!member || !isAdminRole(member.role)) {
         return jsonError(403, "Forbidden");
       }
-    } else if (existing.ownerId && existing.ownerId !== userId) {
+    } else if (!existing.ownerId || existing.ownerId !== userId) {
       return jsonError(403, "Forbidden");
     }
+  } else if (snapshot.dashboard.groupId) {
+    const member = await prisma.groupMember.findFirst({
+      where: { groupId: snapshot.dashboard.groupId, userId },
+      select: { id: true, role: true },
+    });
+    if (!member || !isAdminRole(member.role)) {
+      return jsonError(403, "Forbidden");
+    }
+    resolvedGroupId = snapshot.dashboard.groupId;
   }
 
   const serialized = serializeSnapshot(snapshot, dashboardId);
+  const photosToCleanup = await prisma.photo.findMany({
+    where: { dashboardId },
+    select: { dashboardId: true, storagePath: true },
+  });
 
   await prisma.$transaction(async (tx) => {
-    await persistSnapshot(tx, serialized, { userId, existing });
+    await persistSnapshot(tx, serialized, {
+      userId,
+      existing,
+      resolvedGroupId,
+    });
   });
+  await removePhotoFilesIfUnreferenced(photosToCleanup);
 
   return NextResponse.json({ ok: true });
 }

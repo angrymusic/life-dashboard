@@ -115,6 +115,9 @@ async function fetchSpecialDays(year: number, month: number) {
     month: String(month),
   });
   const response = await fetch(`/api/special-days?${params.toString()}`);
+  if (response.status === 401 || response.status === 403) {
+    return [];
+  }
   if (!response.ok) {
     throw new Error("Failed to fetch special days.");
   }
