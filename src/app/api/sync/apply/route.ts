@@ -231,11 +231,6 @@ export async function POST(request: Request) {
     await ensureWidgetAccess(widgetId, dashboardId);
   };
 
-  const ensureEventWidgetAccess = async (event: SyncEvent) => {
-    if (!event.widgetId) throw new Error("Missing widgetId");
-    await ensureWidgetEditAccess(event.widgetId, event.dashboardId);
-  };
-
   const ensureEventWidgetDeleteAccess = async (event: SyncEvent) => {
     if (!event.widgetId) throw new Error("Missing widgetId");
     await ensureWidgetAccess(event.widgetId, event.dashboardId, { allowMissing: true });
