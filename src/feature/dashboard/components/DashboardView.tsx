@@ -1,127 +1,86 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import Header from "./Header";
 import Footer from "./Footer";
 import GridLayout from "./GridLayout";
 import { AddWidgetDialog } from "./AddWidgetDialog";
 import GuestOnboardingTutorial from "./GuestOnboardingTutorial";
-import { useDashboards, useDashboardWidgets } from "@/shared/db/queries";
 import { Button } from "@/shared/ui/button";
-import { useSession } from "next-auth/react";
-import { useDashboardBootstrapping } from "@/feature/dashboard/hooks/useDashboardBootstrapping";
-import { useDashboardPermissions } from "@/feature/dashboard/hooks/useDashboardPermissions";
-import { useDashboardSync } from "@/feature/dashboard/hooks/useDashboardSync";
-import { useDashboardActions } from "@/feature/dashboard/hooks/useDashboardActions";
-import { detectInAppBrowser } from "@/shared/lib/inAppBrowser";
+import type { Dashboard, Id, Widget } from "@/shared/db/schema";
+import type { AddableWidgetType } from "@/feature/dashboard/libs/widgetRegistry";
 import { useI18n } from "@/shared/i18n/client";
 
-export default function Dashboard() {
+type CopyStatus = "idle" | "success" | "error";
+
+type DashboardViewProps = {
+  dashboards?: Dashboard[];
+  dashboardId?: Id;
+  activeDashboard?: Dashboard;
+  widgets?: Widget[];
+  canCreateWidget: boolean;
+  canEditWidget: (widget: Widget) => boolean;
+  isSignedIn: boolean;
+  isAuthLoading: boolean;
+  isInAppBrowser: boolean;
+  copyStatus: CopyStatus;
+  pendingRemoteUpdate: string | null;
+  dialogOpen: boolean;
+  dashboardError: string | null;
+  isCreating: boolean;
+  isRefreshingDashboards: boolean;
+  onSelectDashboard: (dashboardId: Id) => void;
+  onCreateDashboard: (name: string) => Promise<void>;
+  onRenameDashboard: (dashboardId: Id, name: string) => Promise<void>;
+  onDeleteDashboard: (dashboardId: Id) => Promise<void>;
+  onLayoutCommit: (nextWidgets: Widget[]) => Promise<void>;
+  onRefreshDashboards: () => Promise<void>;
+  onRetryCreateDashboard: () => void;
+  onApplyRemoteUpdate: () => Promise<void>;
+  onCopyCurrentLink: () => Promise<void>;
+  onOpenAddDialog: (open: boolean) => void;
+  onAddWidget: (type: AddableWidgetType) => Promise<void>;
+};
+
+export default function DashboardView({
+  dashboards,
+  dashboardId,
+  activeDashboard,
+  widgets,
+  canCreateWidget,
+  canEditWidget,
+  isSignedIn,
+  isAuthLoading,
+  isInAppBrowser,
+  copyStatus,
+  pendingRemoteUpdate,
+  dialogOpen,
+  dashboardError,
+  isCreating,
+  isRefreshingDashboards,
+  onSelectDashboard,
+  onCreateDashboard,
+  onRenameDashboard,
+  onDeleteDashboard,
+  onLayoutCommit,
+  onRefreshDashboards,
+  onRetryCreateDashboard,
+  onApplyRemoteUpdate,
+  onCopyCurrentLink,
+  onOpenAddDialog,
+  onAddWidget,
+}: DashboardViewProps) {
   const { t } = useI18n();
-  const dashboards = useDashboards();
-  const { data: session, status: authStatus } = useSession();
-  const isSignedIn = authStatus === "authenticated";
-  const isAuthLoading = authStatus === "loading";
-  const authEmail = session?.user?.email?.trim().toLowerCase() ?? null;
-
-  const {
-    activeDashboardId,
-    setActiveDashboardIdByUser,
-    dashboardError,
-    isCreating,
-    isServerBootstrapReady,
-    retry,
-    refreshDashboards,
-    isRefreshingDashboards,
-  } = useDashboardBootstrapping({
-    dashboards,
-    authEmail,
-    isSignedIn,
-    isAuthLoading,
-  });
-
-  const dashboardId = activeDashboardId;
-  const activeDashboard = dashboards?.find(
-    (dashboard) => dashboard.id === dashboardId
-  );
-
-  const { canCreateWidget, canEditWidget, widgetCreatorId } =
-    useDashboardPermissions({
-      activeDashboard,
-      authEmail,
-      isSignedIn,
-    });
-
-  const widgets = useDashboardWidgets(dashboardId);
-
-  const { pendingRemoteUpdate, applyRemoteUpdate } = useDashboardSync({
-    activeDashboard,
-    dashboardId,
-    widgets,
-    isSignedIn,
-    isServerBootstrapReady,
-  });
-
-  const {
-    addWidget,
-    commitWidgetLayout,
-    createDashboard,
-    renameDashboard,
-    deleteDashboard,
-  } = useDashboardActions({
-    dashboards,
-    activeDashboardId: dashboardId,
-    setActiveDashboardIdByUser,
-    dashboardId,
-    widgets,
-    widgetCreatorId,
-  });
-
-  const [dialogOpen, setDialogOpen] = useState(false);
-  const [copyStatus, setCopyStatus] = useState<"idle" | "success" | "error">(
-    "idle"
-  );
-  const [isInAppBrowser, setIsInAppBrowser] = useState(false);
-
-  useEffect(() => {
-    if (typeof navigator === "undefined") return;
-    setIsInAppBrowser(detectInAppBrowser(navigator.userAgent));
-  }, []);
-
-  const handleCopyCurrentLink = async () => {
-    if (typeof window === "undefined") return;
-    const currentUrl = window.location.href;
-
-    try {
-      if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(currentUrl);
-      } else {
-        const textArea = document.createElement("textarea");
-        textArea.value = currentUrl;
-        textArea.style.position = "fixed";
-        textArea.style.opacity = "0";
-        document.body.appendChild(textArea);
-        textArea.select();
-        const copied = document.execCommand("copy");
-        document.body.removeChild(textArea);
-        if (!copied) throw new Error("copy failed");
-      }
-      setCopyStatus("success");
-    } catch {
-      setCopyStatus("error");
-    }
-  };
 
   return (
     <div>
       <Header
         dashboards={dashboards}
         activeDashboardId={dashboardId}
-        onSelectDashboard={setActiveDashboardIdByUser}
-        onCreateDashboard={createDashboard}
-        onRenameDashboard={renameDashboard}
-        onDeleteDashboard={deleteDashboard}
-        onRefreshDashboards={refreshDashboards}
+        onSelectDashboard={onSelectDashboard}
+        onCreateDashboard={onCreateDashboard}
+        onRenameDashboard={onRenameDashboard}
+        onDeleteDashboard={onDeleteDashboard}
+        onRefreshDashboards={onRefreshDashboards}
         isRefreshingDashboards={isRefreshingDashboards}
       />
 
@@ -139,7 +98,7 @@ export default function Dashboard() {
               size="sm"
               variant="outline"
               className="h-7 border-amber-300 bg-white/80 px-2 text-[11px] text-amber-800 hover:bg-white"
-              onClick={() => void handleCopyCurrentLink()}
+              onClick={() => void onCopyCurrentLink()}
             >
               {t("링크 복사", "Copy link")}
             </Button>
@@ -171,7 +130,7 @@ export default function Dashboard() {
               variant="outline"
               size="sm"
               className="rounded-full border-primary/30 bg-white/70 text-primary shadow-none hover:bg-white hover:text-primary"
-              onClick={() => void applyRemoteUpdate()}
+              onClick={() => void onApplyRemoteUpdate()}
             >
               {t("새로고침", "Refresh")}
             </Button>
@@ -193,7 +152,7 @@ export default function Dashboard() {
           {dashboardError ? (
             <div className="space-y-3 text-red-600">
               <div>{t("대시보드를 생성하지 못했어요.", "Failed to create dashboard.")}</div>
-              <Button variant="outline" size="sm" onClick={retry}>
+              <Button variant="outline" size="sm" onClick={onRetryCreateDashboard}>
                 {t("다시 시도", "Retry")}
               </Button>
             </div>
@@ -210,17 +169,17 @@ export default function Dashboard() {
       ) : (
         <GridLayout
           widgets={widgets}
-          onLayoutCommit={commitWidgetLayout}
+          onLayoutCommit={onLayoutCommit}
           canEditWidget={canEditWidget}
         />
       )}
 
-      <Footer onAddClick={() => setDialogOpen(true)} canEdit={canCreateWidget} />
+      <Footer onAddClick={() => onOpenAddDialog(true)} canEdit={canCreateWidget} />
 
       <AddWidgetDialog
         open={dialogOpen}
-        onOpenChange={setDialogOpen}
-        onAdd={(type) => void addWidget(type)}
+        onOpenChange={onOpenAddDialog}
+        onAdd={(type) => void onAddWidget(type)}
         disabled={!canCreateWidget}
       />
 
