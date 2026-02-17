@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import prisma from "@/server/prisma";
 import { jsonError, parseJson } from "@/server/api-response";
 import { isAdminRole, requireUser } from "@/server/api-auth";
+import { publishDashboardUpdate } from "@/server/dashboard-updates";
 import {
   enforceRateLimit,
   isSafeIdentifier,
@@ -112,6 +113,13 @@ function parseOptionalDate(value: unknown) {
   return parseDate(value as string);
 }
 
+function parseSyncClientId(headerValue: string | null) {
+  if (!headerValue) return undefined;
+  const value = headerValue.trim();
+  if (!value || value.length > 200) return undefined;
+  return value;
+}
+
 function parseEvents(body: unknown): SyncEvent[] | null {
   if (!isRecord(body)) return null;
   const rawEvents = body.events;
@@ -158,6 +166,7 @@ export async function POST(request: Request) {
   const userResult = await requireUser();
   if (!userResult.ok) return userResult.response;
   const userId = userResult.context.userId;
+  const syncClientId = parseSyncClientId(request.headers.get("x-sync-client-id"));
 
   const rateLimit = await enforceRateLimit({
     key: `sync-apply:${userId}`,
@@ -1097,6 +1106,14 @@ export async function POST(request: Request) {
       : {}),
     ...(errors.length ? { errors } : {}),
   };
+
+  for (const dashboard of touchedDashboardUpdates) {
+    publishDashboardUpdate({
+      dashboardId: dashboard.id,
+      updatedAt: dashboard.updatedAt,
+      ...(syncClientId ? { clientId: syncClientId } : {}),
+    });
+  }
 
   return NextResponse.json(result, { status: errors.length ? 207 : 200 });
 }

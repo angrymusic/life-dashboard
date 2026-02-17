@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import prisma from "@/server/prisma";
 import { jsonError } from "@/server/api-response";
 import { requireUser } from "@/server/api-auth";
+import { getLatestDashboardUpdate } from "@/server/dashboard-updates";
 import { isSafeIdentifier } from "@/server/request-guards";
 
 export const runtime = "nodejs";
@@ -39,9 +40,13 @@ export async function GET(
   }
   const dashboard = await ensureAccess(dashboardId, userId);
   if (!dashboard) return jsonError(404, "Dashboard not found");
+  const updatedAt = dashboard.updatedAt.toISOString();
+  const latest = getLatestDashboardUpdate(dashboardId);
+  const clientId = latest && latest.updatedAt === updatedAt ? latest.clientId : undefined;
 
   return NextResponse.json({
     ok: true,
-    updatedAt: dashboard.updatedAt.toISOString(),
+    updatedAt,
+    ...(clientId ? { clientId } : {}),
   });
 }

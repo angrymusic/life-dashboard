@@ -7,6 +7,7 @@ import {
 import type { Dashboard, Id, Widget } from "@/shared/db/schema";
 import { useOutboxCount } from "@/shared/db/queries";
 import { readJson } from "@/feature/dashboard/libs/readJson";
+import { getSyncClientId } from "@/shared/db/sync-client";
 
 type SyncParams = {
   activeDashboard?: Dashboard;
@@ -103,6 +104,32 @@ export function useDashboardSync({
     }
   }, [activeDashboard?.groupId, activeDashboard?.id, fetchAndApplySnapshot]);
 
+  const syncLastSeenUpdatedAt = useCallback((updatedAt: string) => {
+    if (!updatedAt) return;
+    const lastSeen = lastRemoteUpdatedAtRef.current;
+    if (!lastSeen || updatedAt > lastSeen) {
+      lastRemoteUpdatedAtRef.current = updatedAt;
+    }
+  }, []);
+
+  const handleRemoteUpdatedAt = useCallback((updatedAt: string) => {
+    if (!updatedAt) return;
+
+    const lastSeen = lastRemoteUpdatedAtRef.current;
+    if (!lastSeen) {
+      setPendingRemoteUpdate(updatedAt);
+      lastRemoteUpdatedAtRef.current = updatedAt;
+      return;
+    }
+    if (updatedAt <= lastSeen) return;
+
+    setPendingRemoteUpdate((current) => {
+      if (current && updatedAt <= current) return current;
+      return updatedAt;
+    });
+    lastRemoteUpdatedAtRef.current = updatedAt;
+  }, []);
+
   useEffect(() => {
     lastRemoteUpdatedAtRef.current = null;
     setPendingRemoteUpdate(null);
@@ -110,8 +137,13 @@ export function useDashboardSync({
 
   useEffect(() => {
     if (!activeDashboard?.updatedAt) return;
-    lastRemoteUpdatedAtRef.current = activeDashboard.updatedAt;
-  }, [activeDashboard?.updatedAt]);
+    syncLastSeenUpdatedAt(activeDashboard.updatedAt);
+    setPendingRemoteUpdate((current) => {
+      if (!current) return current;
+      if (activeDashboard.updatedAt >= current) return null;
+      return current;
+    });
+  }, [activeDashboard?.updatedAt, syncLastSeenUpdatedAt]);
 
   useEffect(() => {
     if (!activeDashboard?.groupId) return;
@@ -142,11 +174,55 @@ export function useDashboardSync({
   useEffect(() => {
     if (!activeDashboard?.groupId) return;
     if (!isSignedIn) return;
+    if (typeof window === "undefined") return;
 
     const currentDashboardId = activeDashboard.id;
     const groupId = activeDashboard.groupId;
+    const syncClientId = getSyncClientId();
     let cancelled = false;
     let timeoutId: number | undefined;
+
+    const consumeSelfEcho = (updatedAt: string, sourceClientId?: string) => {
+      if (!sourceClientId || sourceClientId !== syncClientId) return false;
+      syncLastSeenUpdatedAt(updatedAt);
+      setPendingRemoteUpdate((current) => {
+        if (!current) return current;
+        if (updatedAt >= current) return null;
+        return current;
+      });
+      return true;
+    };
+
+    const handleBaselineUpdatedAt = (updatedAt: string, sourceClientId?: string) => {
+      if (consumeSelfEcho(updatedAt, sourceClientId)) return;
+
+      const lastSeen = lastRemoteUpdatedAtRef.current;
+      if (lastSeen && updatedAt > lastSeen) {
+        handleRemoteUpdatedAt(updatedAt);
+        return;
+      }
+
+      syncLastSeenUpdatedAt(updatedAt);
+    };
+
+    const parseAndHandleUpdatedAt = (
+      data: string,
+      options?: { baseline?: boolean }
+    ) => {
+      try {
+        const payload = JSON.parse(data) as { updatedAt?: string; clientId?: string };
+        if (typeof payload.updatedAt === "string") {
+          if (options?.baseline) {
+            handleBaselineUpdatedAt(payload.updatedAt, payload.clientId);
+          } else {
+            if (consumeSelfEcho(payload.updatedAt, payload.clientId)) return;
+            handleRemoteUpdatedAt(payload.updatedAt);
+          }
+        }
+      } catch {
+        // Ignore malformed SSE payloads and continue listening.
+      }
+    };
 
     const schedule = () => {
       timeoutId = window.setTimeout(poll, 10000);
@@ -166,6 +242,7 @@ export function useDashboardSync({
         const payload = await readJson<{
           ok?: boolean;
           updatedAt?: string;
+          clientId?: string;
         }>(response);
         if (cancelled) return;
         if (response.status === 403 || response.status === 404) {
@@ -174,27 +251,47 @@ export function useDashboardSync({
           return;
         }
         if (!response.ok || !payload?.ok || !payload.updatedAt) return;
-
-        const updatedAt = payload.updatedAt;
-        if (!updatedAt) return;
-
-        const lastSeen = lastRemoteUpdatedAtRef.current;
-        if (!lastSeen) {
-          setPendingRemoteUpdate(updatedAt);
-          lastRemoteUpdatedAtRef.current = updatedAt;
-          return;
-        }
-        if (updatedAt <= lastSeen) return;
-
-        setPendingRemoteUpdate((current) => {
-          if (current && updatedAt <= current) return current;
-          return updatedAt;
-        });
-        lastRemoteUpdatedAtRef.current = updatedAt;
+        if (consumeSelfEcho(payload.updatedAt, payload.clientId)) return;
+        handleRemoteUpdatedAt(payload.updatedAt);
       } finally {
         if (!cancelled) schedule();
       }
     };
+
+    if (typeof window.EventSource === "function") {
+      const eventSource = new window.EventSource(
+        `/api/dashboards/${currentDashboardId}/updates/stream`
+      );
+
+      const handleReady = (event: Event) => {
+        const message = event as MessageEvent<string>;
+        parseAndHandleUpdatedAt(message.data, { baseline: true });
+      };
+
+      const handleDashboardUpdated = (event: Event) => {
+        const message = event as MessageEvent<string>;
+        parseAndHandleUpdatedAt(message.data);
+      };
+
+      const handleForbidden = () => {
+        if (cancelled) return;
+        cancelled = true;
+        eventSource.close();
+        void removeSharedDashboardLocally(currentDashboardId, groupId);
+      };
+
+      eventSource.addEventListener("ready", handleReady);
+      eventSource.addEventListener("dashboard-updated", handleDashboardUpdated);
+      eventSource.addEventListener("forbidden", handleForbidden);
+
+      return () => {
+        cancelled = true;
+        eventSource.removeEventListener("ready", handleReady);
+        eventSource.removeEventListener("dashboard-updated", handleDashboardUpdated);
+        eventSource.removeEventListener("forbidden", handleForbidden);
+        eventSource.close();
+      };
+    }
 
     schedule();
 
@@ -202,7 +299,13 @@ export function useDashboardSync({
       cancelled = true;
       if (timeoutId) window.clearTimeout(timeoutId);
     };
-  }, [activeDashboard?.groupId, activeDashboard?.id, isSignedIn]);
+  }, [
+    activeDashboard?.groupId,
+    activeDashboard?.id,
+    handleRemoteUpdatedAt,
+    isSignedIn,
+    syncLastSeenUpdatedAt,
+  ]);
 
   useEffect(() => {
     if (!isServerBootstrapReady) return;
