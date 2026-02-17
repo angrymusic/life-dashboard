@@ -1,7 +1,10 @@
 import prisma from "@/server/prisma";
 import { jsonError } from "@/server/api-response";
 import { requireUser } from "@/server/api-auth";
-import { subscribeDashboardUpdate } from "@/server/dashboard-updates";
+import {
+  getLatestDashboardUpdate,
+  subscribeDashboardUpdate,
+} from "@/server/dashboard-updates";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -117,8 +120,6 @@ export async function GET(
 
       request.signal.addEventListener("abort", onAbort);
 
-      send("ready", { updatedAt: dashboard.updatedAt.toISOString() });
-
       unsubscribe = subscribeDashboardUpdate(dashboardId, (message) => {
         send(
           "dashboard-updated",
@@ -128,6 +129,15 @@ export async function GET(
           },
           message.updatedAt
         );
+      });
+
+      const readyUpdatedAt = dashboard.updatedAt.toISOString();
+      const latest = getLatestDashboardUpdate(dashboardId);
+      const readyClientId =
+        latest && latest.updatedAt === readyUpdatedAt ? latest.clientId : undefined;
+      send("ready", {
+        updatedAt: readyUpdatedAt,
+        ...(readyClientId ? { clientId: readyClientId } : {}),
       });
 
       heartbeatTimer = setInterval(() => {
