@@ -6,6 +6,7 @@ import {
   LANGUAGE_COOKIE_KEY,
   normalizeLanguage,
 } from "@/shared/i18n/language";
+import { getSiteUrl, SITE_DESCRIPTION, SITE_KEYWORDS, SITE_NAME } from "./seo";
 import "./globals.css";
 import Providers from "./providers";
 
@@ -19,9 +20,68 @@ const geistMono = Geist_Mono({
   subsets: ["latin"],
 });
 
+const siteUrl = getSiteUrl();
+
 export const metadata: Metadata = {
-  title: "Life Dashboard",
-  description: "A dashboard application for your life.",
+  metadataBase: siteUrl,
+  title: {
+    default: `${SITE_NAME} | Local-first Dashboard`,
+    template: `%s | ${SITE_NAME}`,
+  },
+  description: SITE_DESCRIPTION,
+  applicationName: SITE_NAME,
+  keywords: SITE_KEYWORDS,
+  authors: [{ name: SITE_NAME }],
+  creator: SITE_NAME,
+  publisher: SITE_NAME,
+  category: "productivity",
+  alternates: {
+    canonical: "/",
+  },
+  icons: {
+    icon: [{ url: "/favicon.ico" }],
+    shortcut: ["/favicon.ico"],
+    apple: [{ url: "/favicon.ico" }],
+  },
+  manifest: "/manifest.webmanifest",
+  openGraph: {
+    type: "website",
+    siteName: SITE_NAME,
+    url: "/",
+    title: `${SITE_NAME} | Local-first Dashboard`,
+    description: SITE_DESCRIPTION,
+    locale: "en_US",
+    images: [
+      {
+        url: "/opengraph-image",
+        width: 1200,
+        height: 630,
+        alt: `${SITE_NAME} preview image`,
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: `${SITE_NAME} | Local-first Dashboard`,
+    description: SITE_DESCRIPTION,
+    images: ["/twitter-image"],
+  },
+  robots: {
+    index: true,
+    follow: true,
+    googleBot: {
+      index: true,
+      follow: true,
+      "max-video-preview": -1,
+      "max-image-preview": "large",
+      "max-snippet": -1,
+    },
+  },
+  formatDetection: {
+    email: false,
+    address: false,
+    telephone: false,
+  },
 };
 
 export default async function RootLayout({
