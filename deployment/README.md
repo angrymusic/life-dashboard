@@ -1,23 +1,23 @@
 # deployment
 
-`main` 푸시 이후 무중단(blue/green) 배포를 위한 최소 구성입니다.
+무중단(blue/green) 배포를 위한 최소 구성입니다.
 
 흐름은 아래 순서입니다.
 
 1. 비활성 슬롯(`blue`/`green`) 코드 업데이트 + 빌드
 2. 비활성 슬롯 systemd 서비스 재기동
 3. 신규 슬롯 헬스체크
-4. Caddy upstream 파일 갱신 + `caddy reload`
+4. Caddy upstream 파일 갱신 + Caddy 반영(`active`면 reload, 아니면 start)
 5. 이전 슬롯 서비스 중지
 
 ## 포함 파일
 
 - `deploy-bluegreen.sh`: 배포 자동화 스크립트
 - `life-dashboard-next@.service`: 슬롯별 systemd 템플릿 서비스
-- `slots/*.env.example`: 슬롯별 경로/포트 예시
+- `slots/*.env`: 슬롯별 경로/포트/업로드 경로
 - `caddy/Caddyfile.example`: Caddyfile 예시
 - `caddy/upstream.caddy.example`: active upstream 파일 예시
-- `github-actions/deploy-main.yml.example`: main push 시 SSH 배포 예시
+- `.github/workflows/deploy-main.yml`: GitHub Actions 배포 워크플로
 
 ## 사전 조건
 
@@ -42,26 +42,26 @@ sudo apt install -y caddy
 systemctl status caddy --no-pager
 ```
 
-## 1) 슬롯 env 파일 생성
+## 1) 슬롯 env 파일 준비
 
-```bash
-cp deployment/slots/blue.env.example deployment/slots/blue.env
-cp deployment/slots/green.env.example deployment/slots/green.env
-```
-
-`blue.env`, `green.env`의 `APP_DIR` 경로를 서버 실경로에 맞게 수정합니다.
+`blue.env`, `green.env`의 `APP_DIR`/`PORT`/`UPLOAD_DIR`를 서버 실경로에 맞게 수정합니다.
 
 예시:
 
 ```bash
 APP_DIR=/home/angrymusic/apps/life-dashboard/blue
 PORT=3001
+UPLOAD_DIR=/home/angrymusic/projects/life-dashboard/data/uploads
 ```
 
 ```bash
 APP_DIR=/home/angrymusic/apps/life-dashboard/green
 PORT=3002
+UPLOAD_DIR=/home/angrymusic/projects/life-dashboard/data/uploads
 ```
+
+`UPLOAD_DIR`는 반드시 절대경로를 권장합니다.  
+상대경로(`./data/uploads`)를 쓰면 blue/green 슬롯 전환 시 서로 다른 디렉터리를 바라볼 수 있습니다.
 
 ## 2) systemd 템플릿 서비스 설치
 
@@ -138,32 +138,43 @@ chmod +x deployment/deploy-bluegreen.sh
 기본 동작:
 
 - active 슬롯 탐지(`deployment/.active-slot` 우선, 없으면 Caddy upstream 추론)
-- 반대 슬롯(비활성) 업데이트/빌드/기동
+- 반대 슬롯(비활성) 리포를 원격 브랜치 상태로 동기화
+- 빌드 환경파일 동기화(`.env.production.local` 우선, 없으면 `.env.production`)
+- `pnpm install -> pnpm exec prisma generate -> pnpm build`
+- 반대 슬롯 기동
 - `http://127.0.0.1:{port}/` 헬스체크
-- Caddy upstream 변경 + reload
+- Caddy upstream 변경 + 반영(`reload` 또는 `start`)
 - 이전 슬롯 정지
 
-## 5) CI 연결 (main push 자동 실행)
+## 5) CI 연결 (self-hosted runner)
 
-`deployment/github-actions/deploy-main.yml.example`를 `.github/workflows/deploy-main.yml`로 복사해서 사용합니다.
+워크플로 파일은 `.github/workflows/deploy-main.yml`을 사용합니다.
+트리거는 `push(main)`과 `workflow_dispatch`(Run workflow 버튼)입니다.
 
-필요한 GitHub Secrets:
+현재 워크플로는 `self-hosted` 러너에서 로컬 배포 스크립트를 직접 실행합니다.
+SSH 기반(`DEPLOY_HOST`, `DEPLOY_USER`, `DEPLOY_SSH_KEY`) 시크릿은 사용하지 않습니다.
 
-- `DEPLOY_HOST`
-- `DEPLOY_USER`
-- `DEPLOY_SSH_KEY`
+러너 등록 후(Repository Settings > Actions > Runners), 러너 서버에서 서비스 등록:
+
+```bash
+cd ~/actions-runner
+sudo ./svc.sh install
+sudo ./svc.sh start
+sudo ./svc.sh status
+```
 
 ## 내가 해야 할 일 체크리스트
 
 1. Caddy 설치 후 `systemctl status caddy` 확인
-2. `deployment/slots/blue.env`, `green.env` 생성 후 `APP_DIR`, `PORT` 설정
+2. `deployment/slots/blue.env`, `green.env`의 `APP_DIR`, `PORT`, `UPLOAD_DIR` 확인
 3. `/etc/systemd/system/life-dashboard-next@.service` 설치 + `daemon-reload`
 4. `life-dashboard-next@blue.service`, `life-dashboard-next@green.service` enable
 5. `/etc/caddy/Caddyfile`와 `/etc/caddy/lifedashboard/upstream.caddy` 배치 후 Caddy 재시작
 6. 기존 `life-dashboard-next.service` stop/disable (3000 포트 해제)
 7. cloudflared ingress `service: http://localhost:3000` 확인 후 cloudflared 재시작
 8. `./deployment/deploy-bluegreen.sh` 수동 1회 실행해서 배포/전환 검증
-9. 검증 후 GitHub Actions 워크플로우 연결
+9. self-hosted runner 등록 후 `./svc.sh install/start`로 상시 실행
+10. Actions 탭에서 `Run workflow` 수동 실행 테스트
 
 ## 스크립트 주요 환경변수
 
@@ -173,6 +184,14 @@ chmod +x deployment/deploy-bluegreen.sh
 - `HEALTH_TIMEOUT_SECONDS` 기본 `60`
 - `CADDY_UPSTREAM_FILE` 기본 `/etc/caddy/lifedashboard/upstream.caddy`
 - `APP_SERVICE_PREFIX` 기본 `life-dashboard-next@`
+- `CONTROL_REPO_DIR` 기본: 스크립트 상위 디렉터리
+
+GitHub Actions(self-hosted)에서는 아래 환경변수를 워크플로에 고정하는 것을 권장합니다.
+
+```yaml
+env:
+  CONTROL_REPO_DIR: /home/angrymusic/projects/life-dashboard
+```
 
 ## 롤백
 
