@@ -40,7 +40,9 @@ run_root() {
     "$@"
     return
   fi
-  "$SUDO_BIN" "$@"
+  if ! "$SUDO_BIN" -n "$@"; then
+    fail "sudo non-interactive command failed. Configure NOPASSWD sudo for deploy user."
+  fi
 }
 
 slot_to_port() {
