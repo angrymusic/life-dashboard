@@ -114,12 +114,43 @@ sync_slot_repo() {
   fi
 }
 
+prepare_slot_build_env() {
+  local slot="$1"
+  local slot_dir="$SLOTS_ROOT/$slot"
+  local src_env=""
+  local dest_env=""
+
+  if [ -f "$CONTROL_REPO_DIR/.env.production.local" ]; then
+    src_env="$CONTROL_REPO_DIR/.env.production.local"
+    dest_env="$slot_dir/.env.production.local"
+  elif [ -f "$CONTROL_REPO_DIR/.env.production" ]; then
+    src_env="$CONTROL_REPO_DIR/.env.production"
+    dest_env="$slot_dir/.env.production"
+  fi
+
+  if [ -n "$src_env" ]; then
+    log "Sync build env file to $dest_env"
+    cp "$src_env" "$dest_env"
+    return
+  fi
+
+  if [ -n "${DATABASE_URL:-}" ]; then
+    log "Build env file not found. Use DATABASE_URL from current shell environment."
+    return
+  fi
+
+  fail "Missing build environment. Create $CONTROL_REPO_DIR/.env.production.local or set DATABASE_URL before deploy."
+}
+
 build_slot() {
   local slot="$1"
   local slot_dir="$SLOTS_ROOT/$slot"
 
   log "Install dependencies in $slot slot"
   pnpm --dir "$slot_dir" install --frozen-lockfile
+
+  log "Generate Prisma client in $slot slot"
+  pnpm --dir "$slot_dir" exec prisma generate
 
   log "Build $slot slot"
   pnpm --dir "$slot_dir" build
@@ -165,8 +196,13 @@ switch_caddy_upstream() {
   run_root mkdir -p "$upstream_dir"
   printf 'reverse_proxy 127.0.0.1:%s\n' "$port" | run_root tee "$CADDY_UPSTREAM_FILE" >/dev/null
 
-  log "Reload caddy"
-  run_root systemctl reload caddy
+  if run_root systemctl is-active --quiet caddy; then
+    log "Reload caddy"
+    run_root systemctl reload caddy
+  else
+    log "Caddy is not active. Start caddy"
+    run_root systemctl start caddy
+  fi
 }
 
 persist_active_slot() {
@@ -207,6 +243,7 @@ main() {
 
   stop_slot_service "$target_slot"
   sync_slot_repo "$target_slot"
+  prepare_slot_build_env "$target_slot"
   build_slot "$target_slot"
   start_slot_service "$target_slot"
   wait_for_health "$target_slot" "$target_port"
