@@ -8,14 +8,10 @@ on:
 
 jobs:
   deploy:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     steps:
-      - name: Run blue/green deploy script over SSH
-        uses: appleboy/ssh-action@v1.2.2
-        with:
-          host: ${{ secrets.DEPLOY_HOST }}
-          username: ${{ secrets.DEPLOY_USER }}
-          key: ${{ secrets.DEPLOY_SSH_KEY }}
-          script: |
-            cd /home/angrymusic/projects/life-dashboard
-            ./deployment/deploy-bluegreen.sh
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run blue/green deploy script
+        run: ./deployment/deploy-bluegreen.sh
