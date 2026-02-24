@@ -110,7 +110,8 @@ sync_slot_repo() {
     log "Update repository in $slot_dir"
     git -C "$slot_dir" fetch origin "$REPO_BRANCH"
     git -C "$slot_dir" checkout "$REPO_BRANCH"
-    git -C "$slot_dir" pull --ff-only origin "$REPO_BRANCH"
+    # Slot directories are deploy artifacts. Force them to match remote branch.
+    git -C "$slot_dir" reset --hard "origin/$REPO_BRANCH"
   fi
 }
 
