@@ -42,3 +42,6 @@ next-env.d.ts
 
 /references
 /data
+
+# deployment state
+/deployment/.active-slot

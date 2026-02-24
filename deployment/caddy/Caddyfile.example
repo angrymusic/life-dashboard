@@ -1,0 +1,9 @@
+# /etc/caddy/Caddyfile
+{
+    auto_https off
+}
+
+:3000 {
+    encode gzip zstd
+    import /etc/caddy/lifedashboard/upstream.caddy
+}

@@ -1,2 +1,4 @@
 cloudflared-tunnel.service
-life-dashboard-next.service
+caddy.service
+life-dashboard-next@blue.service
+life-dashboard-next@green.service
