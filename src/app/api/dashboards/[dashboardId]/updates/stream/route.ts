@@ -5,6 +5,12 @@ import {
   getLatestDashboardUpdate,
   subscribeDashboardUpdate,
 } from "@/server/dashboard-updates";
+import { subscribeWidgetLockUpdate } from "@/server/widget-lock-updates";
+import { subscribeWidgetUpdate } from "@/server/widget-updates";
+import {
+  listActiveWidgetLocks,
+  WidgetLockUnavailableError,
+} from "@/server/widget-locks";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -71,11 +77,28 @@ export async function GET(
   const dashboard = await ensureAccess(dashboardId, userId);
   if (!dashboard) return jsonError(404, "Dashboard not found");
 
+  let lockReadyPayload: {
+    enabled: boolean;
+    locks: Awaited<ReturnType<typeof listActiveWidgetLocks>>;
+  } = { enabled: false, locks: [] };
+  if (dashboard.groupId) {
+    try {
+      const locks = await listActiveWidgetLocks(dashboardId, userId);
+      lockReadyPayload = { enabled: true, locks };
+    } catch (error) {
+      if (!(error instanceof WidgetLockUnavailableError)) {
+        throw error;
+      }
+    }
+  }
+
   const encoder = new TextEncoder();
 
   let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
   let accessCheckTimer: ReturnType<typeof setInterval> | null = null;
-  let unsubscribe = () => {};
+  let unsubscribeDashboard = () => {};
+  let unsubscribeWidget = () => {};
+  let unsubscribeWidgetLock = () => {};
   let abortHandler: (() => void) | null = null;
   let closed = false;
 
@@ -88,7 +111,9 @@ export async function GET(
         closed = true;
         if (heartbeatTimer) clearInterval(heartbeatTimer);
         if (accessCheckTimer) clearInterval(accessCheckTimer);
-        unsubscribe();
+        unsubscribeDashboard();
+        unsubscribeWidget();
+        unsubscribeWidgetLock();
         if (abortHandler) {
           request.signal.removeEventListener("abort", abortHandler);
           abortHandler = null;
@@ -120,7 +145,7 @@ export async function GET(
 
       request.signal.addEventListener("abort", onAbort);
 
-      unsubscribe = subscribeDashboardUpdate(dashboardId, (message) => {
+      unsubscribeDashboard = subscribeDashboardUpdate(dashboardId, (message) => {
         send(
           "dashboard-updated",
           {
@@ -128,6 +153,18 @@ export async function GET(
             ...(message.clientId ? { clientId: message.clientId } : {}),
           },
           message.updatedAt
+        );
+      });
+      unsubscribeWidget = subscribeWidgetUpdate(dashboardId, (message) => {
+        send(
+          "widget-updated",
+          {
+            widgetId: message.widgetId,
+            type: message.type,
+            updatedAt: message.updatedAt,
+            ...(message.clientId ? { clientId: message.clientId } : {}),
+          },
+          `${message.widgetId}:${message.updatedAt}:${message.type}`
         );
       });
 
@@ -139,6 +176,26 @@ export async function GET(
         updatedAt: readyUpdatedAt,
         ...(readyClientId ? { clientId: readyClientId } : {}),
       });
+      send("widget-lock-ready", lockReadyPayload);
+
+      if (lockReadyPayload.enabled) {
+        unsubscribeWidgetLock = subscribeWidgetLockUpdate(dashboardId, (message) => {
+          if (message.type === "upsert") {
+            send("widget-lock-updated", {
+              type: "upsert",
+              lock: {
+                ...message.lock,
+                isMine: message.lock.userId === userId,
+              },
+            });
+            return;
+          }
+          send("widget-lock-updated", {
+            type: "delete",
+            widgetId: message.widgetId,
+          });
+        });
+      }
 
       heartbeatTimer = setInterval(() => {
         if (closed) return;
@@ -167,7 +224,9 @@ export async function GET(
       closed = true;
       if (heartbeatTimer) clearInterval(heartbeatTimer);
       if (accessCheckTimer) clearInterval(accessCheckTimer);
-      unsubscribe();
+      unsubscribeDashboard();
+      unsubscribeWidget();
+      unsubscribeWidgetLock();
       if (abortHandler) {
         request.signal.removeEventListener("abort", abortHandler);
         abortHandler = null;

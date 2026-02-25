@@ -46,6 +46,8 @@ export { upsertWeatherCache } from "./repositories/weather";
 
 export {
   applyDashboardSnapshot,
+  applyWidgetSnapshot,
+  deleteWidgetSnapshot,
   exportDashboardSnapshot,
   exportLocalSnapshot,
   pushDashboardSnapshot,
