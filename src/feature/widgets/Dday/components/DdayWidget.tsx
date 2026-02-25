@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useState } from "react";
 import type { FormEvent } from "react";
 import { Pencil, Plus } from "lucide-react";
 import { updateWidgetSettings } from "@/shared/db/db";
@@ -21,6 +21,7 @@ import { useWidgetActionMenu } from "@/feature/widgets/shared/hooks/useWidgetAct
 import { useI18n } from "@/shared/i18n/client";
 
 const MS_DAY = 24 * 60 * 60 * 1000;
+const EMPTY_WIDGET_SETTINGS: Record<string, unknown> = {};
 
 function toYmd(date: Date): YMD {
   const yyyy = date.getFullYear();
@@ -67,16 +68,15 @@ export function DdayWidget({ widgetId, canEdit = true }: DdayWidgetProps) {
   const [draftTitle, setDraftTitle] = useState("");
   const [draftDate, setDraftDate] = useState<YMD>(() => toYmd(new Date()));
 
-  const widgetSettings = useMemo(() => {
-    const settings = widget?.settings;
-    if (!settings || typeof settings !== "object" || Array.isArray(settings))
-      return {};
-    return settings as Record<string, unknown>;
-  }, [widget?.settings]);
-  const countFromOne = useMemo(() => {
-    const value = widgetSettings.countFromOne;
-    return typeof value === "boolean" ? value : true;
-  }, [widgetSettings]);
+  const settings = widget?.settings;
+  const widgetSettings =
+    settings && typeof settings === "object" && !Array.isArray(settings)
+      ? (settings as Record<string, unknown>)
+      : EMPTY_WIDGET_SETTINGS;
+  const countFromOne =
+    typeof widgetSettings.countFromOne === "boolean"
+      ? widgetSettings.countFromOne
+      : true;
 
   const openDialog = useCallback(() => {
     if (!canEdit) return;
@@ -176,40 +176,6 @@ export function DdayWidget({ widgetId, canEdit = true }: DdayWidgetProps) {
   const submitLabel = dday ? t("저장", "Save") : t("추가", "Add");
   const canSubmit = draftTitle.trim().length > 0 && Boolean(draftDate);
 
-  const content = useMemo(() => {
-    if (!dday) {
-      return (
-        <div className="flex h-full items-center justify-center text-sm text-gray-400">
-          {t("추가해주세요", "Add one")}
-        </div>
-      );
-    }
-
-    return (
-      <div className="flex h-full min-h-0 flex-col gap-3">
-        <div className="flex items-center justify-between gap-2">
-          <div className="min-w-0">
-            <div className="truncate text-sm font-semibold text-gray-900 dark:text-gray-100">
-              {dday.title}
-            </div>
-          </div>
-          <span className="text-xs text-gray-400">{formatYmd(dday.date, locale)}</span>
-        </div>
-
-        <div className="flex flex-1 items-center justify-center">
-          <div className="flex flex-col items-center gap-2">
-            <div className="flex h-32 w-32 flex-col items-center justify-center rounded-2xl border border-gray-200/70 bg-gray-50/80 dark:border-gray-700 dark:bg-gray-900/30">
-              <div className={cn("text-4xl font-bold leading-none", tone)}>
-                {ddayLabel}
-              </div>
-              <div className="mt-1 text-xs text-gray-500">{statusLabel}</div>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }, [dday, ddayLabel, locale, statusLabel, t, tone]);
-
   return (
     <WidgetCard
       header={
@@ -217,7 +183,35 @@ export function DdayWidget({ widgetId, canEdit = true }: DdayWidgetProps) {
       }
     >
       <div className="flex h-full min-h-0 flex-col">
-        <div className="flex-1 min-h-0">{content}</div>
+        <div className="flex-1 min-h-0">
+          {!dday ? (
+            <div className="flex h-full items-center justify-center text-sm text-gray-400">
+              {t("추가해주세요", "Add one")}
+            </div>
+          ) : (
+            <div className="flex h-full min-h-0 flex-col gap-3">
+              <div className="flex items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <div className="truncate text-sm font-semibold text-gray-900 dark:text-gray-100">
+                    {dday.title}
+                  </div>
+                </div>
+                <span className="text-xs text-gray-400">{formatYmd(dday.date, locale)}</span>
+              </div>
+
+              <div className="flex flex-1 items-center justify-center">
+                <div className="flex flex-col items-center gap-2">
+                  <div className="flex h-32 w-32 flex-col items-center justify-center rounded-2xl border border-gray-200/70 bg-gray-50/80 dark:border-gray-700 dark:bg-gray-900/30">
+                    <div className={cn("text-4xl font-bold leading-none", tone)}>
+                      {ddayLabel}
+                    </div>
+                    <div className="mt-1 text-xs text-gray-500">{statusLabel}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
 
         <Dialog
           open={dialogOpen}

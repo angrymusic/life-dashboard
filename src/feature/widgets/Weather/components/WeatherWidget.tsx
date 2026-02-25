@@ -133,15 +133,15 @@ export function WeatherWidget({ widgetId, canEdit = true }: WeatherWidgetProps) 
   });
 
   const days = useMemo(() => forecast?.days ?? [], [forecast?.days]);
-  const todayYmd = useMemo(() => toYmd(new Date()), []);
+  const now = new Date();
+  const todayYmd = toYmd(now);
+  const currentHour = now.getHours();
   const hourlyToday = useMemo<WeatherHourly[]>(() => {
     const hourly = forecast?.hourly ?? [];
-    const currentHourValue = new Date().getHours();
     return hourly.filter(
-      (item) => item.ymd === todayYmd && (item.hour ?? -1) >= currentHourValue
+      (item) => item.ymd === todayYmd && (item.hour ?? -1) >= currentHour
     );
-  }, [forecast?.hourly, todayYmd]);
-  const currentHour = useMemo(() => new Date().getHours(), []);
+  }, [forecast?.hourly, todayYmd, currentHour]);
   const currentEntry = useMemo(() => {
     if (hourlyToday.length === 0) return null;
     const exact = hourlyToday.find((item) => item.hour === currentHour);
