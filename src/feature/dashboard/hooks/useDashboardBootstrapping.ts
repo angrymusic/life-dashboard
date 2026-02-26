@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
+  clearLocalDataExceptMigrationState,
   getOrCreateLocalProfileId,
   removeDefaultDraftDashboardForSignedInUser,
   syncDashboardsFromServer,
@@ -34,6 +35,8 @@ type DashboardListResponse = {
   error?: string;
 };
 
+const AUTHENTICATED_CACHE_MARKER_KEY = "lifedashboard.authenticatedSession";
+
 export function useDashboardBootstrapping({
   dashboards,
   authEmail,
@@ -49,6 +52,7 @@ export function useDashboardBootstrapping({
   const [activeDashboardId, setActiveDashboardId] = useState<Id | undefined>();
   const userSelectedRef = useRef(false);
   const pendingRestoreRef = useRef<string | null>(null);
+  const sessionCleanupInFlightRef = useRef(false);
 
   const lastActiveDashboardKey =
     typeof window === "undefined"
@@ -138,6 +142,49 @@ export function useDashboardBootstrapping({
     localStorage.setItem(lastActiveDashboardKey, activeDashboardId);
     pendingRestoreRef.current = null;
   }, [activeDashboardId, dashboards, lastActiveDashboardKey]);
+
+  useEffect(() => {
+    if (isAuthLoading) return;
+    if (typeof window === "undefined") return;
+
+    if (isSignedIn) {
+      localStorage.setItem(AUTHENTICATED_CACHE_MARKER_KEY, "1");
+      return;
+    }
+
+    if (sessionCleanupInFlightRef.current) return;
+
+    const hasAuthenticatedMarker =
+      localStorage.getItem(AUTHENTICATED_CACHE_MARKER_KEY) === "1";
+
+    let hasProtectedDashboards = false;
+    if (dashboards?.length) {
+      const localProfileId = getOrCreateLocalProfileId();
+      hasProtectedDashboards = dashboards.some(
+        (dashboard) =>
+          Boolean(dashboard.groupId) ||
+          (Boolean(dashboard.ownerId) && dashboard.ownerId !== localProfileId)
+      );
+    }
+
+    if (!hasAuthenticatedMarker && !hasProtectedDashboards) return;
+
+    sessionCleanupInFlightRef.current = true;
+    void (async () => {
+      try {
+        await clearLocalDataExceptMigrationState();
+      } finally {
+        const keysToRemove = Object.keys(localStorage).filter((key) =>
+          key.startsWith("lifedashboard.")
+        );
+        keysToRemove.forEach((key) => localStorage.removeItem(key));
+        userSelectedRef.current = false;
+        pendingRestoreRef.current = null;
+        setActiveDashboardId(undefined);
+        sessionCleanupInFlightRef.current = false;
+      }
+    })();
+  }, [dashboards, isAuthLoading, isSignedIn]);
 
   useEffect(() => {
     if (isAuthLoading) return;
