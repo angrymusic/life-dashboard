@@ -47,7 +47,7 @@ export default function OpenGraphImage() {
                 padding: "10px 18px",
               }}
             >
-              Local-first
+              for Life
             </span>
             <span
               style={{

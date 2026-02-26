@@ -1,9 +1,14 @@
 export const SITE_NAME = "Life Dashboard";
 export const SITE_DESCRIPTION =
-  "Local-first dashboard builder for planning tasks, notes, photos, weather, and shared life routines in one place.";
+  "Dashboard builder for planning tasks, notes, photos, weather, and shared life routines in one place.";
 export const SITE_KEYWORDS = [
   "life dashboard",
-  "local-first",
+  "family dashboard",
+  "life planner",
+  "task management",
+  "note taking",
+  "photo dashboard",
+  "weather dashboard",
   "personal dashboard",
   "productivity",
   "todo",

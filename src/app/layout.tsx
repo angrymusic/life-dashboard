@@ -25,7 +25,7 @@ const siteUrl = getSiteUrl();
 export const metadata: Metadata = {
   metadataBase: siteUrl,
   title: {
-    default: `${SITE_NAME} | Local-first Dashboard`,
+    default: `${SITE_NAME}`,
     template: `%s | ${SITE_NAME}`,
   },
   description: SITE_DESCRIPTION,
@@ -48,7 +48,7 @@ export const metadata: Metadata = {
     type: "website",
     siteName: SITE_NAME,
     url: "/",
-    title: `${SITE_NAME} | Local-first Dashboard`,
+    title: `${SITE_NAME}`,
     description: SITE_DESCRIPTION,
     locale: "en_US",
     images: [
@@ -62,7 +62,7 @@ export const metadata: Metadata = {
   },
   twitter: {
     card: "summary_large_image",
-    title: `${SITE_NAME} | Local-first Dashboard`,
+    title: `${SITE_NAME}`,
     description: SITE_DESCRIPTION,
     images: ["/twitter-image"],
   },
