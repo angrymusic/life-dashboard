@@ -36,6 +36,7 @@ type DashboardListResponse = {
 };
 
 const AUTHENTICATED_CACHE_MARKER_KEY = "lifedashboard.authenticatedSession";
+const SESSION_CLEANUP_DELAY_MS = 500;
 
 export function useDashboardBootstrapping({
   dashboards,
@@ -53,6 +54,12 @@ export function useDashboardBootstrapping({
   const userSelectedRef = useRef(false);
   const pendingRestoreRef = useRef<string | null>(null);
   const sessionCleanupInFlightRef = useRef(false);
+  const sessionCleanupTaskIdRef = useRef(0);
+  const authStateRef = useRef({ isSignedIn, isAuthLoading });
+
+  useEffect(() => {
+    authStateRef.current = { isSignedIn, isAuthLoading };
+  }, [isAuthLoading, isSignedIn]);
 
   const lastActiveDashboardKey =
     typeof window === "undefined"
@@ -147,6 +154,8 @@ export function useDashboardBootstrapping({
     if (isAuthLoading) return;
     if (typeof window === "undefined") return;
 
+    const taskId = ++sessionCleanupTaskIdRef.current;
+
     if (isSignedIn) {
       localStorage.setItem(AUTHENTICATED_CACHE_MARKER_KEY, "1");
       return;
@@ -169,21 +178,48 @@ export function useDashboardBootstrapping({
 
     if (!hasAuthenticatedMarker && !hasProtectedDashboards) return;
 
-    sessionCleanupInFlightRef.current = true;
-    void (async () => {
-      try {
-        await clearLocalDataExceptMigrationState();
-      } finally {
-        const keysToRemove = Object.keys(localStorage).filter((key) =>
-          key.startsWith("lifedashboard.")
-        );
-        keysToRemove.forEach((key) => localStorage.removeItem(key));
-        userSelectedRef.current = false;
-        pendingRestoreRef.current = null;
-        setActiveDashboardId(undefined);
-        sessionCleanupInFlightRef.current = false;
+    let cancelled = false;
+    const timeoutId = window.setTimeout(() => {
+      if (cancelled) return;
+      if (sessionCleanupTaskIdRef.current !== taskId) return;
+      if (
+        authStateRef.current.isAuthLoading ||
+        authStateRef.current.isSignedIn
+      ) {
+        return;
       }
-    })();
+
+      sessionCleanupInFlightRef.current = true;
+      void (async () => {
+        try {
+          await clearLocalDataExceptMigrationState();
+          if (sessionCleanupTaskIdRef.current !== taskId) {
+            return;
+          }
+          if (
+            authStateRef.current.isAuthLoading ||
+            authStateRef.current.isSignedIn
+          ) {
+            return;
+          }
+
+          const keysToRemove = Object.keys(localStorage).filter((key) =>
+            key.startsWith("lifedashboard.")
+          );
+          keysToRemove.forEach((key) => localStorage.removeItem(key));
+          userSelectedRef.current = false;
+          pendingRestoreRef.current = null;
+          setActiveDashboardId(undefined);
+        } finally {
+          sessionCleanupInFlightRef.current = false;
+        }
+      })();
+    }, SESSION_CLEANUP_DELAY_MS);
+
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeoutId);
+    };
   }, [dashboards, isAuthLoading, isSignedIn]);
 
   useEffect(() => {
