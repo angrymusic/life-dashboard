@@ -48,13 +48,25 @@ export default function DashboardContainer() {
 
   const widgets = useDashboardWidgets(dashboardId);
 
-  useDashboardSync({
+  const { pendingRemoteUpdate, applyRemoteUpdate } = useDashboardSync({
     activeDashboard,
     dashboardId,
     widgets,
     isSignedIn,
     isServerBootstrapReady,
   });
+
+  useEffect(() => {
+    if (!pendingRemoteUpdate) return;
+
+    const timeoutId = window.setTimeout(() => {
+      void applyRemoteUpdate();
+    }, 500);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [pendingRemoteUpdate, applyRemoteUpdate]);
 
   const {
     addWidget,
