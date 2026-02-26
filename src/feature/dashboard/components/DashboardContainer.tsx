@@ -9,6 +9,7 @@ import { useDashboardPermissions } from "@/feature/dashboard/hooks/useDashboardP
 import { useDashboardSync } from "@/feature/dashboard/hooks/useDashboardSync";
 import { useDashboardActions } from "@/feature/dashboard/hooks/useDashboardActions";
 import { detectInAppBrowser } from "@/shared/lib/inAppBrowser";
+import { useWidgetLocks } from "@/feature/dashboard/hooks/useWidgetLocks";
 
 export default function DashboardContainer() {
   const dashboards = useDashboards();
@@ -55,6 +56,18 @@ export default function DashboardContainer() {
     isServerBootstrapReady,
   });
 
+  useEffect(() => {
+    if (!pendingRemoteUpdate) return;
+
+    const timeoutId = window.setTimeout(() => {
+      void applyRemoteUpdate();
+    }, 500);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [pendingRemoteUpdate, applyRemoteUpdate]);
+
   const {
     addWidget,
     commitWidgetLayout,
@@ -69,6 +82,12 @@ export default function DashboardContainer() {
     widgets,
     widgetCreatorId,
   });
+
+  const { lockEnabled, widgetLocks, touchWidgetLock, releaseAllWidgetLocks } =
+    useWidgetLocks({
+      activeDashboard,
+      isSignedIn,
+    });
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [copyStatus, setCopyStatus] = useState<"idle" | "success" | "error">(
@@ -117,7 +136,6 @@ export default function DashboardContainer() {
       isAuthLoading={isAuthLoading}
       isInAppBrowser={isInAppBrowser}
       copyStatus={copyStatus}
-      pendingRemoteUpdate={pendingRemoteUpdate}
       dialogOpen={dialogOpen}
       dashboardError={dashboardError}
       isCreating={isCreating}
@@ -127,9 +145,12 @@ export default function DashboardContainer() {
       onRenameDashboard={renameDashboard}
       onDeleteDashboard={deleteDashboard}
       onLayoutCommit={commitWidgetLayout}
+      lockEnabled={lockEnabled}
+      widgetLocks={widgetLocks}
+      onTouchWidgetLock={touchWidgetLock}
+      onReleaseAllWidgetLocks={releaseAllWidgetLocks}
       onRefreshDashboards={refreshDashboards}
       onRetryCreateDashboard={retry}
-      onApplyRemoteUpdate={applyRemoteUpdate}
       onCopyCurrentLink={handleCopyCurrentLink}
       onOpenAddDialog={setDialogOpen}
       onAddWidget={addWidget}

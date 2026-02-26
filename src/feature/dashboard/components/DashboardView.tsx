@@ -9,6 +9,7 @@ import { Button } from "@/shared/ui/button";
 import type { Dashboard, Id, Widget } from "@/shared/db/schema";
 import type { AddableWidgetType } from "@/feature/dashboard/libs/widgetRegistry";
 import { useI18n } from "@/shared/i18n/client";
+import type { WidgetLockMap } from "@/feature/dashboard/types/widgetLock";
 
 type CopyStatus = "idle" | "success" | "error";
 
@@ -23,7 +24,6 @@ type DashboardViewProps = {
   isAuthLoading: boolean;
   isInAppBrowser: boolean;
   copyStatus: CopyStatus;
-  pendingRemoteUpdate: string | null;
   dialogOpen: boolean;
   dashboardError: string | null;
   isCreating: boolean;
@@ -33,9 +33,12 @@ type DashboardViewProps = {
   onRenameDashboard: (dashboardId: Id, name: string) => Promise<void>;
   onDeleteDashboard: (dashboardId: Id) => Promise<void>;
   onLayoutCommit: (nextWidgets: Widget[]) => Promise<void>;
+  lockEnabled: boolean;
+  widgetLocks: WidgetLockMap;
+  onTouchWidgetLock: (widgetId: Id) => void;
+  onReleaseAllWidgetLocks: () => void;
   onRefreshDashboards: () => Promise<void>;
   onRetryCreateDashboard: () => void;
-  onApplyRemoteUpdate: () => Promise<void>;
   onCopyCurrentLink: () => Promise<void>;
   onOpenAddDialog: (open: boolean) => void;
   onAddWidget: (type: AddableWidgetType) => Promise<void>;
@@ -52,7 +55,6 @@ export default function DashboardView({
   isAuthLoading,
   isInAppBrowser,
   copyStatus,
-  pendingRemoteUpdate,
   dialogOpen,
   dashboardError,
   isCreating,
@@ -62,9 +64,12 @@ export default function DashboardView({
   onRenameDashboard,
   onDeleteDashboard,
   onLayoutCommit,
+  lockEnabled,
+  widgetLocks,
+  onTouchWidgetLock,
+  onReleaseAllWidgetLocks,
   onRefreshDashboards,
   onRetryCreateDashboard,
-  onApplyRemoteUpdate,
   onCopyCurrentLink,
   onOpenAddDialog,
   onAddWidget,
@@ -122,22 +127,6 @@ export default function DashboardView({
         </div>
       ) : null}
 
-      {activeDashboard?.groupId && isSignedIn && pendingRemoteUpdate ? (
-        <div className="pointer-events-none fixed left-1/2 top-20 z-50 w-[calc(100%-2rem)] max-w-sm -translate-x-1/2 sm:max-w-md">
-          <div className="pointer-events-auto flex items-center justify-between gap-3 rounded-full border border-primary/20 bg-accent/40 px-4 py-2 text-xs text-accent-foreground shadow-lg backdrop-blur-sm">
-            <span>{t("새로운 변경사항이 있어요.", "There are new changes.")}</span>
-            <Button
-              variant="outline"
-              size="sm"
-              className="rounded-full border-primary/30 bg-white/70 text-primary shadow-none hover:bg-white hover:text-primary"
-              onClick={() => void onApplyRemoteUpdate()}
-            >
-              {t("새로고침", "Refresh")}
-            </Button>
-          </div>
-        </div>
-      ) : null}
-
       {activeDashboard?.groupId && !isSignedIn ? (
         <div className="mx-4 mt-3 rounded-lg border border-amber-200/70 bg-amber-50 px-4 py-3 text-xs text-amber-700">
           {t(
@@ -171,6 +160,10 @@ export default function DashboardView({
           widgets={widgets}
           onLayoutCommit={onLayoutCommit}
           canEditWidget={canEditWidget}
+          lockEnabled={lockEnabled}
+          widgetLocks={widgetLocks}
+          onTouchWidgetLock={onTouchWidgetLock}
+          onReleaseAllWidgetLocks={onReleaseAllWidgetLocks}
         />
       )}
 

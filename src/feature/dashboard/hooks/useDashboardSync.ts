@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   applyDashboardSnapshot,
+  applyWidgetSnapshot,
+  deleteWidgetSnapshot,
   flushOutbox,
   removeSharedDashboardLocally,
 } from "@/shared/db/db";
@@ -88,6 +90,58 @@ export function useDashboardSync({
         lastRemoteUpdatedAtRef.current = updatedAt;
       }
 
+      return true;
+    },
+    []
+  );
+
+  const fetchAndApplyWidgetSnapshot = useCallback(
+    async (targetDashboardId: Id, widgetId: Id, groupId?: Id) => {
+      const response = await fetch(
+        `/api/dashboards/${targetDashboardId}/widgets/${widgetId}/snapshot`
+      );
+      if (response.status === 404) {
+        await deleteWidgetSnapshot(widgetId);
+        return true;
+      }
+      if (response.status === 403) {
+        if (groupId) {
+          await removeSharedDashboardLocally(targetDashboardId, groupId);
+        }
+        return false;
+      }
+
+      const payload = await readJson<{
+        ok?: boolean;
+        widget?: unknown;
+        memos?: unknown[];
+        todos?: unknown[];
+        ddays?: unknown[];
+        photos?: unknown[];
+        moods?: unknown[];
+        notices?: unknown[];
+        metrics?: unknown[];
+        metricEntries?: unknown[];
+        calendarEvents?: unknown[];
+        weatherCache?: unknown[];
+      }>(response);
+      if (!response.ok || !payload?.ok || !payload.widget) return false;
+
+      const widgetSnapshot = {
+        widget: payload.widget,
+        memos: payload.memos ?? [],
+        todos: payload.todos ?? [],
+        ddays: payload.ddays ?? [],
+        photos: payload.photos ?? [],
+        moods: payload.moods ?? [],
+        notices: payload.notices ?? [],
+        metrics: payload.metrics ?? [],
+        metricEntries: payload.metricEntries ?? [],
+        calendarEvents: payload.calendarEvents ?? [],
+        weatherCache: payload.weatherCache ?? [],
+      } as Parameters<typeof applyWidgetSnapshot>[0];
+
+      await applyWidgetSnapshot(widgetSnapshot);
       return true;
     },
     []
@@ -181,15 +235,24 @@ export function useDashboardSync({
     const syncClientId = getSyncClientId();
     let cancelled = false;
     let timeoutId: number | undefined;
+    const inFlightWidgetUpdates = new Set<Id>();
+    const queuedWidgetUpdates = new Map<
+      Id,
+      { widgetId: Id; type: "upsert" | "delete"; updatedAt?: string }
+    >();
 
-    const consumeSelfEcho = (updatedAt: string, sourceClientId?: string) => {
-      if (!sourceClientId || sourceClientId !== syncClientId) return false;
+    const acknowledgeUpdatedAt = (updatedAt: string) => {
       syncLastSeenUpdatedAt(updatedAt);
       setPendingRemoteUpdate((current) => {
         if (!current) return current;
         if (updatedAt >= current) return null;
         return current;
       });
+    };
+
+    const consumeSelfEcho = (updatedAt: string, sourceClientId?: string) => {
+      if (!sourceClientId || sourceClientId !== syncClientId) return false;
+      acknowledgeUpdatedAt(updatedAt);
       return true;
     };
 
@@ -219,6 +282,77 @@ export function useDashboardSync({
             handleRemoteUpdatedAt(payload.updatedAt);
           }
         }
+      } catch {
+        // Ignore malformed SSE payloads and continue listening.
+      }
+    };
+
+    const applyWidgetUpdate = (payload: {
+      widgetId: Id;
+      type: "upsert" | "delete";
+      updatedAt?: string;
+    }) => {
+      const { widgetId } = payload;
+      if (inFlightWidgetUpdates.has(widgetId)) {
+        queuedWidgetUpdates.set(widgetId, payload);
+        return;
+      }
+
+      inFlightWidgetUpdates.add(widgetId);
+      void (async () => {
+        try {
+          if (payload.type === "delete") {
+            await deleteWidgetSnapshot(widgetId);
+            if (typeof payload.updatedAt === "string") {
+              acknowledgeUpdatedAt(payload.updatedAt);
+            }
+            return;
+          }
+
+          const applied = await fetchAndApplyWidgetSnapshot(
+            currentDashboardId,
+            widgetId,
+            groupId
+          );
+          if (applied && typeof payload.updatedAt === "string") {
+            acknowledgeUpdatedAt(payload.updatedAt);
+            return;
+          }
+          if (!applied && typeof payload.updatedAt === "string") {
+            handleRemoteUpdatedAt(payload.updatedAt);
+          }
+        } finally {
+          inFlightWidgetUpdates.delete(widgetId);
+          const queuedPayload = queuedWidgetUpdates.get(widgetId);
+          if (!queuedPayload) return;
+          queuedWidgetUpdates.delete(widgetId);
+          applyWidgetUpdate(queuedPayload);
+        }
+      })();
+    };
+
+    const parseAndHandleWidgetUpdated = (data: string) => {
+      try {
+        const payload = JSON.parse(data) as {
+          widgetId?: string;
+          type?: "upsert" | "delete";
+          updatedAt?: string;
+          clientId?: string;
+        };
+        if (typeof payload.widgetId !== "string") return;
+        if (payload.type !== "upsert" && payload.type !== "delete") return;
+
+        if (typeof payload.updatedAt === "string") {
+          if (consumeSelfEcho(payload.updatedAt, payload.clientId)) return;
+        } else if (payload.clientId && payload.clientId === syncClientId) {
+          return;
+        }
+
+        applyWidgetUpdate({
+          widgetId: payload.widgetId,
+          type: payload.type,
+          updatedAt: payload.updatedAt,
+        });
       } catch {
         // Ignore malformed SSE payloads and continue listening.
       }
@@ -273,6 +407,11 @@ export function useDashboardSync({
         parseAndHandleUpdatedAt(message.data);
       };
 
+      const handleWidgetUpdated = (event: Event) => {
+        const message = event as MessageEvent<string>;
+        parseAndHandleWidgetUpdated(message.data);
+      };
+
       const handleForbidden = () => {
         if (cancelled) return;
         cancelled = true;
@@ -282,12 +421,14 @@ export function useDashboardSync({
 
       eventSource.addEventListener("ready", handleReady);
       eventSource.addEventListener("dashboard-updated", handleDashboardUpdated);
+      eventSource.addEventListener("widget-updated", handleWidgetUpdated);
       eventSource.addEventListener("forbidden", handleForbidden);
 
       return () => {
         cancelled = true;
         eventSource.removeEventListener("ready", handleReady);
         eventSource.removeEventListener("dashboard-updated", handleDashboardUpdated);
+        eventSource.removeEventListener("widget-updated", handleWidgetUpdated);
         eventSource.removeEventListener("forbidden", handleForbidden);
         eventSource.close();
       };
@@ -302,6 +443,7 @@ export function useDashboardSync({
   }, [
     activeDashboard?.groupId,
     activeDashboard?.id,
+    fetchAndApplyWidgetSnapshot,
     handleRemoteUpdatedAt,
     isSignedIn,
     syncLastSeenUpdatedAt,

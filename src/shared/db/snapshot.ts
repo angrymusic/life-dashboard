@@ -37,6 +37,20 @@ type DashboardSnapshot = {
   members?: Member[];
 };
 
+export type WidgetSnapshot = {
+  widget: Widget;
+  memos: Memo[];
+  todos: Todo[];
+  ddays: Dday[];
+  photos: Photo[];
+  moods: Mood[];
+  notices: Notice[];
+  metrics: Metric[];
+  metricEntries: MetricEntry[];
+  calendarEvents: CalendarEvent[];
+  weatherCache: WeatherCache[];
+};
+
 type ExportDashboardSnapshotOptions = {
   uploadLocalPhotos?: boolean;
 };
@@ -198,6 +212,101 @@ export async function applyDashboardSnapshot(snapshot: DashboardSnapshot) {
     await syncMembersFromServer(snapshot.members, snapshot.dashboard.groupId);
   }
   await clearOutboxForDashboard(dashboardId);
+}
+
+export async function applyWidgetSnapshot(snapshot: WidgetSnapshot) {
+  const widgetId = snapshot.widget.id;
+  const localPhotos: LocalPhoto[] = snapshot.photos.map((photo) => ({
+    id: photo.id,
+    widgetId: photo.widgetId,
+    dashboardId: photo.dashboardId,
+    mimeType: photo.mimeType,
+    caption: photo.caption,
+    takenAt: photo.takenAt,
+    createdAt: photo.createdAt,
+    updatedAt: photo.updatedAt,
+    serverStoragePath: photo.storagePath,
+  }));
+
+  await db.transaction(
+    "rw",
+    [
+      db.widgets,
+      db.memos,
+      db.todos,
+      db.ddays,
+      db.localPhotos,
+      db.moods,
+      db.notices,
+      db.metrics,
+      db.metricEntries,
+      db.calendarEvents,
+      db.weatherCache,
+    ],
+    async () => {
+      await Promise.all([
+        db.memos.where("widgetId").equals(widgetId).delete(),
+        db.todos.where("widgetId").equals(widgetId).delete(),
+        db.ddays.where("widgetId").equals(widgetId).delete(),
+        db.localPhotos.where("widgetId").equals(widgetId).delete(),
+        db.moods.where("widgetId").equals(widgetId).delete(),
+        db.notices.where("widgetId").equals(widgetId).delete(),
+        db.metrics.where("widgetId").equals(widgetId).delete(),
+        db.metricEntries.where("widgetId").equals(widgetId).delete(),
+        db.calendarEvents.where("widgetId").equals(widgetId).delete(),
+        db.weatherCache.where("widgetId").equals(widgetId).delete(),
+      ]);
+
+      await db.widgets.put(snapshot.widget);
+      if (snapshot.memos.length) await db.memos.bulkPut(snapshot.memos);
+      if (snapshot.todos.length) await db.todos.bulkPut(snapshot.todos);
+      if (snapshot.ddays.length) await db.ddays.bulkPut(snapshot.ddays);
+      if (localPhotos.length) await db.localPhotos.bulkPut(localPhotos);
+      if (snapshot.moods.length) await db.moods.bulkPut(snapshot.moods);
+      if (snapshot.notices.length) await db.notices.bulkPut(snapshot.notices);
+      if (snapshot.metrics.length) await db.metrics.bulkPut(snapshot.metrics);
+      if (snapshot.metricEntries.length)
+        await db.metricEntries.bulkPut(snapshot.metricEntries);
+      if (snapshot.calendarEvents.length)
+        await db.calendarEvents.bulkPut(snapshot.calendarEvents);
+      if (snapshot.weatherCache.length)
+        await db.weatherCache.bulkPut(snapshot.weatherCache);
+    }
+  );
+}
+
+export async function deleteWidgetSnapshot(widgetId: Id) {
+  await db.transaction(
+    "rw",
+    [
+      db.widgets,
+      db.memos,
+      db.todos,
+      db.ddays,
+      db.localPhotos,
+      db.moods,
+      db.notices,
+      db.metrics,
+      db.metricEntries,
+      db.calendarEvents,
+      db.weatherCache,
+    ],
+    async () => {
+      await Promise.all([
+        db.widgets.delete(widgetId),
+        db.memos.where("widgetId").equals(widgetId).delete(),
+        db.todos.where("widgetId").equals(widgetId).delete(),
+        db.ddays.where("widgetId").equals(widgetId).delete(),
+        db.localPhotos.where("widgetId").equals(widgetId).delete(),
+        db.moods.where("widgetId").equals(widgetId).delete(),
+        db.notices.where("widgetId").equals(widgetId).delete(),
+        db.metrics.where("widgetId").equals(widgetId).delete(),
+        db.metricEntries.where("widgetId").equals(widgetId).delete(),
+        db.calendarEvents.where("widgetId").equals(widgetId).delete(),
+        db.weatherCache.where("widgetId").equals(widgetId).delete(),
+      ]);
+    }
+  );
 }
 
 export async function exportLocalSnapshot(): Promise<LocalSnapshot> {

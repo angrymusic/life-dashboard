@@ -9,6 +9,7 @@ import ReactGridLayout, {
 } from "react-grid-layout";
 import type { Layout } from "react-grid-layout";
 import type { Widget } from "@/shared/db/schema";
+import { cn } from "@/shared/lib/utils";
 import {
   getLayoutUpdates,
   toGridLayout,
@@ -17,11 +18,17 @@ import {
   WidgetRegistry,
   isAddableWidgetType,
 } from "@/feature/dashboard/libs/widgetRegistry";
+import { useI18n } from "@/shared/i18n/client";
+import type { WidgetLockMap } from "@/feature/dashboard/types/widgetLock";
 
 type Props = {
   widgets: Widget[];
   onLayoutCommit: (next: Widget[]) => void;
   canEditWidget?: (widget: Widget) => boolean;
+  lockEnabled?: boolean;
+  widgetLocks?: WidgetLockMap;
+  onTouchWidgetLock?: (widgetId: string) => void;
+  onReleaseAllWidgetLocks?: () => void;
 };
 
 const MOBILE_BREAKPOINT = 768;
@@ -63,12 +70,17 @@ export default function GridLayout({
   widgets,
   onLayoutCommit,
   canEditWidget,
+  lockEnabled = false,
+  widgetLocks = {},
+  onTouchWidgetLock,
+  onReleaseAllWidgetLocks,
 }: Props) {
+  const { t } = useI18n();
   const { width, containerRef, mounted } = useContainerWidth();
   const isMobileViewport = mounted && width < MOBILE_BREAKPOINT;
   const compactor = verticalCompactor;
 
-  const editableById = useMemo(() => {
+  const permissionEditableById = useMemo(() => {
     return new Map(
       widgets.map((widget) => [
         widget.id,
@@ -76,17 +88,26 @@ export default function GridLayout({
       ])
     );
   }, [widgets, canEditWidget]);
+  const effectiveEditableById = useMemo(() => {
+    return new Map(
+      widgets.map((widget) => {
+        const canEditByPermission = permissionEditableById.get(widget.id) ?? true;
+        const lock = widgetLocks[widget.id];
+        const lockedByOther = lockEnabled && Boolean(lock && !lock.isMine);
+        return [widget.id, canEditByPermission && !lockedByOther];
+      })
+    );
+  }, [lockEnabled, permissionEditableById, widgetLocks, widgets]);
   const canEditAny = useMemo(() => {
-    if (!canEditWidget) return true;
-    return widgets.some((widget) => canEditWidget(widget));
-  }, [widgets, canEditWidget]);
+    return widgets.some((widget) => effectiveEditableById.get(widget.id) ?? false);
+  }, [widgets, effectiveEditableById]);
   const canEditLayout = canEditAny && !isMobileViewport;
   const layout = useMemo(() => {
     return toGridLayout(widgets).map((item) => {
-      const canEdit = editableById.get(item.i) ?? true;
+      const canEdit = effectiveEditableById.get(item.i) ?? true;
       return { ...item, static: Boolean(item.static) || !canEdit };
     });
-  }, [widgets, editableById]);
+  }, [widgets, effectiveEditableById]);
   const renderedLayout = useMemo(
     () => (isMobileViewport ? toMobileStackLayout(layout) : layout),
     [isMobileViewport, layout]
@@ -111,16 +132,29 @@ export default function GridLayout({
       if (!canEditLayout) return;
       const updates = getLayoutUpdates(widgets, nextLayout);
       const allowedUpdates = updates.filter(
-        (widget) => editableById.get(widget.id) ?? false
+        (widget) => effectiveEditableById.get(widget.id) ?? false
       );
       if (allowedUpdates.length === 0) return;
       onLayoutCommit(allowedUpdates);
     },
-    [canEditLayout, onLayoutCommit, widgets, editableById]
+    [canEditLayout, onLayoutCommit, widgets, effectiveEditableById]
   );
 
   return (
-    <div ref={containerRef} className="px-2 pb-24 sm:px-4">
+    <div
+      ref={containerRef}
+      className="px-2 pb-24 sm:px-4"
+      onPointerDownCapture={(event) => {
+        if (!lockEnabled) return;
+        if (!onReleaseAllWidgetLocks) return;
+
+        const target = event.target;
+        if (!(target instanceof Element)) return;
+        if (target.closest("[data-widget-shell='true']")) return;
+
+        onReleaseAllWidgetLocks();
+      }}
+    >
       {mounted && (
         <ReactGridLayout
           layout={renderedLayout}
@@ -136,13 +170,58 @@ export default function GridLayout({
           onResizeStop={handleLayoutCommit}
         >
           {widgets.map((w) => {
-            const canEdit = editableById.get(w.id) ?? true;
+            const canEdit = effectiveEditableById.get(w.id) ?? true;
+            const canEditByPermission = permissionEditableById.get(w.id) ?? true;
+            const lock = widgetLocks[w.id];
+            const lockedByOther = lockEnabled && Boolean(lock && !lock.isMine);
             const entry = isAddableWidgetType(w.type)
               ? WidgetRegistry[w.type]
               : null;
             return (
-              <div key={w.id} className="h-full">
-                {entry ? entry.render({ widgetId: w.id, canEdit }) : null}
+              <div key={w.id} className="h-full" data-widget-shell="true">
+                <div
+                  className="relative h-full"
+                  onPointerDownCapture={() => {
+                    if (!lockEnabled) return;
+                    if (!canEditByPermission) return;
+                    if (lockedByOther) return;
+                    onTouchWidgetLock?.(w.id);
+                  }}
+                  onFocusCapture={() => {
+                    if (!lockEnabled) return;
+                    if (!canEditByPermission) return;
+                    if (lockedByOther) return;
+                    onTouchWidgetLock?.(w.id);
+                  }}
+                >
+                  <div key={`${w.id}:${canEdit ? "edit" : "readonly"}`} className="h-full">
+                    {entry ? entry.render({ widgetId: w.id, canEdit }) : null}
+                  </div>
+                  {lockEnabled && lock ? (
+                    <>
+                      <div
+                        className={cn(
+                          "pointer-events-none absolute inset-0 rounded-lg border-2",
+                          lock.isMine
+                            ? "border-sky-400/80"
+                            : "border-amber-400/90"
+                        )}
+                      />
+                      <div
+                        className={cn(
+                          "pointer-events-none absolute bottom-2 right-2 rounded-full px-2 py-0.5 text-[10px] font-medium shadow-sm",
+                          lock.isMine
+                            ? "bg-sky-500/95 text-white"
+                            : "bg-amber-500/95 text-white"
+                        )}
+                      >
+                        {lock.isMine
+                          ? t("수정 중", "Editing")
+                          : `${lock.displayName} ${t("수정 중", "editing")}`}
+                      </div>
+                    </>
+                  ) : null}
+                </div>
               </div>
             );
           })}

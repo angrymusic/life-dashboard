@@ -15,9 +15,14 @@ const { requireUser, prisma } = vi.hoisted(() => ({
     widget: {
       findUnique: vi.fn(),
     },
+    widgetLock: {
+      deleteMany: vi.fn(),
+      findUnique: vi.fn(),
+    },
     memo: {
       upsert: vi.fn(),
       deleteMany: vi.fn(),
+      findUnique: vi.fn(),
     },
   },
 }));
@@ -45,6 +50,9 @@ function buildRequest(body: unknown) {
 describe("POST /api/sync/apply", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    prisma.widgetLock.deleteMany.mockResolvedValue({ count: 0 });
+    prisma.widgetLock.findUnique.mockResolvedValue(null);
+    prisma.memo.findUnique.mockResolvedValue(null);
   });
 
   it("returns 401 when the user is not authenticated", async () => {
@@ -151,6 +159,63 @@ describe("POST /api/sync/apply", () => {
     expect(prisma.dashboard.updateMany).toHaveBeenCalledTimes(1);
   });
 
+  it("applies memo updates when text is cleared to an empty string", async () => {
+    requireUser.mockResolvedValue({
+      ok: true,
+      context: { userId: "child-1" },
+    });
+    prisma.widget.findUnique.mockResolvedValue({
+      id: "widget-1",
+      dashboardId: "dashboard-1",
+      createdBy: "child-1",
+    });
+    prisma.dashboard.findUnique.mockResolvedValue({
+      id: "dashboard-1",
+      ownerId: null,
+      groupId: "group-1",
+    });
+    prisma.groupMember.findFirst.mockResolvedValue({
+      id: "member-1",
+      role: "child",
+    });
+    prisma.memo.upsert.mockResolvedValue({});
+    prisma.dashboard.updateMany.mockResolvedValue({ count: 1 });
+
+    const response = await POST(
+      buildRequest({
+        events: [
+          {
+            id: "memo:memo-1",
+            entityType: "memo",
+            entityId: "memo-1",
+            operation: "upsert",
+            dashboardId: "dashboard-1",
+            widgetId: "widget-1",
+            payload: {
+              id: "memo-1",
+              dashboardId: "dashboard-1",
+              widgetId: "widget-1",
+              text: "",
+            },
+          },
+        ],
+      })
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(body.ok).toBe(true);
+    expect(body.appliedIds).toEqual(["memo:memo-1"]);
+    expect(body.errors).toBeUndefined();
+    expect(prisma.memo.upsert).toHaveBeenCalledTimes(1);
+    expect(prisma.memo.upsert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        create: expect.objectContaining({ text: "" }),
+        update: expect.objectContaining({ text: "" }),
+      })
+    );
+  });
+
   it("returns partial success for mixed permission outcomes", async () => {
     requireUser.mockResolvedValue({
       ok: true,
@@ -219,5 +284,63 @@ describe("POST /api/sync/apply", () => {
       { id: "dashboard:new-dashboard", error: "Forbidden" },
     ]);
     expect(prisma.memo.upsert).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects widget writes when the widget is locked by another member", async () => {
+    requireUser.mockResolvedValue({
+      ok: true,
+      context: { userId: "child-1" },
+    });
+    prisma.widget.findUnique.mockResolvedValue({
+      id: "widget-1",
+      dashboardId: "dashboard-1",
+      createdBy: "child-1",
+    });
+    prisma.dashboard.findUnique.mockResolvedValue({
+      id: "dashboard-1",
+      ownerId: null,
+      groupId: "group-1",
+    });
+    prisma.groupMember.findFirst.mockResolvedValue({
+      id: "member-1",
+      role: "child",
+    });
+    prisma.widgetLock.findUnique.mockResolvedValue({
+      widgetId: "widget-1",
+      dashboardId: "dashboard-1",
+      userId: "other-user",
+      displayName: "Other Member",
+      expiresAt: new Date(Date.now() + 60_000),
+    });
+
+    const response = await POST(
+      buildRequest({
+        events: [
+          {
+            id: "memo:memo-1",
+            entityType: "memo",
+            entityId: "memo-1",
+            operation: "upsert",
+            dashboardId: "dashboard-1",
+            widgetId: "widget-1",
+            payload: {
+              id: "memo-1",
+              dashboardId: "dashboard-1",
+              widgetId: "widget-1",
+              text: "blocked",
+            },
+          },
+        ],
+      })
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(207);
+    expect(body.ok).toBe(false);
+    expect(body.appliedIds).toEqual([]);
+    expect(body.errors).toEqual([
+      { id: "memo:memo-1", error: "Widget is locked by Other Member" },
+    ]);
+    expect(prisma.memo.upsert).not.toHaveBeenCalled();
   });
 });
