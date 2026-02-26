@@ -77,21 +77,6 @@ export async function GET(
   const dashboard = await ensureAccess(dashboardId, userId);
   if (!dashboard) return jsonError(404, "Dashboard not found");
 
-  let lockReadyPayload: {
-    enabled: boolean;
-    locks: Awaited<ReturnType<typeof listActiveWidgetLocks>>;
-  } = { enabled: false, locks: [] };
-  if (dashboard.groupId) {
-    try {
-      const locks = await listActiveWidgetLocks(dashboardId, userId);
-      lockReadyPayload = { enabled: true, locks };
-    } catch (error) {
-      if (!(error instanceof WidgetLockUnavailableError)) {
-        throw error;
-      }
-    }
-  }
-
   const encoder = new TextEncoder();
 
   let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
@@ -145,6 +130,16 @@ export async function GET(
 
       request.signal.addEventListener("abort", onAbort);
 
+      let lockReadySent = !dashboard.groupId;
+      const pendingLockEvents: Array<() => void> = [];
+      const enqueueLockEvent = (event: () => void) => {
+        if (lockReadySent) {
+          event();
+          return;
+        }
+        pendingLockEvents.push(event);
+      };
+
       unsubscribeDashboard = subscribeDashboardUpdate(dashboardId, (message) => {
         send(
           "dashboard-updated",
@@ -168,34 +163,60 @@ export async function GET(
         );
       });
 
-      const readyUpdatedAt = dashboard.updatedAt.toISOString();
-      const latest = getLatestDashboardUpdate(dashboardId);
-      const readyClientId =
-        latest && latest.updatedAt === readyUpdatedAt ? latest.clientId : undefined;
-      send("ready", {
-        updatedAt: readyUpdatedAt,
-        ...(readyClientId ? { clientId: readyClientId } : {}),
-      });
-      send("widget-lock-ready", lockReadyPayload);
-
-      if (lockReadyPayload.enabled) {
+      if (dashboard.groupId) {
         unsubscribeWidgetLock = subscribeWidgetLockUpdate(dashboardId, (message) => {
-          if (message.type === "upsert") {
+          enqueueLockEvent(() => {
+            if (message.type === "upsert") {
+              send("widget-lock-updated", {
+                type: "upsert",
+                lock: {
+                  ...message.lock,
+                  isMine: message.lock.userId === userId,
+                },
+              });
+              return;
+            }
             send("widget-lock-updated", {
-              type: "upsert",
-              lock: {
-                ...message.lock,
-                isMine: message.lock.userId === userId,
-              },
+              type: "delete",
+              widgetId: message.widgetId,
             });
-            return;
-          }
-          send("widget-lock-updated", {
-            type: "delete",
-            widgetId: message.widgetId,
           });
         });
       }
+
+      void (async () => {
+        let lockReadyPayload: {
+          enabled: boolean;
+          locks: Awaited<ReturnType<typeof listActiveWidgetLocks>>;
+        } = { enabled: false, locks: [] };
+
+        if (dashboard.groupId) {
+          try {
+            const locks = await listActiveWidgetLocks(dashboardId, userId);
+            lockReadyPayload = { enabled: true, locks };
+          } catch (error) {
+            if (!(error instanceof WidgetLockUnavailableError)) {
+              close();
+              return;
+            }
+          }
+        }
+
+        const readyUpdatedAt = dashboard.updatedAt.toISOString();
+        const latest = getLatestDashboardUpdate(dashboardId);
+        const readyClientId =
+          latest && latest.updatedAt === readyUpdatedAt ? latest.clientId : undefined;
+        send("ready", {
+          updatedAt: readyUpdatedAt,
+          ...(readyClientId ? { clientId: readyClientId } : {}),
+        });
+        send("widget-lock-ready", lockReadyPayload);
+        lockReadySent = true;
+        for (const pendingEvent of pendingLockEvents) {
+          pendingEvent();
+        }
+        pendingLockEvents.length = 0;
+      })();
 
       heartbeatTimer = setInterval(() => {
         if (closed) return;
