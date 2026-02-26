@@ -1,5 +1,7 @@
 "use client";
 
+import { ChevronDown } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
 import Header from "./Header";
 import Footer from "./Footer";
 import GridLayout from "./GridLayout";
@@ -75,6 +77,57 @@ export default function DashboardView({
   onAddWidget,
 }: DashboardViewProps) {
   const { t } = useI18n();
+  const [showScrollToBottom, setShowScrollToBottom] = useState(false);
+
+  const updateScrollToBottomVisibility = useCallback(() => {
+    if (typeof window === "undefined") return;
+    const documentHeight = Math.max(
+      document.documentElement.scrollHeight,
+      document.body.scrollHeight
+    );
+    const viewportBottom = window.scrollY + window.innerHeight;
+    const canScroll = documentHeight > window.innerHeight + 8;
+    const distanceToBottom = documentHeight - viewportBottom;
+    const nextVisible = canScroll && distanceToBottom > 96;
+
+    setShowScrollToBottom((current) =>
+      current === nextVisible ? current : nextVisible
+    );
+  }, []);
+
+  const scrollToBottom = useCallback(() => {
+    if (typeof window === "undefined") return;
+    const documentHeight = Math.max(
+      document.documentElement.scrollHeight,
+      document.body.scrollHeight
+    );
+    window.scrollTo({
+      top: documentHeight,
+      behavior: "smooth",
+    });
+  }, []);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    window.addEventListener("scroll", updateScrollToBottomVisibility, {
+      passive: true,
+    });
+    window.addEventListener("resize", updateScrollToBottomVisibility);
+
+    return () => {
+      window.removeEventListener("scroll", updateScrollToBottomVisibility);
+      window.removeEventListener("resize", updateScrollToBottomVisibility);
+    };
+  }, [updateScrollToBottomVisibility]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const frame = window.requestAnimationFrame(updateScrollToBottomVisibility);
+    return () => {
+      window.cancelAnimationFrame(frame);
+    };
+  }, [widgets?.length, dashboardId, updateScrollToBottomVisibility]);
 
   return (
     <div>
@@ -166,6 +219,19 @@ export default function DashboardView({
           onReleaseAllWidgetLocks={onReleaseAllWidgetLocks}
         />
       )}
+
+      {showScrollToBottom ? (
+        <Button
+          type="button"
+          variant="outline"
+          size="icon-lg"
+          aria-label={t("맨 아래로 이동", "Scroll to bottom")}
+          className="fixed bottom-4 left-1/2 z-50 -translate-x-1/2 rounded-full bg-white/70 backdrop-blur-[2px] shadow-sm hover:bg-white/90"
+          onClick={scrollToBottom}
+        >
+          <ChevronDown className="h-5 w-5" />
+        </Button>
+      ) : null}
 
       <Footer onAddClick={() => onOpenAddDialog(true)} canEdit={canCreateWidget} />
 

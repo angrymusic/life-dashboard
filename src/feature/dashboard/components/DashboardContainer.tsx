@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import DashboardView from "./DashboardView";
 import { useDashboards, useDashboardWidgets } from "@/shared/db/queries";
 import { useSession } from "next-auth/react";
@@ -124,6 +124,30 @@ export default function DashboardContainer() {
     }
   };
 
+  const handleAddWidget: typeof addWidget = useCallback(
+    async (type) => {
+      await addWidget(type);
+      if (typeof window === "undefined") return;
+
+      const scrollToBottom = () => {
+        const documentHeight = Math.max(
+          document.documentElement.scrollHeight,
+          document.body.scrollHeight
+        );
+        window.scrollTo({
+          top: documentHeight,
+          behavior: "smooth",
+        });
+      };
+
+      window.requestAnimationFrame(() => {
+        scrollToBottom();
+        window.requestAnimationFrame(scrollToBottom);
+      });
+    },
+    [addWidget]
+  );
+
   return (
     <DashboardView
       dashboards={dashboards}
@@ -153,7 +177,7 @@ export default function DashboardContainer() {
       onRetryCreateDashboard={retry}
       onCopyCurrentLink={handleCopyCurrentLink}
       onOpenAddDialog={setDialogOpen}
-      onAddWidget={addWidget}
+      onAddWidget={handleAddWidget}
     />
   );
 }
