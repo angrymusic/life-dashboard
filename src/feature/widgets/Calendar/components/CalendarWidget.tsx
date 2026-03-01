@@ -165,11 +165,20 @@ export function CalendarWidget({
   } = useCalendarWidget(widgetId);
 
   const [specialDayDialogOpen, setSpecialDayDialogOpen] = useState(false);
+  const [monthPickerOpen, setMonthPickerOpen] = useState(false);
   const [weatherLocationDialogOpen, setWeatherLocationDialogOpen] =
     useState(false);
   const [draftShowHoliday, setDraftShowHoliday] = useState(showHoliday);
   const [draftShowAnniversary, setDraftShowAnniversary] =
     useState(showAnniversary);
+  const [draftYear, setDraftYear] = useState(() =>
+    String(viewDate.getFullYear())
+  );
+  const [draftMonth, setDraftMonth] = useState(() =>
+    String(viewDate.getMonth() + 1)
+  );
+  const yearInputId = `calendar-year-${widgetId}`;
+  const monthSelectId = `calendar-month-${widgetId}`;
 
   const openSpecialDayDialog = () => {
     setDraftShowHoliday(showHoliday);
@@ -205,6 +214,44 @@ export function CalendarWidget({
       ? `음 윤${lunar.month}.${lunar.day}`
       : `음 ${lunar.month}.${lunar.day}`;
   }, [selectedDate]);
+  const monthOptions = useMemo(
+    () =>
+      Array.from({ length: 12 }, (_, index) => ({
+        value: String(index + 1),
+        label: new Intl.DateTimeFormat(locale, { month: "long" }).format(
+          new Date(2024, index, 1)
+        ),
+      })),
+    [locale]
+  );
+
+  const openMonthPicker = () => {
+    setDraftYear(String(viewDate.getFullYear()));
+    setDraftMonth(String(viewDate.getMonth() + 1));
+    setMonthPickerOpen(true);
+  };
+
+  const handleMonthPickerOpenChange = (nextOpen: boolean) => {
+    if (nextOpen) {
+      setDraftYear(String(viewDate.getFullYear()));
+      setDraftMonth(String(viewDate.getMonth() + 1));
+    }
+    setMonthPickerOpen(nextOpen);
+  };
+
+  const saveMonthSelection = () => {
+    const normalizedYear = draftYear.trim();
+    const normalizedMonth = draftMonth.trim();
+    if (!normalizedYear || !normalizedMonth) return;
+    const year = Number(normalizedYear);
+    const month = Number(normalizedMonth);
+    if (!Number.isInteger(year) || !Number.isInteger(month)) return;
+    if (year < 1 || month < 1 || month > 12) return;
+    const day = selectedDate.getDate();
+    const lastDay = new Date(year, month, 0).getDate();
+    selectDate(new Date(year, month - 1, Math.min(day, lastDay)));
+    setMonthPickerOpen(false);
+  };
 
   const saveSpecialDaySettings = async () => {
     if (
@@ -294,9 +341,15 @@ export function CalendarWidget({
               >
                 <ChevronLeft className="size-4" />
               </Button>
-              <div className="min-w-[72px] text-center text-sm font-semibold @[360px]:text-base">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="min-w-[72px] px-2 text-center text-sm font-semibold @[360px]:text-base"
+                aria-label={t("년월 선택", "Choose year and month")}
+                onClick={openMonthPicker}
+              >
                 {formatMonth(viewDate, locale)}
-              </div>
+              </Button>
               <Button
                 variant="ghost"
                 size="icon-sm"
@@ -587,6 +640,79 @@ export function CalendarWidget({
                 {t("저장", "Save")}
               </Button>
             </DialogFooter>
+          </DialogContent>
+        </Dialog>
+        <Dialog
+          open={monthPickerOpen}
+          onOpenChange={handleMonthPickerOpenChange}
+        >
+          <DialogContent className="max-w-xs">
+            <DialogHeader>
+              <DialogTitle>{t("년월 선택", "Choose year and month")}</DialogTitle>
+              <DialogDescription>
+                {t(
+                  "이동할 년도와 월을 선택하세요.",
+                  "Pick the year and month to jump to."
+                )}
+              </DialogDescription>
+            </DialogHeader>
+            <form
+              className="grid gap-3"
+              onSubmit={(event) => {
+                event.preventDefault();
+                saveMonthSelection();
+              }}
+            >
+              <div className="grid grid-cols-2 gap-2">
+                <div className="grid gap-1">
+                  <label
+                    htmlFor={yearInputId}
+                    className="text-xs text-gray-500"
+                  >
+                    {t("년도", "Year")}
+                  </label>
+                  <input
+                    id={yearInputId}
+                    type="number"
+                    inputMode="numeric"
+                    className="w-full rounded-md border border-gray-300 bg-transparent px-2 py-1 text-base outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-700"
+                    value={draftYear}
+                    onChange={(event) => setDraftYear(event.target.value)}
+                    autoFocus
+                  />
+                </div>
+                <div className="grid gap-1">
+                  <label
+                    htmlFor={monthSelectId}
+                    className="text-xs text-gray-500"
+                  >
+                    {t("월", "Month")}
+                  </label>
+                  <select
+                    id={monthSelectId}
+                    className="w-full rounded-md border border-gray-300 bg-transparent px-2 py-1 text-base outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-700"
+                    value={draftMonth}
+                    onChange={(event) => setDraftMonth(event.target.value)}
+                  >
+                    {monthOptions.map((month) => (
+                      <option key={month.value} value={month.value}>
+                        {month.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+              <DialogFooter>
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setMonthPickerOpen(false)}
+                >
+                  {t("취소", "Cancel")}
+                </Button>
+                <Button type="submit">{t("이동", "Go")}</Button>
+              </DialogFooter>
+            </form>
           </DialogContent>
         </Dialog>
         <WeatherLocationDialog

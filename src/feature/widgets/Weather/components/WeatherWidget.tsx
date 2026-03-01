@@ -169,7 +169,10 @@ export function WeatherWidget({ widgetId, canEdit = true }: WeatherWidgetProps) 
         <WidgetHeader title={t("날씨", "Weather")} actions={actions} canEdit={canEdit} />
       }
     >
-      <div className="flex h-full min-h-0 flex-col">
+      <div
+        className="flex h-full min-h-0 flex-col overflow-y-auto overflow-x-hidden pr-1 touch-pan-y overscroll-y-contain"
+        style={{ WebkitOverflowScrolling: "touch" }}
+      >
         <div className="flex items-center justify-between text-xs text-gray-500">
           <span className="min-w-0 truncate">{location.label}</span>
           {updatedAt ? (
@@ -201,10 +204,7 @@ export function WeatherWidget({ widgetId, canEdit = true }: WeatherWidgetProps) 
           </div>
         ) : null}
 
-        <div
-          className="mt-3 flex-1 min-h-0 overflow-y-auto overflow-x-hidden pr-1 touch-pan-y overscroll-y-contain"
-          style={{ WebkitOverflowScrolling: "touch" }}
-        >
+        <div className="mt-3 min-w-0">
           {!forecast && isLoading ? (
             <div className="text-sm text-gray-400">
               {t("날씨 불러오는 중...", "Loading weather...")}
