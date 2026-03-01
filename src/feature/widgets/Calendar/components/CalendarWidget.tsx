@@ -225,10 +225,13 @@ export function CalendarWidget({
   };
 
   const saveMonthSelection = () => {
-    const year = Number(draftYear);
-    const month = Number(draftMonth);
+    const normalizedYear = draftYear.trim();
+    const normalizedMonth = draftMonth.trim();
+    if (!normalizedYear || !normalizedMonth) return;
+    const year = Number(normalizedYear);
+    const month = Number(normalizedMonth);
     if (!Number.isInteger(year) || !Number.isInteger(month)) return;
-    if (month < 1 || month > 12) return;
+    if (year < 1 || month < 1 || month > 12) return;
     const day = selectedDate.getDate();
     const lastDay = new Date(year, month, 0).getDate();
     selectDate(new Date(year, month - 1, Math.min(day, lastDay)));
