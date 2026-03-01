@@ -152,6 +152,9 @@ build_slot() {
   log "Install dependencies in $slot slot"
   pnpm --dir "$slot_dir" install --frozen-lockfile
 
+  log "Apply Prisma migrations in $slot slot"
+  pnpm --dir "$slot_dir" exec prisma migrate deploy
+
   log "Generate Prisma client in $slot slot"
   pnpm --dir "$slot_dir" exec prisma generate
 
