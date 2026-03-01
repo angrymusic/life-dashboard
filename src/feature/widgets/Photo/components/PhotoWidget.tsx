@@ -1,5 +1,5 @@
 import Image from "next/image";
-import type { ChangeEvent } from "react";
+import type { ChangeEvent, KeyboardEvent, PointerEvent } from "react";
 import { useCallback, useRef } from "react";
 import { Upload, X } from "lucide-react";
 import { PhotoViewerDialog } from "@/feature/widgets/Photo/components/PhotoViewerDialog";
@@ -18,12 +18,21 @@ type PhotoWidgetProps = {
   canEdit?: boolean;
 };
 
+const PHOTO_CLICK_DRAG_THRESHOLD_PX = 6;
+
 export function PhotoWidget({ widgetId, canEdit = true }: PhotoWidgetProps) {
   const { t } = useI18n();
   const { photoUrl, hasPhoto, replacePhoto, clearPhoto } =
     usePhotoWidget(widgetId);
   const viewer = usePhotoViewer(photoUrl);
   const inputRef = useRef<HTMLInputElement>(null);
+  const pointerStateRef = useRef<{
+    pointerId: number;
+    startX: number;
+    startY: number;
+    moved: boolean;
+  } | null>(null);
+  const suppressClickRef = useRef(false);
 
   const openFileDialog = useCallback(() => {
     if (!canEdit) return;
@@ -73,6 +82,65 @@ export function PhotoWidget({ widgetId, canEdit = true }: PhotoWidgetProps) {
 
   const showActions = canEdit && actions.length > 0;
 
+  const handlePhotoPointerDown = useCallback(
+    (event: PointerEvent<HTMLDivElement>) => {
+      if (event.button !== 0) return;
+      pointerStateRef.current = {
+        pointerId: event.pointerId,
+        startX: event.clientX,
+        startY: event.clientY,
+        moved: false,
+      };
+      suppressClickRef.current = false;
+    },
+    []
+  );
+
+  const handlePhotoPointerMove = useCallback(
+    (event: PointerEvent<HTMLDivElement>) => {
+      const state = pointerStateRef.current;
+      if (!state || state.pointerId !== event.pointerId || state.moved) return;
+      const deltaX = event.clientX - state.startX;
+      const deltaY = event.clientY - state.startY;
+      if (Math.hypot(deltaX, deltaY) >= PHOTO_CLICK_DRAG_THRESHOLD_PX) {
+        state.moved = true;
+      }
+    },
+    []
+  );
+
+  const handlePhotoPointerUp = useCallback(
+    (event: PointerEvent<HTMLDivElement>) => {
+      const state = pointerStateRef.current;
+      if (!state || state.pointerId !== event.pointerId) return;
+      suppressClickRef.current = state.moved;
+      pointerStateRef.current = null;
+    },
+    []
+  );
+
+  const handlePhotoPointerCancel = useCallback(() => {
+    pointerStateRef.current = null;
+    suppressClickRef.current = true;
+  }, []);
+
+  const handlePhotoClick = useCallback(() => {
+    if (suppressClickRef.current) {
+      suppressClickRef.current = false;
+      return;
+    }
+    viewer.openViewer();
+  }, [viewer]);
+
+  const handlePhotoKeyDown = useCallback(
+    (event: KeyboardEvent<HTMLDivElement>) => {
+      if (event.key !== "Enter" && event.key !== " ") return;
+      event.preventDefault();
+      viewer.openViewer();
+    },
+    [viewer]
+  );
+
   return (
     <WidgetCard className="p-0">
       <div className="relative h-full w-full">
@@ -86,23 +154,27 @@ export function PhotoWidget({ widgetId, canEdit = true }: PhotoWidgetProps) {
         ) : null}
 
         {photoUrl ? (
-          <div className="flex h-full w-full items-center justify-center overflow-hidden">
-            <button
-              type="button"
-              className="flex h-full w-full cursor-zoom-in items-center justify-center overflow-hidden focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/70"
-              onClick={viewer.openViewer}
-              aria-label={t("사진 전체 화면 보기", "Open photo in full screen")}
-            >
-              <Image
-                src={photoUrl}
-                alt={t("업로드된 사진", "Uploaded photo")}
-                width={1}
-                height={1}
-                unoptimized
-                className="pointer-events-none block h-full w-auto max-w-none shrink-0"
-                draggable={false}
-              />
-            </button>
+          <div
+            className="relative flex h-full w-full cursor-grab items-center justify-center overflow-hidden active:cursor-grabbing"
+            role="button"
+            tabIndex={0}
+            onPointerDown={handlePhotoPointerDown}
+            onPointerMove={handlePhotoPointerMove}
+            onPointerUp={handlePhotoPointerUp}
+            onPointerCancel={handlePhotoPointerCancel}
+            onClick={handlePhotoClick}
+            onKeyDown={handlePhotoKeyDown}
+            aria-label={t("사진 전체 화면 보기", "Open photo in full screen")}
+          >
+            <Image
+              src={photoUrl}
+              alt={t("업로드된 사진", "Uploaded photo")}
+              width={1}
+              height={1}
+              unoptimized
+              className="pointer-events-none block h-full w-auto max-w-none shrink-0"
+              draggable={false}
+            />
           </div>
         ) : (
           <div className="flex h-full w-full flex-col items-center justify-center gap-2 text-sm text-gray-400">
