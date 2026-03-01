@@ -140,7 +140,7 @@ chmod +x deployment/deploy-bluegreen.sh
 - active 슬롯 탐지(`deployment/.active-slot` 우선, 없으면 Caddy upstream 추론)
 - 반대 슬롯(비활성) 리포를 원격 브랜치 상태로 동기화
 - 빌드 환경파일 동기화(`.env.production.local` 우선, 없으면 `.env.production`)
-- `pnpm install -> pnpm exec prisma generate -> pnpm build`
+- `pnpm install -> pnpm exec prisma migrate deploy -> pnpm exec prisma generate -> pnpm build`
 - 반대 슬롯 기동
 - `http://127.0.0.1:{port}/` 헬스체크
 - Caddy upstream 변경 + 반영(`reload` 또는 `start`)
