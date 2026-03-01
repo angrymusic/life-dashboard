@@ -162,7 +162,8 @@ export default function GridLayout({
           gridConfig={gridConfig}
           compactor={compactor}
           dragConfig={{
-            cancel: "textarea, input, button, select, a",
+            cancel:
+              "textarea, input, button, select, a, .overflow-auto, .overflow-scroll, .overflow-y-auto, .overflow-y-scroll, .overflow-x-auto, .overflow-x-scroll, .touch-pan-y, .touch-pan-x",
             enabled: canEditLayout,
           }}
           resizeConfig={{ enabled: canEditLayout }}
