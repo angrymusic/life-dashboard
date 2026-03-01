@@ -17,6 +17,7 @@ import { useI18n } from "@/shared/i18n/client";
 
 type RecurrenceType = "none" | "weekly" | "cycle" | "yearly";
 type ScheduleMode = "single" | "range" | "recurrence" | "anniversary";
+type AnniversaryCalendar = "solar" | "lunar";
 
 type CalendarEventDialogProps = {
   open: boolean;
@@ -32,6 +33,10 @@ type CalendarEventDialogProps = {
   isRange: boolean;
   recurrenceType: RecurrenceType;
   recurrenceUntil: string;
+  anniversaryCalendar: AnniversaryCalendar;
+  draftLunarLeapMonth: boolean;
+  lunarPreviewYmd: string;
+  isLunarAnniversaryValid: boolean;
   weeklyDays: number[];
   cyclePattern: CalendarRecurrenceCycleItem[];
   onClose: () => void;
@@ -45,6 +50,8 @@ type CalendarEventDialogProps = {
   setDraftColor: (value: string) => void;
   setRecurrenceType: (value: RecurrenceType) => void;
   setRecurrenceUntil: (value: string) => void;
+  setAnniversaryCalendar: (value: AnniversaryCalendar) => void;
+  setDraftLunarLeapMonth: (value: boolean) => void;
   toggleWeeklyDay: (index: number) => void;
   updateCyclePatternItem: (
     index: number,
@@ -69,6 +76,10 @@ export function CalendarEventDialog({
   isRange,
   recurrenceType,
   recurrenceUntil,
+  anniversaryCalendar,
+  draftLunarLeapMonth,
+  lunarPreviewYmd,
+  isLunarAnniversaryValid,
   weeklyDays,
   cyclePattern,
   onClose,
@@ -82,6 +93,8 @@ export function CalendarEventDialog({
   setDraftColor,
   setRecurrenceType,
   setRecurrenceUntil,
+  setAnniversaryCalendar,
+  setDraftLunarLeapMonth,
   toggleWeeklyDay,
   updateCyclePatternItem,
   addCyclePatternItem,
@@ -104,6 +117,8 @@ export function CalendarEventDialog({
   const showSingleTime =
     scheduleMode === "single" ||
     (scheduleMode === "recurrence" && recurrenceType === "weekly");
+  const isLunarAnniversary =
+    scheduleMode === "anniversary" && anniversaryCalendar === "lunar";
   const isRangeMode = scheduleMode === "range";
   const dateLabel =
     scheduleMode === "anniversary"
@@ -128,6 +143,7 @@ export function CalendarEventDialog({
     Boolean(draftStartDate) &&
     (!isRangeMode || Boolean(draftEndDate)) &&
     (!isRangeMode || isRangeTimeValid) &&
+    (!isLunarAnniversary || isLunarAnniversaryValid) &&
     isWeeklyValid &&
     isCyclePatternValid;
 
@@ -212,6 +228,36 @@ export function CalendarEventDialog({
               })}
             </div>
           </div>
+          {scheduleMode === "anniversary" ? (
+            <div className="flex flex-col gap-2 text-sm text-gray-500 sm:flex-row sm:items-center sm:justify-between">
+              <span>{t("기준 달력", "Calendar basis")}</span>
+              <div className="inline-flex items-center gap-1 rounded-2xl border border-gray-200 p-1 dark:border-gray-700">
+                {(
+                  [
+                    { value: "solar", label: t("양력", "Solar") },
+                    { value: "lunar", label: t("음력", "Lunar") },
+                  ] as const
+                ).map((option) => {
+                  const isActive = anniversaryCalendar === option.value;
+                  return (
+                    <button
+                      key={option.value}
+                      type="button"
+                      className={cn(
+                        "rounded-full px-2.5 py-1 text-xs font-medium whitespace-nowrap transition",
+                        isActive
+                          ? "bg-primary/10 text-primary"
+                          : "text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800/40"
+                      )}
+                      onClick={() => setAnniversaryCalendar(option.value)}
+                    >
+                      {option.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
 
           {scheduleMode === "range" ? (
             <>
@@ -292,6 +338,35 @@ export function CalendarEventDialog({
                   />
                 ) : null}
               </div>
+              {isLunarAnniversary ? (
+                <>
+                  <label className="flex items-center gap-1.5 text-xs text-gray-500">
+                    <input
+                      type="checkbox"
+                      checked={draftLunarLeapMonth}
+                      onChange={(event) =>
+                        setDraftLunarLeapMonth(event.target.checked)
+                      }
+                    />
+                    {t("윤달 기준", "Use leap month")}
+                  </label>
+                  {lunarPreviewYmd ? (
+                    <div className="text-xs text-gray-500">
+                      {t(
+                        `양력 변환: ${lunarPreviewYmd}`,
+                        `Solar date: ${lunarPreviewYmd}`
+                      )}
+                    </div>
+                  ) : (
+                    <div className="text-xs text-rose-500">
+                      {t(
+                        "입력한 음력 날짜를 양력으로 변환할 수 없어요.",
+                        "Unable to convert this lunar date to solar."
+                      )}
+                    </div>
+                  )}
+                </>
+              ) : null}
             </>
           )}
           {scheduleMode === "recurrence" ? (

@@ -25,10 +25,12 @@ import {
 } from "@/shared/ui/dialog";
 import {
   CalendarEventInstance,
+  formatLunarMonthDayLabel,
   getWeekDayLabels,
   formatEventTime,
   formatMonth,
   formatMonthDay,
+  getLunarDateInfo,
   getContrastColor,
   normalizeColor,
   shiftYmd,
@@ -121,6 +123,10 @@ export function CalendarWidget({
     isRange,
     recurrenceType,
     recurrenceUntil,
+    anniversaryCalendar,
+    draftLunarLeapMonth,
+    lunarPreviewYmd,
+    isLunarAnniversaryValid,
     weeklyDays,
     cyclePattern,
     setDraftTitle,
@@ -132,6 +138,8 @@ export function CalendarWidget({
     setRangeEndDate,
     setRecurrenceType,
     setRecurrenceUntil,
+    setAnniversaryCalendar,
+    setDraftLunarLeapMonth,
     toggleWeeklyDay,
     updateCyclePatternItem,
     addCyclePatternItem,
@@ -190,6 +198,13 @@ export function CalendarWidget({
     return map;
   }, [forecast?.days]);
   const weekEndYmd = useMemo(() => shiftYmd(todayYmd, 6), [todayYmd]);
+  const selectedLunarLabel = useMemo(() => {
+    const lunar = getLunarDateInfo(selectedDate);
+    if (!lunar) return "";
+    return lunar.isLeapMonth
+      ? `음 윤${lunar.month}.${lunar.day}`
+      : `음 ${lunar.month}.${lunar.day}`;
+  }, [selectedDate]);
 
   const saveSpecialDaySettings = async () => {
     if (
@@ -326,6 +341,9 @@ export function CalendarWidget({
             const overflow = day.overflow ?? 0;
             const special = specialDaysByYmd.get(day.ymd);
             const hasHoliday = (special?.holidays.length ?? 0) > 0;
+            const lunarLabel = formatLunarMonthDayLabel(day.date);
+            const showLunarLabel =
+              Boolean(lunarLabel) && !shouldShowWeather && overflow === 0;
             return (
               <button
                 key={day.ymd}
@@ -357,6 +375,11 @@ export function CalendarWidget({
                     ) : null}
                   </div>
                   <div className="flex items-center gap-1">
+                    {showLunarLabel ? (
+                      <span className="hidden @[360px]:inline text-[10px] text-gray-400 leading-none">
+                        {lunarLabel}
+                      </span>
+                    ) : null}
                     {shouldShowWeather ? (
                       <span
                         className="flex items-center gap-0.5 text-[12px] text-gray-500"
@@ -434,8 +457,13 @@ export function CalendarWidget({
         </div>
 
         <div className="mt-3 flex items-center justify-between">
-          <div className="text-base font-medium">
-            {formatMonthDay(selectedDate, locale)}
+          <div className="flex items-center gap-2">
+            <div className="text-base font-medium">
+              {formatMonthDay(selectedDate, locale)}
+            </div>
+            {selectedLunarLabel ? (
+              <div className="text-xs text-gray-500">{selectedLunarLabel}</div>
+            ) : null}
           </div>
           {canEdit ? (
             <Button
@@ -465,6 +493,10 @@ export function CalendarWidget({
             isRange={isRange}
             recurrenceType={recurrenceType}
             recurrenceUntil={recurrenceUntil}
+            anniversaryCalendar={anniversaryCalendar}
+            draftLunarLeapMonth={draftLunarLeapMonth}
+            lunarPreviewYmd={lunarPreviewYmd}
+            isLunarAnniversaryValid={isLunarAnniversaryValid}
             weeklyDays={weeklyDays}
             cyclePattern={cyclePattern}
             onClose={cancelAdd}
@@ -478,6 +510,8 @@ export function CalendarWidget({
             setDraftColor={setDraftColor}
             setRecurrenceType={setRecurrenceType}
             setRecurrenceUntil={setRecurrenceUntil}
+            setAnniversaryCalendar={setAnniversaryCalendar}
+            setDraftLunarLeapMonth={setDraftLunarLeapMonth}
             toggleWeeklyDay={toggleWeeklyDay}
             updateCyclePatternItem={updateCyclePatternItem}
             addCyclePatternItem={addCyclePatternItem}

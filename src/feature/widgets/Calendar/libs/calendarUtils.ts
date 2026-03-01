@@ -25,6 +25,21 @@ export function getWeekDayLabels(locale: string) {
 
 const DEFAULT_ALL_DAY_HOUR = 9;
 const DAY_MS = 24 * 60 * 60 * 1000;
+const LUNAR_TIME_ZONE = "Asia/Seoul";
+const LUNAR_FORMATTER = new Intl.DateTimeFormat("ko-KR-u-ca-chinese", {
+  year: "numeric",
+  month: "numeric",
+  day: "numeric",
+  timeZone: LUNAR_TIME_ZONE,
+});
+const solarFromLunarCache = new Map<string, Date | null>();
+
+export type LunarDateInfo = {
+  year: number;
+  month: number;
+  day: number;
+  isLeapMonth: boolean;
+};
 
 export type CalendarEventInstance = CalendarEvent & {
   occurrenceKey?: string;
@@ -99,6 +114,95 @@ export function shiftYmd(ymd: YMD, delta: number): YMD {
   if (Number.isNaN(date.getTime())) return ymd;
   date.setDate(date.getDate() + delta);
   return toYmd(date);
+}
+
+function parseLunarNumber(value: string | undefined) {
+  if (!value) return null;
+  const digits = value.replace(/\D/g, "");
+  if (!digits) return null;
+  const parsed = Number(digits);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function normalizePositiveInt(value: number | undefined) {
+  if (typeof value !== "number" || !Number.isFinite(value)) return null;
+  const rounded = Math.floor(value);
+  return rounded > 0 ? rounded : null;
+}
+
+export function getLunarDateInfo(date: Date): LunarDateInfo | null {
+  if (Number.isNaN(date.getTime())) return null;
+  const parts = LUNAR_FORMATTER.formatToParts(date);
+  const yearPart = parts.find((part) => {
+    const type = part.type as string;
+    return type === "relatedYear" || type === "year";
+  });
+  const monthPart = parts.find((part) => part.type === "month");
+  const dayPart = parts.find((part) => part.type === "day");
+  const year = parseLunarNumber(yearPart?.value);
+  const month = parseLunarNumber(monthPart?.value);
+  const day = parseLunarNumber(dayPart?.value);
+  if (!year || !month || !day) return null;
+  const monthRaw = monthPart?.value ?? "";
+  const isLeapMonth = /[^\d]/.test(monthRaw);
+  return {
+    year,
+    month,
+    day,
+    isLeapMonth,
+  };
+}
+
+export function findSolarDateForLunarDate(
+  solarYear: number,
+  lunarMonth: number,
+  lunarDay: number,
+  lunarLeapMonth = false
+) {
+  const safeSolarYear = normalizePositiveInt(solarYear);
+  const safeLunarMonth = normalizePositiveInt(lunarMonth);
+  const safeLunarDay = normalizePositiveInt(lunarDay);
+  if (!safeSolarYear || !safeLunarMonth || !safeLunarDay) return null;
+  if (safeLunarMonth > 12 || safeLunarDay > 30) return null;
+
+  const cacheKey = `${safeSolarYear}:${safeLunarMonth}:${safeLunarDay}:${lunarLeapMonth ? 1 : 0}`;
+  const cached = solarFromLunarCache.get(cacheKey);
+  if (cached !== undefined) {
+    return cached ? new Date(cached) : null;
+  }
+
+  const start = new Date(safeSolarYear, 0, 1);
+  const end = new Date(safeSolarYear, 11, 31);
+  let fallback: Date | null = null;
+  let matched: Date | null = null;
+
+  for (
+    let cursor = startOfDay(start);
+    cursor.getTime() <= end.getTime();
+    cursor = addDays(cursor, 1)
+  ) {
+    const lunar = getLunarDateInfo(cursor);
+    if (!lunar) continue;
+    if (lunar.month !== safeLunarMonth || lunar.day !== safeLunarDay) continue;
+    if (lunar.isLeapMonth === lunarLeapMonth) {
+      matched = startOfDay(cursor);
+      break;
+    }
+    if (!lunar.isLeapMonth && !fallback) {
+      fallback = startOfDay(cursor);
+    }
+  }
+
+  const result = matched ?? (!lunarLeapMonth ? fallback : null);
+  solarFromLunarCache.set(cacheKey, result ? new Date(result) : null);
+  return result ? new Date(result) : null;
+}
+
+export function formatLunarMonthDayLabel(date: Date) {
+  const lunar = getLunarDateInfo(date);
+  if (!lunar) return null;
+  if (lunar.day !== 1 && lunar.day !== 15) return null;
+  return `음 ${lunar.month}.${lunar.day}`;
 }
 
 function parseTime(value: string) {
@@ -557,7 +661,16 @@ export function expandCalendarEvents(
         untilDate = null;
       }
 
-      const baseYear = baseStart.getFullYear();
+      const lunarYear = normalizePositiveInt(event.recurrence.lunarYear);
+      const lunarMonth = normalizePositiveInt(event.recurrence.lunarMonth);
+      const lunarDay = normalizePositiveInt(event.recurrence.lunarDay);
+      const useLunarCalendar =
+        event.recurrence.calendar === "lunar" &&
+        Boolean(lunarMonth) &&
+        Boolean(lunarDay);
+      const baseYear = useLunarCalendar
+        ? (lunarYear ?? baseStart.getFullYear())
+        : baseStart.getFullYear();
       const rangeStartYear = rangeStartDay.getFullYear() - 1;
       const rangeEndYear = rangeEndDay.getFullYear() + 1;
       const durationMs = baseEnd ? baseEnd.getTime() - baseStart.getTime() : 0;
@@ -565,7 +678,27 @@ export function expandCalendarEvents(
       for (let year = rangeStartYear; year <= rangeEndYear; year += 1) {
         if (year < baseYear) continue;
         if ((year - baseYear) % intervalYears !== 0) continue;
-        const rawStart = buildDateForYear(baseStart, year);
+        let rawStart: Date;
+        if (useLunarCalendar && lunarMonth && lunarDay) {
+          const solarDate = findSolarDateForLunarDate(
+            year,
+            lunarMonth,
+            lunarDay,
+            Boolean(event.recurrence.lunarLeapMonth)
+          );
+          if (!solarDate) continue;
+          rawStart = new Date(
+            solarDate.getFullYear(),
+            solarDate.getMonth(),
+            solarDate.getDate(),
+            baseStart.getHours(),
+            baseStart.getMinutes(),
+            baseStart.getSeconds(),
+            baseStart.getMilliseconds()
+          );
+        } else {
+          rawStart = buildDateForYear(baseStart, year);
+        }
         const occurrenceStart = event.allDay ? startOfDay(rawStart) : rawStart;
         if (untilDate && occurrenceStart.getTime() > untilDate.getTime()) break;
         const occurrenceEnd =
