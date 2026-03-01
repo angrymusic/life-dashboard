@@ -122,6 +122,12 @@ prepare_slot_build_env() {
   local slot_dir="$SLOTS_ROOT/$slot"
   local src_env=""
   local dest_env=""
+  local dev_env_file="$slot_dir/.env.development.local"
+
+  if [ -f "$dev_env_file" ]; then
+    log "Remove stale development env file in $slot slot"
+    rm -f "$dev_env_file"
+  fi
 
   if [ -f "$CONTROL_REPO_DIR/.env.production.local" ]; then
     src_env="$CONTROL_REPO_DIR/.env.production.local"
@@ -153,10 +159,10 @@ build_slot() {
   pnpm --dir "$slot_dir" install --frozen-lockfile
 
   log "Apply Prisma migrations in $slot slot"
-  pnpm --dir "$slot_dir" exec prisma migrate deploy
+  NODE_ENV=production pnpm --dir "$slot_dir" exec prisma migrate deploy
 
   log "Generate Prisma client in $slot slot"
-  pnpm --dir "$slot_dir" exec prisma generate
+  NODE_ENV=production pnpm --dir "$slot_dir" exec prisma generate
 
   log "Build $slot slot"
   pnpm --dir "$slot_dir" build
