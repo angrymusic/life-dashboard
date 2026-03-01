@@ -276,7 +276,7 @@ export default function AccountDialog({
                 {isInAppBrowser ? null : (
                   <Button
                     type="button"
-                    onClick={() => signIn("google")}
+                    onClick={() => signIn("google", { callbackUrl: "/" })}
                     disabled={isAuthLoading}
                   >
                     <LogIn className="size-4" />
