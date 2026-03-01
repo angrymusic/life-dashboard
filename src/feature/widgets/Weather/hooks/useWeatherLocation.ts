@@ -9,6 +9,12 @@ const STORAGE_KEY = "lifedashboard.weatherLocation";
 const SOURCE_STORAGE_KEY = "lifedashboard.weatherLocationSource";
 const LOCATION_SYNC_EVENT = "lifedashboard:weather-location-changed";
 let geolocationPromise: Promise<WeatherLocation | null> | null = null;
+const REVERSE_GEOCODE_CACHE_TTL_MS = 5 * 60 * 1000;
+const reverseGeocodePromiseByKey = new Map<string, Promise<string | null>>();
+const reverseGeocodeLabelCacheByKey = new Map<
+  string,
+  { label: string; expiresAt: number }
+>();
 const CURRENT_LOCATION_LABEL = {
   ko: "현재 위치",
   en: "Current location",
@@ -73,6 +79,24 @@ function inferStoredLocationSource(
 
 function buildCoordinateLabel(latitude: number, longitude: number) {
   return `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`;
+}
+
+function buildReverseGeocodeKey(
+  latitude: number,
+  longitude: number,
+  language: string
+) {
+  return `${latitude.toFixed(5)},${longitude.toFixed(5)}:${language}`;
+}
+
+function getCachedReverseGeocodeLabel(key: string) {
+  const cached = reverseGeocodeLabelCacheByKey.get(key);
+  if (!cached) return null;
+  if (cached.expiresAt <= Date.now()) {
+    reverseGeocodeLabelCacheByKey.delete(key);
+    return null;
+  }
+  return cached.label;
 }
 
 function parseStoredLocationState(): {
@@ -201,23 +225,48 @@ export function useWeatherLocation() {
 
   const resolveLocationLabel = useCallback(
     async (baseLocation: WeatherLocation) => {
+      const cacheKey = buildReverseGeocodeKey(
+        baseLocation.latitude,
+        baseLocation.longitude,
+        language
+      );
+      const cachedLabel = getCachedReverseGeocodeLabel(cacheKey);
+      if (cachedLabel) return cachedLabel;
+
+      const inFlight = reverseGeocodePromiseByKey.get(cacheKey);
+      if (inFlight) {
+        const label = await inFlight;
+        return label || baseLocation.label;
+      }
+
       const params = new URLSearchParams({
         lat: String(baseLocation.latitude),
         lon: String(baseLocation.longitude),
         language,
       });
       const url = `/api/geocode/reverse?${params.toString()}`;
-      try {
-        const response = await fetch(url);
-        if (!response.ok) return baseLocation.label;
-        const payload = (await response.json()) as { label?: string | null };
-        if (payload.label && payload.label.trim()) {
-          return payload.label;
+      const request = (async () => {
+        try {
+          const response = await fetch(url);
+          if (!response.ok) return null;
+          const payload = (await response.json()) as { label?: string | null };
+          const nextLabel = payload.label?.trim();
+          if (!nextLabel) return null;
+          reverseGeocodeLabelCacheByKey.set(cacheKey, {
+            label: nextLabel,
+            expiresAt: Date.now() + REVERSE_GEOCODE_CACHE_TTL_MS,
+          });
+          return nextLabel;
+        } catch {
+          return null;
+        } finally {
+          reverseGeocodePromiseByKey.delete(cacheKey);
         }
-        return baseLocation.label;
-      } catch {
-        return baseLocation.label;
-      }
+      })();
+      reverseGeocodePromiseByKey.set(cacheKey, request);
+
+      const label = await request;
+      return label || baseLocation.label;
     },
     [language]
   );
