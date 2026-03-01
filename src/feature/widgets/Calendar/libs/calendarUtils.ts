@@ -32,6 +32,13 @@ const LUNAR_FORMATTER = new Intl.DateTimeFormat("ko-KR-u-ca-chinese", {
   day: "numeric",
   timeZone: LUNAR_TIME_ZONE,
 });
+const SEOUL_SOLAR_FORMATTER = new Intl.DateTimeFormat("en-US", {
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  timeZone: LUNAR_TIME_ZONE,
+});
+const SEOUL_NOON_UTC_HOUR = 3;
 const solarFromLunarCache = new Map<string, Date | null>();
 
 export type LunarDateInfo = {
@@ -130,6 +137,20 @@ function normalizePositiveInt(value: number | undefined) {
   return rounded > 0 ? rounded : null;
 }
 
+function createSeoulNoonDate(year: number, month: number, day: number) {
+  return new Date(Date.UTC(year, month - 1, day, SEOUL_NOON_UTC_HOUR, 0, 0, 0));
+}
+
+function getSeoulSolarDateInfo(date: Date) {
+  if (Number.isNaN(date.getTime())) return null;
+  const parts = SEOUL_SOLAR_FORMATTER.formatToParts(date);
+  const year = parseLunarNumber(parts.find((part) => part.type === "year")?.value);
+  const month = parseLunarNumber(parts.find((part) => part.type === "month")?.value);
+  const day = parseLunarNumber(parts.find((part) => part.type === "day")?.value);
+  if (!year || !month || !day) return null;
+  return { year, month, day };
+}
+
 export function getLunarDateInfo(date: Date): LunarDateInfo | null {
   if (Number.isNaN(date.getTime())) return null;
   const parts = LUNAR_FORMATTER.formatToParts(date);
@@ -171,26 +192,28 @@ export function findSolarDateForLunarDate(
     return cached ? new Date(cached) : null;
   }
 
-  const start = new Date(safeLunarYear - 1, 0, 1);
-  const end = new Date(safeLunarYear + 1, 11, 31);
+  const start = createSeoulNoonDate(safeLunarYear - 1, 1, 1);
+  const end = createSeoulNoonDate(safeLunarYear + 1, 12, 31);
   let fallback: Date | null = null;
   let matched: Date | null = null;
 
-  for (
-    let cursor = startOfDay(start);
-    cursor.getTime() <= end.getTime();
-    cursor = addDays(cursor, 1)
-  ) {
+  for (let cursorMs = start.getTime(); cursorMs <= end.getTime(); cursorMs += DAY_MS) {
+    const cursor = new Date(cursorMs);
     const lunar = getLunarDateInfo(cursor);
     if (!lunar) continue;
     if (lunar.year !== safeLunarYear) continue;
     if (lunar.month !== safeLunarMonth || lunar.day !== safeLunarDay) continue;
+
+    const solar = getSeoulSolarDateInfo(cursor);
+    if (!solar) continue;
+    const localDate = new Date(solar.year, solar.month - 1, solar.day);
+
     if (lunar.isLeapMonth === lunarLeapMonth) {
-      matched = startOfDay(cursor);
+      matched = localDate;
       break;
     }
     if (!lunar.isLeapMonth && !fallback) {
-      fallback = startOfDay(cursor);
+      fallback = localDate;
     }
   }
 
