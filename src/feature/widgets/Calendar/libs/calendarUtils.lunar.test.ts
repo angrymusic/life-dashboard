@@ -25,6 +25,16 @@ describe("calendarUtils lunar helpers", () => {
     expect(toYmd(solar ?? new Date(NaN))).toBe("2026-07-22");
   });
 
+  it("matches the requested lunar year for late-year lunar dates", () => {
+    const solar = findSolarDateForLunarDate(2026, 12, 15, false);
+    expect(solar).not.toBeNull();
+    expect((solar ?? new Date(NaN)).getFullYear()).toBe(2027);
+    const lunar = getLunarDateInfo(solar ?? new Date(NaN));
+    expect(lunar?.year).toBe(2026);
+    expect(lunar?.month).toBe(12);
+    expect(lunar?.day).toBe(15);
+  });
+
   it("shows lunar labels only on the 1st and 15th lunar days", () => {
     expect(formatLunarMonthDayLabel(new Date(2026, 5, 15))).toBe("음 5.1");
     expect(formatLunarMonthDayLabel(new Date(2026, 5, 29))).toBe("음 5.15");

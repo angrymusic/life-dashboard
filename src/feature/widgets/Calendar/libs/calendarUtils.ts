@@ -154,25 +154,25 @@ export function getLunarDateInfo(date: Date): LunarDateInfo | null {
 }
 
 export function findSolarDateForLunarDate(
-  solarYear: number,
+  lunarYear: number,
   lunarMonth: number,
   lunarDay: number,
   lunarLeapMonth = false
 ) {
-  const safeSolarYear = normalizePositiveInt(solarYear);
+  const safeLunarYear = normalizePositiveInt(lunarYear);
   const safeLunarMonth = normalizePositiveInt(lunarMonth);
   const safeLunarDay = normalizePositiveInt(lunarDay);
-  if (!safeSolarYear || !safeLunarMonth || !safeLunarDay) return null;
+  if (!safeLunarYear || !safeLunarMonth || !safeLunarDay) return null;
   if (safeLunarMonth > 12 || safeLunarDay > 30) return null;
 
-  const cacheKey = `${safeSolarYear}:${safeLunarMonth}:${safeLunarDay}:${lunarLeapMonth ? 1 : 0}`;
+  const cacheKey = `${safeLunarYear}:${safeLunarMonth}:${safeLunarDay}:${lunarLeapMonth ? 1 : 0}`;
   const cached = solarFromLunarCache.get(cacheKey);
   if (cached !== undefined) {
     return cached ? new Date(cached) : null;
   }
 
-  const start = new Date(safeSolarYear, 0, 1);
-  const end = new Date(safeSolarYear, 11, 31);
+  const start = new Date(safeLunarYear - 1, 0, 1);
+  const end = new Date(safeLunarYear + 1, 11, 31);
   let fallback: Date | null = null;
   let matched: Date | null = null;
 
@@ -183,6 +183,7 @@ export function findSolarDateForLunarDate(
   ) {
     const lunar = getLunarDateInfo(cursor);
     if (!lunar) continue;
+    if (lunar.year !== safeLunarYear) continue;
     if (lunar.month !== safeLunarMonth || lunar.day !== safeLunarDay) continue;
     if (lunar.isLeapMonth === lunarLeapMonth) {
       matched = startOfDay(cursor);
