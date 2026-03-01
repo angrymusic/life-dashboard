@@ -159,6 +159,11 @@ export type CalendarRecurrenceYearly = {
   type: "yearly";
   intervalYears?: number;
   until?: YMD;
+  calendar?: "solar" | "lunar";
+  lunarYear?: number;
+  lunarMonth?: number;
+  lunarDay?: number;
+  lunarLeapMonth?: boolean;
 };
 
 export type CalendarRecurrence =

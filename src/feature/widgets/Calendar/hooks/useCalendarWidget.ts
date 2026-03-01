@@ -23,8 +23,10 @@ import {
   buildStartAt,
   expandCalendarEvents,
   endOfDay,
+  findSolarDateForLunarDate,
   formatTimeInput,
   getCalendarViewRange,
+  getLunarDateInfo,
   parseTimeInput,
   shiftYmd,
   shiftMonth,
@@ -37,7 +39,23 @@ import { useSpecialDayEvents } from "@/feature/widgets/Calendar/hooks/useSpecial
 import { useI18n } from "@/shared/i18n/client";
 
 type RecurrenceType = "none" | "weekly" | "cycle" | "yearly";
+type AnniversaryCalendar = "solar" | "lunar";
 type DeleteScope = "all" | "future";
+
+function parseLunarYmd(ymd: string) {
+  const [rawYear, rawMonth, rawDay] = ymd.split("-").map(Number);
+  const year = Number.isFinite(rawYear) ? Math.floor(rawYear) : NaN;
+  const month = Number.isFinite(rawMonth) ? Math.floor(rawMonth) : NaN;
+  const day = Number.isFinite(rawDay) ? Math.floor(rawDay) : NaN;
+  if (!year || !month || !day) return null;
+  if (month < 1 || month > 12) return null;
+  if (day < 1 || day > 30) return null;
+  return {
+    year,
+    month,
+    day,
+  };
+}
 
 function buildDefaultCyclePattern(
   t: (ko: string, en: string) => string
@@ -82,11 +100,37 @@ export function useCalendarWidget(widgetId: Id) {
   const [cyclePattern, setCyclePattern] = useState<
     CalendarRecurrenceCycleItem[]
   >(defaultCyclePattern);
+  const [anniversaryCalendar, setAnniversaryCalendar] =
+    useState<AnniversaryCalendar>("solar");
+  const [draftLunarLeapMonth, setDraftLunarLeapMonth] = useState(false);
 
   const selectedYmd = useMemo(() => toYmd(selectedDate), [selectedDate]);
   const todayYmd = useMemo(() => toYmd(new Date()), []);
   const viewDate = useMemo(() => startOfMonth(selectedDate), [selectedDate]);
   const viewRange = useMemo(() => getCalendarViewRange(viewDate), [viewDate]);
+  const parsedLunarDate = useMemo(
+    () => parseLunarYmd(draftStartDate),
+    [draftStartDate]
+  );
+  const lunarPreviewDate = useMemo(() => {
+    if (anniversaryCalendar !== "lunar") return null;
+    if (!parsedLunarDate) return null;
+    return findSolarDateForLunarDate(
+      parsedLunarDate.year,
+      parsedLunarDate.month,
+      parsedLunarDate.day,
+      draftLunarLeapMonth
+    );
+  }, [anniversaryCalendar, parsedLunarDate, draftLunarLeapMonth]);
+  const lunarPreviewYmd = useMemo(
+    () => (lunarPreviewDate ? toYmd(lunarPreviewDate) : ""),
+    [lunarPreviewDate]
+  );
+  const isLunarAnniversaryValid = useMemo(() => {
+    if (anniversaryCalendar !== "lunar") return true;
+    if (!parsedLunarDate) return false;
+    return Boolean(lunarPreviewDate);
+  }, [anniversaryCalendar, parsedLunarDate, lunarPreviewDate]);
   const { widgetSettings, showHoliday, showAnniversary } = useMemo(() => {
     const settings =
       widget?.settings &&
@@ -235,6 +279,8 @@ export function useCalendarWidget(widgetId: Id) {
     setRecurrenceUntil("");
     setWeeklyDays([]);
     setCyclePattern(defaultCyclePattern);
+    setAnniversaryCalendar("solar");
+    setDraftLunarLeapMonth(false);
   }, [defaultCyclePattern, selectedYmd]);
 
   const setRangeEnabled = useCallback(
@@ -333,6 +379,8 @@ export function useCalendarWidget(widgetId: Id) {
     setRecurrenceUntil("");
     setWeeklyDays([]);
     setCyclePattern(defaultCyclePattern);
+    setAnniversaryCalendar("solar");
+    setDraftLunarLeapMonth(false);
   }, [defaultCyclePattern, selectedYmd]);
 
   const startEdit = useCallback(
@@ -361,13 +409,46 @@ export function useCalendarWidget(widgetId: Id) {
         setRecurrenceUntil("");
         setWeeklyDays([]);
         setCyclePattern(defaultCyclePattern);
+        setAnniversaryCalendar("solar");
+        setDraftLunarLeapMonth(false);
       } else if (baseEvent.recurrence.type === "weekly") {
         setRecurrenceTypeState("weekly");
         setRecurrenceUntil(baseEvent.recurrence.until ?? "");
         setWeeklyDays(baseEvent.recurrence.daysOfWeek ?? []);
+        setAnniversaryCalendar("solar");
+        setDraftLunarLeapMonth(false);
       } else if (baseEvent.recurrence.type === "yearly") {
         setRecurrenceTypeState("yearly");
         setRecurrenceUntil(baseEvent.recurrence.until ?? "");
+        if (baseEvent.recurrence.calendar === "lunar") {
+          const lunarFromStart = getLunarDateInfo(start);
+          const lunarYear =
+            typeof baseEvent.recurrence.lunarYear === "number" &&
+            Number.isFinite(baseEvent.recurrence.lunarYear)
+              ? Math.floor(baseEvent.recurrence.lunarYear)
+              : (lunarFromStart?.year ?? start.getFullYear());
+          const lunarMonth =
+            typeof baseEvent.recurrence.lunarMonth === "number" &&
+            Number.isFinite(baseEvent.recurrence.lunarMonth)
+              ? Math.floor(baseEvent.recurrence.lunarMonth)
+              : (lunarFromStart?.month ?? 1);
+          const lunarDay =
+            typeof baseEvent.recurrence.lunarDay === "number" &&
+            Number.isFinite(baseEvent.recurrence.lunarDay)
+              ? Math.floor(baseEvent.recurrence.lunarDay)
+              : (lunarFromStart?.day ?? 1);
+          setAnniversaryCalendar("lunar");
+          setDraftStartDate(
+            `${String(lunarYear).padStart(4, "0")}-${String(lunarMonth).padStart(2, "0")}-${String(lunarDay).padStart(2, "0")}` as YMD
+          );
+          setDraftEndDate(
+            `${String(lunarYear).padStart(4, "0")}-${String(lunarMonth).padStart(2, "0")}-${String(lunarDay).padStart(2, "0")}` as YMD
+          );
+          setDraftLunarLeapMonth(Boolean(baseEvent.recurrence.lunarLeapMonth));
+        } else {
+          setAnniversaryCalendar("solar");
+          setDraftLunarLeapMonth(false);
+        }
       } else if (baseEvent.recurrence.type === "cycle") {
         setRecurrenceTypeState("cycle");
         setRecurrenceUntil(baseEvent.recurrence.until ?? "");
@@ -379,6 +460,8 @@ export function useCalendarWidget(widgetId: Id) {
               }))
             : defaultCyclePattern
         );
+        setAnniversaryCalendar("solar");
+        setDraftLunarLeapMonth(false);
       }
 
       if (baseEvent.recurrence) {
@@ -425,9 +508,9 @@ export function useCalendarWidget(widgetId: Id) {
     const title = draftTitle.trim();
     if (!title) return;
 
-    let startAt: Date;
+    let startAt: Date = startOfDay(selectedDate);
     let endAt: Date | undefined;
-    let allDay: boolean;
+    let allDay = true;
     let recurrence: CalendarRecurrence | undefined;
 
     if (recurrenceType === "cycle") {
@@ -465,10 +548,34 @@ export function useCalendarWidget(widgetId: Id) {
         };
       }
       if (isYearly) {
-        recurrence = {
-          type: "yearly",
-          until: recurrenceUntil || undefined,
-        };
+        if (anniversaryCalendar === "lunar") {
+          if (!parsedLunarDate) return;
+          const solarDate = findSolarDateForLunarDate(
+            parsedLunarDate.year,
+            parsedLunarDate.month,
+            parsedLunarDate.day,
+            draftLunarLeapMonth
+          );
+          if (!solarDate) return;
+          recurrence = {
+            type: "yearly",
+            until: recurrenceUntil || undefined,
+            calendar: "lunar",
+            lunarYear: parsedLunarDate.year,
+            lunarMonth: parsedLunarDate.month,
+            lunarDay: parsedLunarDate.day,
+            lunarLeapMonth: draftLunarLeapMonth || undefined,
+          };
+          startAt = startOfDay(solarDate);
+          allDay = true;
+          endAt = undefined;
+        } else {
+          recurrence = {
+            type: "yearly",
+            until: recurrenceUntil || undefined,
+            calendar: "solar",
+          };
+        }
       }
 
       if (isRange && !isYearly) {
@@ -529,9 +636,11 @@ export function useCalendarWidget(widgetId: Id) {
           ? selectedDate
           : startDate;
         if (isYearly) {
-          startAt = startOfDay(safeStart);
-          allDay = true;
-          endAt = undefined;
+          if (anniversaryCalendar !== "lunar") {
+            startAt = startOfDay(safeStart);
+            allDay = true;
+            endAt = undefined;
+          }
         } else {
           const built = buildStartAt(safeStart, draftTime);
           startAt = built.startAt;
@@ -584,8 +693,11 @@ export function useCalendarWidget(widgetId: Id) {
     setRecurrenceUntil("");
     setWeeklyDays([]);
     setCyclePattern(defaultCyclePattern);
+    setAnniversaryCalendar("solar");
+    setDraftLunarLeapMonth(false);
   }, [
     defaultCyclePattern,
+    anniversaryCalendar,
     widget,
     editingEventId,
     widgetId,
@@ -601,6 +713,8 @@ export function useCalendarWidget(widgetId: Id) {
     isRange,
     recurrenceType,
     recurrenceUntil,
+    parsedLunarDate,
+    draftLunarLeapMonth,
     weeklyDays,
     cyclePattern,
   ]);
@@ -646,10 +760,6 @@ export function useCalendarWidget(widgetId: Id) {
   const setRangeStartDate = useCallback(
     (value: YMD) => {
       setDraftStartDate(value);
-      const date = toDateFromYmd(value);
-      if (!Number.isNaN(date.getTime())) {
-        setSelectedDate(date);
-      }
       if (draftEndDate < value) {
         setDraftEndDate(value);
       }
@@ -679,6 +789,10 @@ export function useCalendarWidget(widgetId: Id) {
     isRange,
     recurrenceType,
     recurrenceUntil,
+    anniversaryCalendar,
+    draftLunarLeapMonth,
+    lunarPreviewYmd,
+    isLunarAnniversaryValid,
     weeklyDays,
     cyclePattern,
     setDraftTitle,
@@ -690,6 +804,8 @@ export function useCalendarWidget(widgetId: Id) {
     setRangeEndDate,
     setRecurrenceType,
     setRecurrenceUntil,
+    setAnniversaryCalendar,
+    setDraftLunarLeapMonth,
     toggleWeeklyDay,
     updateCyclePatternItem,
     addCyclePatternItem,

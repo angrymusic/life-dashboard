@@ -106,6 +106,11 @@ type CalendarRecurrenceYearly = {
   type: "yearly";
   intervalYears?: number;
   until?: string;
+  calendar?: "solar" | "lunar";
+  lunarYear?: number;
+  lunarMonth?: number;
+  lunarDay?: number;
+  lunarLeapMonth?: boolean;
 };
 
 type CalendarRecurrence =
@@ -349,6 +354,13 @@ function isCalendarRecurrence(v: unknown): v is CalendarRecurrence {
   if (type === "yearly") {
     if (v.intervalYears !== undefined && !isNumber(v.intervalYears)) return false;
     if (v.until !== undefined && !isString(v.until)) return false;
+    if (v.calendar !== undefined && v.calendar !== "solar" && v.calendar !== "lunar") {
+      return false;
+    }
+    if (v.lunarYear !== undefined && !isNumber(v.lunarYear)) return false;
+    if (v.lunarMonth !== undefined && !isNumber(v.lunarMonth)) return false;
+    if (v.lunarDay !== undefined && !isNumber(v.lunarDay)) return false;
+    if (v.lunarLeapMonth !== undefined && !isBoolean(v.lunarLeapMonth)) return false;
     return true;
   }
   return false;
