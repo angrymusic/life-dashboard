@@ -2,6 +2,7 @@
 
 import { ChevronDown } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import Header from "./Header";
 import Footer from "./Footer";
 import GridLayout from "./GridLayout";
@@ -77,6 +78,8 @@ export default function DashboardView({
   onAddWidget,
 }: DashboardViewProps) {
   const { t } = useI18n();
+  const searchParams = useSearchParams();
+  const isOAuthCallbackError = searchParams.get("error") === "OAuthCallback";
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
 
   const updateScrollToBottomVisibility = useCallback(() => {
@@ -185,6 +188,15 @@ export default function DashboardView({
           {t(
             "공유 대시보드는 로그인 후 편집할 수 있어요.",
             "You can edit shared dashboards after signing in."
+          )}
+        </div>
+      ) : null}
+
+      {isOAuthCallbackError ? (
+        <div className="mx-4 mt-3 rounded-lg border border-red-200/70 bg-red-50 px-4 py-3 text-xs text-red-700">
+          {t(
+            "로그인 실패했습니다. 다시 시도하세요.",
+            "Sign-in failed. Please try again."
           )}
         </div>
       ) : null}
