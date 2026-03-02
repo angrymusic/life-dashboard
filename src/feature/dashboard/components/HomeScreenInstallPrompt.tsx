@@ -24,11 +24,14 @@ type HomeScreenInstallPromptProps = {
   disabled?: boolean;
 };
 
+function isIOSDevice(userAgent: string): boolean {
+  return /iphone|ipad|ipod/i.test(userAgent);
+}
+
 function detectBrowserKind(userAgent: string): BrowserKind {
   const ua = userAgent.toLowerCase();
 
   if (ua.includes("samsungbrowser")) return "samsung";
-  if (ua.includes("crios")) return "chrome";
 
   const hasChrome = ua.includes("chrome") || ua.includes("chromium");
   const hasSafari = ua.includes("safari");
@@ -155,9 +158,16 @@ export default function HomeScreenInstallPrompt({
     };
   }, [markInstalled]);
 
-  const guideMessage = useMemo(
-    () =>
-      ({
+  const guideMessage = useMemo(() => {
+    if (typeof navigator !== "undefined" && isIOSDevice(navigator.userAgent)) {
+      return t(
+        "공유 버튼을 누른 뒤 '홈 화면에 추가'를 선택해 주세요.",
+        "Tap Share and choose 'Add to Home Screen' in any browser."
+      );
+    }
+
+    return (
+      {
         safari: t(
           "Safari에서 공유 버튼을 누른 뒤 '홈 화면에 추가'를 선택해 주세요.",
           "In Safari, tap Share and choose 'Add to Home Screen'."
@@ -174,9 +184,9 @@ export default function HomeScreenInstallPrompt({
           "브라우저 메뉴에서 '홈 화면에 추가'를 선택해 주세요.",
           "Use your browser menu and choose 'Add to Home Screen'."
         ),
-      })[browserKind],
-    [browserKind, t]
-  );
+      }[browserKind]
+    );
+  }, [browserKind, t]);
 
   const isDismissed = dismissedUntil > Date.now();
   const shouldShow =
