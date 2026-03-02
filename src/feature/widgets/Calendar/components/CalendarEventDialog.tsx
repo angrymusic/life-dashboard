@@ -14,10 +14,17 @@ import {
   getWeekDayLabels,
 } from "@/feature/widgets/Calendar/libs/calendarUtils";
 import { useI18n } from "@/shared/i18n/client";
-
-type RecurrenceType = "none" | "weekly" | "cycle" | "yearly";
-type ScheduleMode = "single" | "range" | "recurrence" | "anniversary";
-type AnniversaryCalendar = "solar" | "lunar";
+import {
+  AnniversaryScheduleSection,
+  type AnniversaryCalendar,
+  FIELD_INPUT_CLASS,
+  RangeScheduleSection,
+  RecurrenceScheduleSection,
+  type RecurrenceType,
+  type ScheduleMode,
+  SegmentedOptionRow,
+  SingleScheduleSection,
+} from "@/feature/widgets/Calendar/components/CalendarEventDialogSections";
 
 type CalendarEventDialogProps = {
   open: boolean;
@@ -107,25 +114,18 @@ export function CalendarEventDialog({
   const isWeekly = recurrenceType === "weekly";
   const isCycle = recurrenceType === "cycle";
   const isYearly = recurrenceType === "yearly";
-  const scheduleMode: ScheduleMode = isYearly
-    ? "anniversary"
-    : recurrenceType !== "none"
-      ? "recurrence"
-      : isRange
-        ? "range"
-        : "single";
-  const showSingleTime =
-    scheduleMode === "single" ||
-    (scheduleMode === "recurrence" && recurrenceType === "weekly");
-  const isLunarAnniversary =
-    scheduleMode === "anniversary" && anniversaryCalendar === "lunar";
+
+  const scheduleMode: ScheduleMode = (() => {
+    if (isYearly) return "anniversary";
+    if (recurrenceType !== "none") return "recurrence";
+    if (isRange) return "range";
+    return "single";
+  })();
+
+  const isAnniversaryMode = scheduleMode === "anniversary";
   const isRangeMode = scheduleMode === "range";
-  const dateLabel =
-    scheduleMode === "anniversary"
-      ? t("기념일 날짜", "Anniversary date")
-      : scheduleMode === "recurrence"
-        ? t("기준 날짜", "Base date")
-        : t("시작 날짜", "Start date");
+  const isLunarAnniversary = isAnniversaryMode && anniversaryCalendar === "lunar";
+
   const hasRangeTime = Boolean(draftStartTime) || Boolean(draftEndTime);
   const isRangeTimeValid =
     !hasRangeTime || (Boolean(draftStartTime) && Boolean(draftEndTime));
@@ -137,6 +137,7 @@ export function CalendarEventDialog({
         const days = item.days ?? 1;
         return Number.isFinite(days) && days > 0;
       }));
+
   const canSubmit =
     canCreate &&
     draftTitle.trim().length > 0 &&
@@ -147,31 +148,104 @@ export function CalendarEventDialog({
     isWeeklyValid &&
     isCyclePatternValid;
 
+  const scheduleOptions: { value: ScheduleMode; label: string }[] = [
+    { value: "single", label: t("당일 일정", "Single day") },
+    { value: "range", label: t("기간 일정", "Date range") },
+    { value: "recurrence", label: t("반복 일정", "Recurring") },
+    { value: "anniversary", label: t("기념일", "Anniversary") },
+  ];
+
   const setScheduleMode = (next: ScheduleMode) => {
-    if (next === "single") {
-      setRecurrenceType("none");
-      setRangeEnabled(false);
-      return;
+    switch (next) {
+      case "single":
+        setRecurrenceType("none");
+        setRangeEnabled(false);
+        return;
+      case "range":
+        setRecurrenceType("none");
+        setRangeEnabled(true);
+        return;
+      case "anniversary":
+        setRecurrenceType("yearly");
+        setRangeEnabled(false);
+        setDraftTime("");
+        setDraftStartTime("");
+        setDraftEndTime("");
+        setRecurrenceUntil("");
+        return;
+      case "recurrence":
+        if (recurrenceType === "none" || recurrenceType === "yearly") {
+          setRecurrenceType("weekly");
+        }
+        setRangeEnabled(false);
+        return;
     }
-    if (next === "range") {
-      setRecurrenceType("none");
-      setRangeEnabled(true);
-      return;
-    }
-    if (next === "anniversary") {
-      setRecurrenceType("yearly");
-      setRangeEnabled(false);
-      setDraftTime("");
-      setDraftStartTime("");
-      setDraftEndTime("");
-      setRecurrenceUntil("");
-      return;
-    }
-    if (recurrenceType === "none" || recurrenceType === "yearly") {
-      setRecurrenceType("weekly");
-    }
-    setRangeEnabled(false);
   };
+
+  const scheduleSection = (() => {
+    switch (scheduleMode) {
+      case "single":
+        return (
+          <SingleScheduleSection
+            draftStartDate={draftStartDate}
+            draftTime={draftTime}
+            setRangeStartDate={setRangeStartDate}
+            setDraftTime={setDraftTime}
+            t={t}
+          />
+        );
+      case "range":
+        return (
+          <RangeScheduleSection
+            draftStartDate={draftStartDate}
+            draftEndDate={draftEndDate}
+            draftStartTime={draftStartTime}
+            draftEndTime={draftEndTime}
+            setRangeStartDate={setRangeStartDate}
+            setRangeEndDate={setRangeEndDate}
+            setDraftStartTime={setDraftStartTime}
+            setDraftEndTime={setDraftEndTime}
+            t={t}
+          />
+        );
+      case "recurrence":
+        return (
+          <RecurrenceScheduleSection
+            recurrenceType={recurrenceType}
+            setRecurrenceType={setRecurrenceType}
+            recurrenceUntil={recurrenceUntil}
+            setRecurrenceUntil={setRecurrenceUntil}
+            draftStartDate={draftStartDate}
+            draftTime={draftTime}
+            setRangeStartDate={setRangeStartDate}
+            setDraftTime={setDraftTime}
+            weekDays={weekDays}
+            weeklyDays={weeklyDays}
+            toggleWeeklyDay={toggleWeeklyDay}
+            cyclePattern={cyclePattern}
+            draftColor={draftColor}
+            addCyclePatternItem={addCyclePatternItem}
+            updateCyclePatternItem={updateCyclePatternItem}
+            removeCyclePatternItem={removeCyclePatternItem}
+            isCyclePatternValid={isCyclePatternValid}
+            t={t}
+          />
+        );
+      case "anniversary":
+        return (
+          <AnniversaryScheduleSection
+            anniversaryCalendar={anniversaryCalendar}
+            setAnniversaryCalendar={setAnniversaryCalendar}
+            draftStartDate={draftStartDate}
+            setRangeStartDate={setRangeStartDate}
+            draftLunarLeapMonth={draftLunarLeapMonth}
+            setDraftLunarLeapMonth={setDraftLunarLeapMonth}
+            lunarPreviewYmd={lunarPreviewYmd}
+            t={t}
+          />
+        );
+    }
+  })();
 
   return (
     <Dialog
@@ -187,380 +261,29 @@ export function CalendarEventDialog({
           </DialogTitle>
         </DialogHeader>
         <form
-          className="grid gap-3"
+          className="flex flex-col gap-3"
           onSubmit={(event) => {
             event.preventDefault();
             void onSubmit();
           }}
         >
           <input
-            className="w-full rounded-md border border-gray-300 dark:border-gray-700 bg-transparent px-2 py-1 text-base outline-none focus:ring-1 focus:ring-blue-500"
+            className={FIELD_INPUT_CLASS}
             placeholder={t("일정 제목", "Event title")}
             value={draftTitle}
             onChange={(event) => setDraftTitle(event.target.value)}
             autoFocus
           />
-          <div className="flex flex-col gap-2 text-sm text-gray-500 sm:flex-row sm:items-center sm:justify-between">
-            <span>{t("일정 종류", "Schedule type")}</span>
-            <div className="inline-flex flex-wrap items-center gap-1 rounded-2xl border border-gray-200 p-1 dark:border-gray-700">
-              {[
-                { value: "single", label: t("당일 일정", "Single day") },
-                { value: "range", label: t("기간 일정", "Date range") },
-                { value: "recurrence", label: t("반복 일정", "Recurring") },
-                { value: "anniversary", label: t("기념일", "Anniversary") },
-              ].map((option) => {
-                const isActive = scheduleMode === option.value;
-                return (
-                  <button
-                    key={option.value}
-                    type="button"
-                    className={cn(
-                      "rounded-full px-2.5 py-1 text-xs font-medium whitespace-nowrap transition",
-                      isActive
-                        ? "bg-primary/10 text-primary"
-                        : "text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800/40"
-                    )}
-                    onClick={() => setScheduleMode(option.value as ScheduleMode)}
-                  >
-                    {option.label}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-          {scheduleMode === "anniversary" ? (
-            <div className="flex flex-col gap-2 text-sm text-gray-500 sm:flex-row sm:items-center sm:justify-between">
-              <span>{t("기준 달력", "Calendar basis")}</span>
-              <div className="inline-flex items-center gap-1 rounded-2xl border border-gray-200 p-1 dark:border-gray-700">
-                {(
-                  [
-                    { value: "solar", label: t("양력", "Solar") },
-                    { value: "lunar", label: t("음력", "Lunar") },
-                  ] as const
-                ).map((option) => {
-                  const isActive = anniversaryCalendar === option.value;
-                  return (
-                    <button
-                      key={option.value}
-                      type="button"
-                      className={cn(
-                        "rounded-full px-2.5 py-1 text-xs font-medium whitespace-nowrap transition",
-                        isActive
-                          ? "bg-primary/10 text-primary"
-                          : "text-gray-500 hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-800/40"
-                      )}
-                      onClick={() => setAnniversaryCalendar(option.value)}
-                    >
-                      {option.label}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          ) : null}
 
-          {scheduleMode === "range" ? (
-            <>
-              <div className="grid grid-cols-2 gap-2 text-xs text-gray-500">
-                <span>{t("시작 날짜", "Start date")}</span>
-                <span>{t("끝 날짜", "End date")}</span>
-              </div>
-              <div className="grid grid-cols-2 gap-2 [&>*]:min-w-0">
-                <input
-                  type="date"
-                  aria-label="Start date"
-                  className="min-w-0 w-full rounded-md border border-gray-300 dark:border-gray-700 bg-transparent px-2 py-1 text-base outline-none focus:ring-1 focus:ring-blue-500"
-                  value={draftStartDate}
-                  max={draftEndDate}
-                  onChange={(event) => setRangeStartDate(event.target.value)}
-                />
-                <input
-                  type="date"
-                  aria-label="End date"
-                  className="min-w-0 w-full rounded-md border border-gray-300 dark:border-gray-700 bg-transparent px-2 py-1 text-base outline-none focus:ring-1 focus:ring-blue-500"
-                  value={draftEndDate}
-                  min={draftStartDate}
-                  onChange={(event) => setRangeEndDate(event.target.value)}
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-2 text-xs text-gray-500">
-                <span>{t("시작 시간", "Start time")}</span>
-                <span>{t("끝 시간", "End time")}</span>
-              </div>
-              <div className="grid grid-cols-2 gap-2 [&>*]:min-w-0">
-                <input
-                  type="time"
-                  aria-label="Start time"
-                  className="min-w-0 w-full rounded-md border border-gray-300 dark:border-gray-700 bg-transparent px-2 py-1 text-base outline-none focus:ring-1 focus:ring-blue-500"
-                  value={draftStartTime}
-                  onChange={(event) => setDraftStartTime(event.target.value)}
-                />
-                <input
-                  type="time"
-                  aria-label="End time"
-                  className="min-w-0 w-full rounded-md border border-gray-300 dark:border-gray-700 bg-transparent px-2 py-1 text-base outline-none focus:ring-1 focus:ring-blue-500"
-                  value={draftEndTime}
-                  onChange={(event) => setDraftEndTime(event.target.value)}
-                />
-              </div>
-            </>
-          ) : (
-            <>
-              <div
-                className={cn(
-                  "grid gap-2 text-xs text-gray-500",
-                  showSingleTime ? "grid-cols-2" : "grid-cols-1"
-                )}
-              >
-                <span>{dateLabel}</span>
-                {showSingleTime ? <span>{t("시작 시간", "Start time")}</span> : null}
-              </div>
-              <div
-                className={cn(
-                  "grid gap-2 [&>*]:min-w-0",
-                  showSingleTime ? "grid-cols-2" : "grid-cols-1"
-                )}
-              >
-                <input
-                  type="date"
-                  aria-label="Start date"
-                  className="min-w-0 w-full rounded-md border border-gray-300 dark:border-gray-700 bg-transparent px-2 py-1 text-base outline-none focus:ring-1 focus:ring-blue-500"
-                  value={draftStartDate}
-                  onChange={(event) => setRangeStartDate(event.target.value)}
-                />
-                {showSingleTime ? (
-                  <input
-                    type="time"
-                    aria-label="Start time"
-                    className="min-w-0 w-full rounded-md border border-gray-300 dark:border-gray-700 bg-transparent px-2 py-1 text-base outline-none focus:ring-1 focus:ring-blue-500"
-                    value={draftTime}
-                    onChange={(event) => setDraftTime(event.target.value)}
-                  />
-                ) : null}
-              </div>
-              {isLunarAnniversary ? (
-                <>
-                  <label className="flex items-center gap-1.5 text-xs text-gray-500">
-                    <input
-                      type="checkbox"
-                      checked={draftLunarLeapMonth}
-                      onChange={(event) =>
-                        setDraftLunarLeapMonth(event.target.checked)
-                      }
-                    />
-                    {t("윤달 기준", "Use leap month")}
-                  </label>
-                  {lunarPreviewYmd ? (
-                    <div className="text-xs text-gray-500">
-                      {t(
-                        `양력 변환: ${lunarPreviewYmd}`,
-                        `Solar date: ${lunarPreviewYmd}`
-                      )}
-                    </div>
-                  ) : (
-                    <div className="text-xs text-rose-500">
-                      {t(
-                        "입력한 음력 날짜를 양력으로 변환할 수 없어요.",
-                        "Unable to convert this lunar date to solar."
-                      )}
-                    </div>
-                  )}
-                </>
-              ) : null}
-            </>
-          )}
-          {scheduleMode === "recurrence" ? (
-            <div className="flex flex-col gap-2 text-sm text-gray-500 sm:flex-row sm:items-center sm:justify-between">
-              <span>{t("반복 유형", "Recurrence type")}</span>
-              <select
-                aria-label="Recurrence type"
-                className="w-full rounded-md border border-gray-300 dark:border-gray-700 bg-transparent px-2 py-1 text-base outline-none focus:ring-1 focus:ring-blue-500 sm:w-auto"
-                value={recurrenceType}
-                onChange={(event) =>
-                  setRecurrenceType(event.target.value as RecurrenceType)
-                }
-              >
-                <option value="weekly">{t("요일 반복", "Weekly")}</option>
-                <option value="cycle">{t("교대 패턴", "Shift cycle")}</option>
-              </select>
-            </div>
-          ) : null}
-          {scheduleMode === "recurrence" ? (
-            <>
-              <div className="grid grid-cols-2 gap-2 text-xs text-gray-500">
-                <span>{t("반복 종료", "Repeat until")}</span>
-                <span className="text-right">{t("선택", "Choose")}</span>
-              </div>
-              <div className="grid grid-cols-2 gap-2 [&>*]:min-w-0">
-                <input
-                  type="date"
-                  aria-label="Recurrence end date"
-                  className="min-w-0 w-full rounded-md border border-gray-300 dark:border-gray-700 bg-transparent px-2 py-1 text-base outline-none focus:ring-1 focus:ring-blue-500"
-                  value={recurrenceUntil}
-                  min={draftStartDate}
-                  onChange={(event) => setRecurrenceUntil(event.target.value)}
-                />
-                <button
-                  type="button"
-                  className="rounded-md border border-gray-200 px-2 py-1 text-xs text-gray-500 transition hover:bg-gray-100 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-800/40"
-                  onClick={() => setRecurrenceUntil("")}
-                >
-                  {t("무기한", "No end date")}
-                </button>
-              </div>
-            </>
-          ) : null}
-          {scheduleMode === "recurrence" && isWeekly ? (
-            <>
-              <div className="text-xs text-gray-500">{t("요일 선택", "Select weekdays")}</div>
-              <div className="grid grid-cols-7 gap-1">
-                {weekDays.map((day, index) => {
-                  const isActive = weeklyDays.includes(index);
-                  return (
-                    <button
-                      key={day}
-                      type="button"
-                      className={cn(
-                        "rounded-md border px-1.5 py-1 text-xs font-medium transition",
-                        isActive
-                          ? "border-primary/50 bg-primary/10 text-primary"
-                          : "border-gray-200 text-gray-500 hover:bg-gray-100 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-800/40"
-                      )}
-                      onClick={() => toggleWeeklyDay(index)}
-                    >
-                      {day}
-                    </button>
-                  );
-                })}
-              </div>
-            </>
-          ) : null}
-          {scheduleMode === "recurrence" && isCycle ? (
-            <>
-              <div className="flex flex-col gap-2 text-xs text-gray-500 sm:flex-row sm:items-center sm:justify-between">
-                <span>{t("교대 패턴", "Shift cycle")}</span>
-                <button
-                  type="button"
-                  className="rounded-md border border-gray-200 px-2 py-1 text-xs text-gray-500 transition hover:bg-gray-100 dark:border-gray-700 dark:text-gray-400 dark:hover:bg-gray-800/40"
-                  onClick={addCyclePatternItem}
-                >
-                  {t("+ 항목 추가", "+ Add item")}
-                </button>
-              </div>
-              <div className="space-y-2">
-                {cyclePattern.map((item, index) => (
-                  <div
-                    key={`cycle-${index}`}
-                    className="grid gap-2 rounded-md border border-gray-200/70 p-2 dark:border-gray-700 sm:grid-cols-[minmax(0,1.4fr)_minmax(0,0.6fr)_auto_auto] sm:items-center"
-                  >
-                    <div className="flex min-w-0 flex-col gap-1">
-                      <label className="flex items-center gap-1 text-[10px] text-gray-400">
-                        <input
-                          type="checkbox"
-                          checked={Boolean(item.isGap)}
-                          onChange={() =>
-                            updateCyclePatternItem(index, {
-                              isGap: !item.isGap,
-                            })
-                          }
-                        />
-                        {t("공백", "Gap")}
-                      </label>
-                      <input
-                        aria-label={`Pattern label ${index + 1}`}
-                        className={cn(
-                          "w-full rounded-md border border-gray-300 dark:border-gray-700 bg-transparent px-2 py-1 text-base outline-none focus:ring-1 focus:ring-blue-500",
-                          item.isGap
-                            ? "text-gray-400 placeholder:text-gray-400"
-                            : ""
-                        )}
-                        placeholder={
-                          item.isGap
-                            ? t("공백", "Gap")
-                            : t(`패턴 ${index + 1}`, `Pattern ${index + 1}`)
-                        }
-                        value={item.isGap ? "" : item.label}
-                        onChange={(event) =>
-                          updateCyclePatternItem(index, {
-                            label: event.target.value,
-                          })
-                        }
-                        disabled={Boolean(item.isGap)}
-                      />
-                    </div>
-                    <input
-                      type="number"
-                      min={1}
-                      step={1}
-                      aria-label={`Pattern days ${index + 1}`}
-                      className="w-full rounded-md border border-gray-300 dark:border-gray-700 bg-transparent px-2 py-1 text-base outline-none focus:ring-1 focus:ring-blue-500"
-                      value={item.days ?? 1}
-                      onChange={(event) => {
-                        const next = Number(event.target.value);
-                        updateCyclePatternItem(index, {
-                          days: Number.isFinite(next) ? next : 1,
-                        });
-                      }}
-                    />
-                    <div className="flex min-w-0 flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                      <div className="flex flex-wrap items-center gap-1">
-                        {COLOR_PRESETS.map((color) => (
-                          <button
-                            key={`${index}-${color}`}
-                            type="button"
-                            aria-label={`Set pattern color ${color}`}
-                            className={cn(
-                              "h-5 w-5 rounded-full border border-gray-200",
-                              (item.color ?? draftColor) === color
-                                ? "ring-2 ring-gray-900/50"
-                                : "",
-                              item.isGap ? "opacity-40" : ""
-                            )}
-                            style={{ backgroundColor: color }}
-                            onClick={() => {
-                              if (item.isGap) return;
-                              updateCyclePatternItem(index, { color });
-                            }}
-                            disabled={Boolean(item.isGap)}
-                          />
-                        ))}
-                      </div>
-                      <label className="flex items-center gap-1 text-xs text-gray-500">
-                        <input
-                          type="color"
-                          aria-label={`Pattern custom color ${index + 1}`}
-                          className={cn(
-                            "h-6 w-7 rounded border border-gray-200 bg-transparent p-0",
-                            item.isGap ? "opacity-40" : ""
-                          )}
-                          value={item.color ?? draftColor}
-                          onChange={(event) => {
-                            if (item.isGap) return;
-                            updateCyclePatternItem(index, {
-                              color: event.target.value || draftColor,
-                            });
-                          }}
-                          disabled={Boolean(item.isGap)}
-                        />
-                      </label>
-                    </div>
-                    <button
-                      type="button"
-                      className="justify-self-start text-xs font-medium text-gray-400 transition hover:text-red-500 sm:justify-self-auto"
-                      onClick={() => removeCyclePatternItem(index)}
-                    >
-                      {t("삭제", "Delete")}
-                    </button>
-                  </div>
-                ))}
-              </div>
-              {!isCyclePatternValid ? (
-                <div className="text-xs text-rose-500">
-                  {t("일수는 1 이상이어야 합니다.", "Days must be 1 or greater.")}
-                </div>
-              ) : null}
-            </>
-          ) : null}
+          <SegmentedOptionRow
+            label={t("일정 종류", "Schedule type")}
+            options={scheduleOptions}
+            value={scheduleMode}
+            onChange={setScheduleMode}
+          />
+
+          {scheduleSection}
+
           {!isCycle ? (
             <div className="flex flex-col gap-2 text-sm text-gray-500 sm:flex-row sm:items-center sm:justify-between">
               <div className="flex min-w-0 items-center gap-2">
@@ -597,6 +320,7 @@ export function CalendarEventDialog({
               </div>
             </div>
           ) : null}
+
           <DialogFooter className="mt-2">
             <Button type="button" variant="outline" onClick={onClose}>
               {t("취소", "Cancel")}
