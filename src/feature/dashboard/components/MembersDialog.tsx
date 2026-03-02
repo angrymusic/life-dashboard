@@ -12,6 +12,7 @@ import {
 } from "@/shared/ui/dialog";
 import type { Dashboard, Member, Role } from "@/shared/db/schema";
 import {
+  clearDashboardGroupId,
   clearOutboxForDashboard,
   getLocalMembersGroupId,
   pushDashboardSnapshot,
@@ -278,6 +279,8 @@ export default function MembersDialog({
       const payload = (await response.json()) as {
         ok?: boolean;
         error?: string;
+        dashboard?: { id: string; groupId: string | null; updatedAt: string };
+        removedGroupId?: string;
         members?: unknown[];
       };
 
@@ -290,8 +293,32 @@ export default function MembersDialog({
         return;
       }
 
+      if (payload.dashboard?.id === activeDashboard.id) {
+        if (payload.dashboard.groupId) {
+          await setDashboardGroupId(
+            {
+              dashboardId: activeDashboard.id,
+              groupId: payload.dashboard.groupId,
+              updatedAt: payload.dashboard.updatedAt,
+            },
+            { skipOutbox: true }
+          );
+        } else {
+          await clearDashboardGroupId(
+            {
+              dashboardId: activeDashboard.id,
+              updatedAt: payload.dashboard.updatedAt,
+            },
+            { skipOutbox: true }
+          );
+        }
+      }
+
       if (Array.isArray(payload.members)) {
-        await syncMembersFromServer(payload.members as Member[]);
+        await syncMembersFromServer(
+          payload.members as Member[],
+          payload.removedGroupId ?? activeDashboard.groupId
+        );
       }
     } catch (err) {
       const message =

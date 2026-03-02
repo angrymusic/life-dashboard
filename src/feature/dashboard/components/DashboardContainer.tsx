@@ -74,6 +74,7 @@ export default function DashboardContainer() {
     createDashboard,
     renameDashboard,
     deleteDashboard,
+    leaveDashboard,
   } = useDashboardActions({
     dashboards,
     activeDashboardId: dashboardId,
@@ -168,6 +169,7 @@ export default function DashboardContainer() {
       onCreateDashboard={createDashboard}
       onRenameDashboard={renameDashboard}
       onDeleteDashboard={deleteDashboard}
+      onLeaveDashboard={leaveDashboard}
       onLayoutCommit={commitWidgetLayout}
       lockEnabled={lockEnabled}
       widgetLocks={widgetLocks}

@@ -277,6 +277,27 @@ export async function POST(request: Request) {
     return access.dashboard;
   };
 
+  const ensureDashboardCreatorAccess = async (dashboardId: string) => {
+    const access = await ensureAccessForDashboard(dashboardId);
+    if (!access.dashboard.groupId) {
+      if (!access.dashboard.ownerId || access.dashboard.ownerId !== userId) {
+        throw new Error("Forbidden");
+      }
+      return access.dashboard;
+    }
+
+    const firstMember = await prisma.groupMember.findFirst({
+      where: { groupId: access.dashboard.groupId },
+      orderBy: { createdAt: "asc" },
+      select: { userId: true },
+    });
+    const creatorUserId = firstMember?.userId ?? access.dashboard.ownerId;
+    if (!creatorUserId || creatorUserId !== userId) {
+      throw new Error("Forbidden");
+    }
+    return access.dashboard;
+  };
+
   const ensureGroupAdminAccess = async (groupId: string) => {
     const member = await getGroupMember(groupId);
     if (!member || !isAdminRole(member.role)) {
@@ -362,12 +383,7 @@ export async function POST(request: Request) {
       delete: async (event) => {
         const dashboard = await getDashboard(event.entityId);
         if (!dashboard) return;
-        if (dashboard.groupId) {
-          const member = await getGroupMember(dashboard.groupId);
-          if (!member || !isAdminRole(member.role)) throw new Error("Forbidden");
-        } else if (!dashboard.ownerId || dashboard.ownerId !== userId) {
-          throw new Error("Forbidden");
-        }
+        await ensureDashboardCreatorAccess(dashboard.id);
 
         const photosToCleanup = await prisma.photo.findMany({
           where: { dashboardId: event.entityId },

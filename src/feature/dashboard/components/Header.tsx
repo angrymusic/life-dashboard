@@ -21,6 +21,7 @@ type HeaderProps = {
   onCreateDashboard: (name: string) => Promise<void>;
   onRenameDashboard: (dashboardId: Id, name: string) => Promise<void>;
   onDeleteDashboard: (dashboardId: Id) => Promise<void>;
+  onLeaveDashboard: (dashboardId: Id) => Promise<void>;
   onRefreshDashboards: () => Promise<void>;
   isRefreshingDashboards: boolean;
 };
@@ -32,6 +33,7 @@ export default function Header({
   onCreateDashboard,
   onRenameDashboard,
   onDeleteDashboard,
+  onLeaveDashboard,
   onRefreshDashboards,
   isRefreshingDashboards,
 }: HeaderProps) {
@@ -224,6 +226,7 @@ export default function Header({
         onCreateDashboard={onCreateDashboard}
         onRenameDashboard={onRenameDashboard}
         onDeleteDashboard={onDeleteDashboard}
+        onLeaveDashboard={onLeaveDashboard}
         isSignedIn={isSignedIn}
         onRefreshDashboards={isSignedIn ? onRefreshDashboards : undefined}
         isRefreshingDashboards={isRefreshingDashboards}

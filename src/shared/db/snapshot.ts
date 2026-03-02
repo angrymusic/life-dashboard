@@ -147,6 +147,7 @@ export async function pushDashboardSnapshot(dashboardId: Id) {
 
 export async function applyDashboardSnapshot(snapshot: DashboardSnapshot) {
   const dashboardId = snapshot.dashboard.id;
+  const previousGroupId = (await db.dashboards.get(dashboardId))?.groupId;
   const localPhotos: LocalPhoto[] = snapshot.photos.map((photo) => ({
     id: photo.id,
     widgetId: photo.widgetId,
@@ -209,7 +210,10 @@ export async function applyDashboardSnapshot(snapshot: DashboardSnapshot) {
   );
 
   if (snapshot.members) {
-    await syncMembersFromServer(snapshot.members, snapshot.dashboard.groupId);
+    await syncMembersFromServer(
+      snapshot.members,
+      snapshot.dashboard.groupId ?? previousGroupId
+    );
   }
   await clearOutboxForDashboard(dashboardId);
 }

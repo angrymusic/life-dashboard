@@ -35,6 +35,7 @@ type DashboardViewProps = {
   onCreateDashboard: (name: string) => Promise<void>;
   onRenameDashboard: (dashboardId: Id, name: string) => Promise<void>;
   onDeleteDashboard: (dashboardId: Id) => Promise<void>;
+  onLeaveDashboard: (dashboardId: Id) => Promise<void>;
   onLayoutCommit: (nextWidgets: Widget[]) => Promise<void>;
   lockEnabled: boolean;
   widgetLocks: WidgetLockMap;
@@ -66,6 +67,7 @@ export default function DashboardView({
   onCreateDashboard,
   onRenameDashboard,
   onDeleteDashboard,
+  onLeaveDashboard,
   onLayoutCommit,
   lockEnabled,
   widgetLocks,
@@ -141,6 +143,7 @@ export default function DashboardView({
         onCreateDashboard={onCreateDashboard}
         onRenameDashboard={onRenameDashboard}
         onDeleteDashboard={onDeleteDashboard}
+        onLeaveDashboard={onLeaveDashboard}
         onRefreshDashboards={onRefreshDashboards}
         isRefreshingDashboards={isRefreshingDashboards}
       />

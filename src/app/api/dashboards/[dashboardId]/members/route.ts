@@ -8,6 +8,7 @@ import {
   parsePositiveIntEnv,
 } from "@/server/request-guards";
 import { detectLanguageFromRequest } from "@/shared/i18n/language";
+import { publishDashboardUpdate } from "@/server/dashboard-updates";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -508,13 +509,62 @@ export async function DELETE(
     where: { id: targetMember.id },
   });
 
-  const members = await prisma.groupMember.findMany({
+  const membersAfterDelete = await prisma.groupMember.findMany({
     where: { groupId: dashboard.groupId },
     orderBy: { createdAt: "asc" },
+    select: {
+      id: true,
+      groupId: true,
+      role: true,
+      displayName: true,
+      avatarUrl: true,
+      email: true,
+      userId: true,
+      createdAt: true,
+      updatedAt: true,
+    },
   });
+
+  let responseDashboard: {
+    id: string;
+    groupId: string | null;
+    updatedAt: string;
+  } = {
+    id: dashboard.id,
+    groupId: dashboard.groupId,
+    updatedAt: dashboard.updatedAt.toISOString(),
+  };
+  let members = membersAfterDelete;
+  if (membersAfterDelete.length <= 1) {
+    const updated = await prisma.dashboard.update({
+      where: { id: dashboard.id },
+      data: {
+        groupId: null,
+        ...(membersAfterDelete[0]?.userId
+          ? { ownerId: membersAfterDelete[0].userId }
+          : {}),
+      },
+      select: { id: true, groupId: true, updatedAt: true },
+    });
+    await prisma.groupMember.deleteMany({
+      where: { groupId: dashboard.groupId },
+    });
+    responseDashboard = {
+      id: updated.id,
+      groupId: updated.groupId,
+      updatedAt: updated.updatedAt.toISOString(),
+    };
+    members = [];
+    publishDashboardUpdate({
+      dashboardId: updated.id,
+      updatedAt: responseDashboard.updatedAt,
+    });
+  }
 
   return NextResponse.json({
     ok: true,
+    dashboard: responseDashboard,
+    removedGroupId: dashboard.groupId,
     members: members.map(mapMember),
   });
 }

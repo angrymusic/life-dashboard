@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
-import { Check, Pencil, Plus, RefreshCw, Trash2, X } from "lucide-react";
+import { Check, LogOut, Pencil, Plus, RefreshCw, Trash2, X } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import {
   Dialog,
@@ -28,6 +28,7 @@ type DashboardManagerDialogProps = {
   onCreateDashboard: (name: string) => Promise<void>;
   onRenameDashboard: (dashboardId: Id, name: string) => Promise<void>;
   onDeleteDashboard: (dashboardId: Id) => Promise<void>;
+  onLeaveDashboard: (dashboardId: Id) => Promise<void>;
   isSignedIn: boolean;
   onRefreshDashboards?: () => Promise<void>;
   isRefreshingDashboards?: boolean;
@@ -42,6 +43,7 @@ export default function DashboardManagerDialog({
   onCreateDashboard,
   onRenameDashboard,
   onDeleteDashboard,
+  onLeaveDashboard,
   isSignedIn,
   onRefreshDashboards,
   isRefreshingDashboards,
@@ -53,10 +55,13 @@ export default function DashboardManagerDialog({
   const [renameDraft, setRenameDraft] = useState("");
   const [renameError, setRenameError] = useState<string | null>(null);
   const [refreshError, setRefreshError] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [isRenaming, setIsRenaming] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [editingDashboardId, setEditingDashboardId] = useState<Id | null>(null);
   const renameInputRef = useRef<HTMLInputElement | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Dashboard | null>(null);
+  const [leaveTarget, setLeaveTarget] = useState<Dashboard | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [isCreateFormOpen, setIsCreateFormOpen] = useState(false);
   const sessionEmail = session?.user?.email?.trim().toLowerCase() ?? null;
@@ -72,12 +77,54 @@ export default function DashboardManagerDialog({
       return acc;
     }, new Map<string, string>());
   }, [members, sessionEmail]);
+  const creatorEmailByGroupId = useMemo(() => {
+    if (!members) return new Map<string, string>();
+    const earliestByGroup = new Map<string, { createdAt: string; email: string }>();
+    for (const member of members) {
+      const normalizedEmail = member.email?.trim().toLowerCase();
+      if (!normalizedEmail) continue;
+      const existing = earliestByGroup.get(member.groupId);
+      if (!existing || member.createdAt < existing.createdAt) {
+        earliestByGroup.set(member.groupId, {
+          createdAt: member.createdAt,
+          email: normalizedEmail,
+        });
+      }
+    }
+    return new Map(
+      [...earliestByGroup.entries()].map(([groupId, value]) => [groupId, value.email])
+    );
+  }, [members]);
+
+  const isDashboardCreator = (dashboard?: Dashboard) =>
+    Boolean(
+      dashboard &&
+        (!dashboard.groupId ||
+          (isSignedIn &&
+            sessionEmail &&
+            creatorEmailByGroupId.get(dashboard.groupId) &&
+            creatorEmailByGroupId.get(dashboard.groupId) === sessionEmail))
+    );
 
   const canRenameDashboard = (dashboard?: Dashboard) =>
     Boolean(
       dashboard &&
         (!dashboard.groupId ||
           (isSignedIn && roleByGroupId.get(dashboard.groupId) === "parent"))
+    );
+  const canDeleteDashboard = (dashboard?: Dashboard) =>
+    Boolean(
+      dashboard &&
+        canDelete &&
+        (!dashboard.groupId || isDashboardCreator(dashboard))
+    );
+  const canLeaveDashboard = (dashboard?: Dashboard) =>
+    Boolean(
+      dashboard &&
+        dashboard.groupId &&
+        isSignedIn &&
+        creatorEmailByGroupId.get(dashboard.groupId) &&
+        !isDashboardCreator(dashboard)
     );
   const hasRenameRestriction =
     dashboards?.some(
@@ -106,8 +153,10 @@ export default function DashboardManagerDialog({
     setRenameDraft("");
     setRenameError(null);
     setRefreshError(null);
+    setDeleteError(null);
     setIsCreating(false);
     setIsRenaming(false);
+    setIsDeleting(false);
   }, [open]);
 
   const handleRefreshDashboards = async () => {
@@ -145,15 +194,53 @@ export default function DashboardManagerDialog({
   };
 
   const handleDeleteRequest = (dashboard: Dashboard) => {
+    if (!canDeleteDashboard(dashboard)) return;
+    setDeleteError(null);
     onOpenChange(false);
     setDeleteTarget(dashboard);
   };
 
+  const handleLeaveRequest = (dashboard: Dashboard) => {
+    if (!canLeaveDashboard(dashboard)) return;
+    setDeleteError(null);
+    onOpenChange(false);
+    setLeaveTarget(dashboard);
+  };
+
   const handleDeleteConfirm = async () => {
-    if (!deleteTarget) return;
-    const targetId = deleteTarget.id;
-    setDeleteTarget(null);
-    await onDeleteDashboard(targetId);
+    if (!deleteTarget || isDeleting) return;
+    setDeleteError(null);
+    setIsDeleting(true);
+    try {
+      await onDeleteDashboard(deleteTarget.id);
+      setDeleteTarget(null);
+    } catch (err) {
+      const message =
+        err instanceof Error
+          ? localizeErrorMessage(err.message, t)
+          : t("삭제에 실패했어요.", "Failed to delete.");
+      setDeleteError(message);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const handleLeaveConfirm = async () => {
+    if (!leaveTarget || isDeleting) return;
+    setDeleteError(null);
+    setIsDeleting(true);
+    try {
+      await onLeaveDashboard(leaveTarget.id);
+      setLeaveTarget(null);
+    } catch (err) {
+      const message =
+        err instanceof Error
+          ? localizeErrorMessage(err.message, t)
+          : t("대시보드에서 나가지 못했어요.", "Failed to leave dashboard.");
+      setDeleteError(message);
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   const handleRenameStart = (dashboard: Dashboard) => {
@@ -261,6 +348,8 @@ export default function DashboardManagerDialog({
                     const isShared = Boolean(dashboard.groupId);
                     const isEditing = editingDashboardId === dashboard.id;
                     const canRenameRow = canRenameDashboard(dashboard);
+                    const canDeleteRow = canDeleteDashboard(dashboard);
+                    const canLeaveRow = canLeaveDashboard(dashboard);
 
                     return (
                       <div
@@ -357,17 +446,31 @@ export default function DashboardManagerDialog({
                             >
                               <Pencil className="size-4" />
                             </Button>
-                            <Button
-                              type="button"
-                              variant="ghost"
-                              size="icon-sm"
-                              aria-label="Delete dashboard"
-                              className="text-gray-500 hover:text-destructive"
-                              onClick={() => handleDeleteRequest(dashboard)}
-                              disabled={!canDelete}
-                            >
-                              <Trash2 className="size-4" />
-                            </Button>
+                            {canDeleteRow ? (
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon-sm"
+                                aria-label="Delete dashboard"
+                                className="text-gray-500 hover:text-destructive"
+                                onClick={() => handleDeleteRequest(dashboard)}
+                                disabled={isDeleting}
+                              >
+                                <Trash2 className="size-4" />
+                              </Button>
+                            ) : canLeaveRow ? (
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="icon-sm"
+                                aria-label="Leave dashboard"
+                                className="text-gray-500 hover:text-amber-700"
+                                onClick={() => handleLeaveRequest(dashboard)}
+                                disabled={isDeleting}
+                              >
+                                <LogOut className="size-4" />
+                              </Button>
+                            ) : null}
                           </>
                         )}
                       </div>
@@ -482,7 +585,10 @@ export default function DashboardManagerDialog({
       <Dialog
         open={Boolean(deleteTarget)}
         onOpenChange={(nextOpen) => {
-          if (!nextOpen) setDeleteTarget(null);
+          if (!nextOpen) {
+            setDeleteTarget(null);
+            setDeleteError(null);
+          }
         }}
       >
         <DialogContent className="max-w-sm">
@@ -508,6 +614,9 @@ export default function DashboardManagerDialog({
                   )}
                 </div>
               ) : null}
+              {deleteError ? (
+                <div className="text-xs text-red-500">{deleteError}</div>
+              ) : null}
             </div>
           </DialogDescription>
           <DialogFooter>
@@ -515,6 +624,7 @@ export default function DashboardManagerDialog({
               type="button"
               variant="outline"
               onClick={() => setDeleteTarget(null)}
+              disabled={isDeleting}
             >
               {t("취소", "Cancel")}
             </Button>
@@ -522,8 +632,61 @@ export default function DashboardManagerDialog({
               type="button"
               variant="destructive"
               onClick={handleDeleteConfirm}
+              disabled={isDeleting}
             >
-              {t("삭제", "Delete")}
+              {isDeleting
+                ? t("삭제 중...", "Deleting...")
+                : t("삭제", "Delete")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={Boolean(leaveTarget)}
+        onOpenChange={(nextOpen) => {
+          if (!nextOpen) {
+            setLeaveTarget(null);
+            setDeleteError(null);
+          }
+        }}
+      >
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>{t("대시보드에서 나갈까요?", "Leave this dashboard?")}</DialogTitle>
+          </DialogHeader>
+          <DialogDescription asChild>
+            <div className="space-y-2 text-sm text-gray-500">
+              <div className="font-medium text-gray-900 dark:text-gray-100">
+                {leaveTarget?.name}
+              </div>
+              <div>
+                {t(
+                  "나가면 이 대시보드가 내 목록에서 사라져요.",
+                  "This dashboard will be removed from your list after leaving."
+                )}
+              </div>
+              {deleteError ? (
+                <div className="text-xs text-red-500">{deleteError}</div>
+              ) : null}
+            </div>
+          </DialogDescription>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setLeaveTarget(null)}
+              disabled={isDeleting}
+            >
+              {t("취소", "Cancel")}
+            </Button>
+            <Button
+              type="button"
+              variant="destructive"
+              onClick={handleLeaveConfirm}
+              disabled={isDeleting}
+            >
+              {isDeleting ? t("나가는 중...", "Leaving...") : t("나가기", "Leave")}
             </Button>
           </DialogFooter>
         </DialogContent>
