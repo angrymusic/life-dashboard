@@ -170,27 +170,7 @@
 @supports (-webkit-touch-callout: none) {
   input[type="date"],
   input[type="time"] {
-    min-width: 0;
-    width: 100%;
-    max-width: 100%;
-    min-height: 2.125rem;
-    box-sizing: border-box;
-    line-height: 1.2;
-  }
-
-  input[type="date"]::-webkit-datetime-edit,
-  input[type="time"]::-webkit-datetime-edit {
-    padding: 0;
-    margin: 0;
-    line-height: 1.2;
-  }
-
-  input[type="date"]::-webkit-datetime-edit-fields-wrapper,
-  input[type="time"]::-webkit-datetime-edit-fields-wrapper,
-  input[type="date"]::-webkit-date-and-time-value,
-  input[type="time"]::-webkit-date-and-time-value {
-    padding: 0;
-    margin: 0;
+    -webkit-appearance: none;
   }
 }
 
