@@ -8,6 +8,7 @@ import Footer from "./Footer";
 import GridLayout from "./GridLayout";
 import { AddWidgetDialog } from "./AddWidgetDialog";
 import GuestOnboardingTutorial from "./GuestOnboardingTutorial";
+import HomeScreenInstallPrompt from "./HomeScreenInstallPrompt";
 import { Button } from "@/shared/ui/button";
 import type { Dashboard, Id, Widget } from "@/shared/db/schema";
 import type { AddableWidgetType } from "@/feature/dashboard/libs/widgetRegistry";
@@ -191,6 +192,8 @@ export default function DashboardView({
           ) : null}
         </div>
       ) : null}
+
+      <HomeScreenInstallPrompt disabled={isInAppBrowser} />
 
       {activeDashboard?.groupId && !isSignedIn ? (
         <div className="mx-4 mt-3 rounded-lg border border-amber-200/70 bg-amber-50 px-4 py-3 text-xs text-amber-700">
