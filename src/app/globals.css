@@ -166,6 +166,16 @@
   }
 }
 
+/* Keep iOS date/time controls from expanding past grid/flex tracks. */
+@supports (-webkit-touch-callout: none) {
+  input[type="date"],
+  input[type="time"] {
+    min-width: 0;
+    width: 100%;
+    max-width: 100%;
+  }
+}
+
 *::-webkit-scrollbar {
   width: 10px;
   height: 10px;

@@ -265,11 +265,11 @@ export function CalendarEventDialog({
                 <span>{t("시작 날짜", "Start date")}</span>
                 <span>{t("끝 날짜", "End date")}</span>
               </div>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-2 gap-2 [&>*]:min-w-0">
                 <input
                   type="date"
                   aria-label="Start date"
-                  className="w-full rounded-md border border-gray-300 dark:border-gray-700 bg-transparent px-2 py-1 text-base outline-none focus:ring-1 focus:ring-blue-500"
+                  className="min-w-0 w-full rounded-md border border-gray-300 dark:border-gray-700 bg-transparent px-2 py-1 text-base outline-none focus:ring-1 focus:ring-blue-500"
                   value={draftStartDate}
                   max={draftEndDate}
                   onChange={(event) => setRangeStartDate(event.target.value)}
@@ -277,7 +277,7 @@ export function CalendarEventDialog({
                 <input
                   type="date"
                   aria-label="End date"
-                  className="w-full rounded-md border border-gray-300 dark:border-gray-700 bg-transparent px-2 py-1 text-base outline-none focus:ring-1 focus:ring-blue-500"
+                  className="min-w-0 w-full rounded-md border border-gray-300 dark:border-gray-700 bg-transparent px-2 py-1 text-base outline-none focus:ring-1 focus:ring-blue-500"
                   value={draftEndDate}
                   min={draftStartDate}
                   onChange={(event) => setRangeEndDate(event.target.value)}
@@ -287,18 +287,18 @@ export function CalendarEventDialog({
                 <span>{t("시작 시간", "Start time")}</span>
                 <span>{t("끝 시간", "End time")}</span>
               </div>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-2 gap-2 [&>*]:min-w-0">
                 <input
                   type="time"
                   aria-label="Start time"
-                  className="w-full rounded-md border border-gray-300 dark:border-gray-700 bg-transparent px-2 py-1 text-base outline-none focus:ring-1 focus:ring-blue-500"
+                  className="min-w-0 w-full rounded-md border border-gray-300 dark:border-gray-700 bg-transparent px-2 py-1 text-base outline-none focus:ring-1 focus:ring-blue-500"
                   value={draftStartTime}
                   onChange={(event) => setDraftStartTime(event.target.value)}
                 />
                 <input
                   type="time"
                   aria-label="End time"
-                  className="w-full rounded-md border border-gray-300 dark:border-gray-700 bg-transparent px-2 py-1 text-base outline-none focus:ring-1 focus:ring-blue-500"
+                  className="min-w-0 w-full rounded-md border border-gray-300 dark:border-gray-700 bg-transparent px-2 py-1 text-base outline-none focus:ring-1 focus:ring-blue-500"
                   value={draftEndTime}
                   onChange={(event) => setDraftEndTime(event.target.value)}
                 />
@@ -317,14 +317,14 @@ export function CalendarEventDialog({
               </div>
               <div
                 className={cn(
-                  "grid gap-2",
+                  "grid gap-2 [&>*]:min-w-0",
                   showSingleTime ? "grid-cols-2" : "grid-cols-1"
                 )}
               >
                 <input
                   type="date"
                   aria-label="Start date"
-                  className="w-full rounded-md border border-gray-300 dark:border-gray-700 bg-transparent px-2 py-1 text-base outline-none focus:ring-1 focus:ring-blue-500"
+                  className="min-w-0 w-full rounded-md border border-gray-300 dark:border-gray-700 bg-transparent px-2 py-1 text-base outline-none focus:ring-1 focus:ring-blue-500"
                   value={draftStartDate}
                   onChange={(event) => setRangeStartDate(event.target.value)}
                 />
@@ -332,7 +332,7 @@ export function CalendarEventDialog({
                   <input
                     type="time"
                     aria-label="Start time"
-                    className="w-full rounded-md border border-gray-300 dark:border-gray-700 bg-transparent px-2 py-1 text-base outline-none focus:ring-1 focus:ring-blue-500"
+                    className="min-w-0 w-full rounded-md border border-gray-300 dark:border-gray-700 bg-transparent px-2 py-1 text-base outline-none focus:ring-1 focus:ring-blue-500"
                     value={draftTime}
                     onChange={(event) => setDraftTime(event.target.value)}
                   />
@@ -391,11 +391,11 @@ export function CalendarEventDialog({
                 <span>{t("반복 종료", "Repeat until")}</span>
                 <span className="text-right">{t("선택", "Choose")}</span>
               </div>
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-2 gap-2 [&>*]:min-w-0">
                 <input
                   type="date"
                   aria-label="Recurrence end date"
-                  className="w-full rounded-md border border-gray-300 dark:border-gray-700 bg-transparent px-2 py-1 text-base outline-none focus:ring-1 focus:ring-blue-500"
+                  className="min-w-0 w-full rounded-md border border-gray-300 dark:border-gray-700 bg-transparent px-2 py-1 text-base outline-none focus:ring-1 focus:ring-blue-500"
                   value={recurrenceUntil}
                   min={draftStartDate}
                   onChange={(event) => setRecurrenceUntil(event.target.value)}
