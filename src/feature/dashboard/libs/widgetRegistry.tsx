@@ -44,7 +44,7 @@ const widgetRegistryEntries = [
     type: "calendar",
     title: "Calendar",
     description: "View monthly schedules and events",
-    create: createWithLayout({ w: 5, h: 13, minW: 5, minH: 12 }),
+    create: createWithLayout({ w: 5, h: 13, minW: 4, minH: 12 }),
     render: ({ widgetId, canEdit }) => (
       <CalendarWidget widgetId={widgetId} canEdit={canEdit} />
     ),
@@ -54,7 +54,7 @@ const widgetRegistryEntries = [
     title: "Memo",
     description: "Write quick notes",
     create: createWithLayout(
-      { w: 3, h: 4, minW: 3, minH: 4 },
+      { w: 3, h: 4, minW: 2, minH: 4 },
       { payload: { type: "memo", data: { text: "", color: undefined } } }
     ),
     render: ({ widgetId, canEdit }) => (
@@ -74,7 +74,7 @@ const widgetRegistryEntries = [
     type: "todo",
     title: "Todo",
     description: "Track today's tasks",
-    create: createWithLayout({ w: 3, h: 6, minW: 3, minH: 6 }),
+    create: createWithLayout({ w: 3, h: 6, minW: 2, minH: 6 }),
     render: ({ widgetId, canEdit }) => (
       <TodoWidget widgetId={widgetId} canEdit={canEdit} />
     ),
@@ -83,7 +83,7 @@ const widgetRegistryEntries = [
     type: "dday",
     title: "D-Day",
     description: "Count down to your target date",
-    create: createWithLayout({ w: 3, h: 6, minW: 3, minH: 6 }),
+    create: createWithLayout({ w: 3, h: 6, minW: 2, minH: 6 }),
     render: ({ widgetId, canEdit }) => (
       <DdayWidget widgetId={widgetId} canEdit={canEdit} />
     ),
@@ -102,7 +102,7 @@ const widgetRegistryEntries = [
     title: "Chart",
     description: "Track progress over time",
     create: createWithLayout(
-      { w: 6, h: 9, minW: 5, minH: 8 },
+      { w: 6, h: 9, minW: 4, minH: 8 },
       {
         settings: { isConfigured: false },
         payload: {
@@ -119,7 +119,7 @@ const widgetRegistryEntries = [
     type: "weather",
     title: "Weather",
     description: "Check this week's weather",
-    create: createWithLayout({ w: 3, h: 5, minW: 3, minH: 5 }),
+    create: createWithLayout({ w: 3, h: 5, minW: 2, minH: 5 }),
     render: ({ widgetId, canEdit }) => (
       <WeatherWidget widgetId={widgetId} canEdit={canEdit} />
     ),
