@@ -57,6 +57,14 @@ const MESSAGE_MAP: Record<string, { ko: string; en: string }> = {
     ko: "첫 생성자는 퇴출할 수 없어요.",
     en: "You cannot remove the first creator.",
   },
+  "Creator cannot leave dashboard": {
+    ko: "대시보드를 처음 만든 사용자는 나갈 수 없어요.",
+    en: "Creator cannot leave dashboard",
+  },
+  "Failed to leave dashboard.": {
+    ko: "대시보드에서 나가지 못했어요.",
+    en: "Failed to leave dashboard.",
+  },
   "Invalid snapshot payload": {
     ko: "스냅샷 데이터 형식이 올바르지 않아요.",
     en: "Invalid snapshot payload",

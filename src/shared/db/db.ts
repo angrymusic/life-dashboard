@@ -3,6 +3,7 @@ export { db, LifeDashboardDB, getLocalMembersGroupId, getOrCreateLocalProfileId,
 export type { CreateWidgetPayload } from "./repositories/widgets";
 
 export {
+  clearDashboardGroupId,
   createDashboard,
   deleteDashboardCascade,
   ensureDefaultDashboard,

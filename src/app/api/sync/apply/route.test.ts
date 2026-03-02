@@ -107,6 +107,48 @@ describe("POST /api/sync/apply", () => {
     expect(prisma.dashboard.upsert).not.toHaveBeenCalled();
   });
 
+  it("rejects shared dashboard deletes for non-creator admins", async () => {
+    requireUser.mockResolvedValue({
+      ok: true,
+      context: { userId: "admin-2" },
+    });
+    prisma.dashboard.findUnique.mockResolvedValue({
+      id: "dash-1",
+      ownerId: "creator-1",
+      groupId: "group-1",
+    });
+    prisma.groupMember.findFirst
+      .mockResolvedValueOnce({
+        id: "member-admin",
+        role: "parent",
+      })
+      .mockResolvedValueOnce({
+        userId: "creator-1",
+      });
+
+    const response = await POST(
+      buildRequest({
+        events: [
+          {
+            id: "dashboard:dash-1",
+            entityType: "dashboard",
+            entityId: "dash-1",
+            operation: "delete",
+          },
+        ],
+      })
+    );
+    const body = await response.json();
+
+    expect(response.status).toBe(207);
+    expect(body.ok).toBe(false);
+    expect(body.appliedIds).toEqual([]);
+    expect(body.errors).toEqual([
+      { id: "dashboard:dash-1", error: "Forbidden" },
+    ]);
+    expect(prisma.dashboard.deleteMany).not.toHaveBeenCalled();
+  });
+
   it("applies memo updates when a child edits their own widget", async () => {
     requireUser.mockResolvedValue({
       ok: true,

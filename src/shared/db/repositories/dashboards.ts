@@ -159,6 +159,16 @@ export async function deleteDashboardCascade(
   options: WriteOptions = {}
 ) {
   const policy = await resolveWritePolicy(dashboardId, options);
+  if (policy.syncToServer) {
+    const event = buildDeleteEventForRecord("dashboard", { id: dashboardId });
+    if (event) {
+      const result = await applyEventsToServer([event]);
+      if (!result.appliedIds.includes(event.id)) {
+        const eventError = result.errors?.find((item) => item.id === event.id)?.error;
+        throw new Error(eventError ?? result.errors?.[0]?.error ?? "Server sync failed");
+      }
+    }
+  }
   await db.transaction(
     "rw",
     [
@@ -205,12 +215,6 @@ export async function deleteDashboardCascade(
       });
     }
   );
-  if (policy.syncToServer) {
-    const event = buildDeleteEventForRecord("dashboard", { id: dashboardId });
-    if (event) {
-      await applyEventsToServer([event]);
-    }
-  }
 }
 
 export async function setDashboardGroupId(
@@ -232,6 +236,37 @@ export async function setDashboardGroupId(
     };
     await db.dashboards.update(params.dashboardId, {
       groupId: params.groupId,
+      updatedAt,
+    });
+    await recordOutboxUpsert({
+      entityType: "dashboard",
+      record: nextDashboard,
+      options,
+      now: updatedAt,
+    });
+  });
+}
+
+export async function clearDashboardGroupId(
+  params: {
+    dashboardId: Id;
+    updatedAt?: ISODate;
+  },
+  options: WriteOptions = {}
+) {
+  const updatedAt = params.updatedAt ?? nowIso();
+  await db.transaction("rw", [db.dashboards, db.outbox], async () => {
+    const existing = await db.dashboards.get(params.dashboardId);
+    if (!existing) return;
+    const nextDashboard: Dashboard = {
+      id: existing.id,
+      name: existing.name,
+      ownerId: existing.ownerId,
+      createdAt: existing.createdAt,
+      updatedAt,
+    };
+    await db.dashboards.update(params.dashboardId, {
+      groupId: undefined,
       updatedAt,
     });
     await recordOutboxUpsert({

@@ -8,6 +8,7 @@ import {
   parsePositiveIntEnv,
 } from "@/server/request-guards";
 import { detectLanguageFromRequest } from "@/shared/i18n/language";
+import { publishDashboardUpdate } from "@/server/dashboard-updates";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -508,13 +509,79 @@ export async function DELETE(
     where: { id: targetMember.id },
   });
 
-  const members = await prisma.groupMember.findMany({
+  const membersAfterDelete = await prisma.groupMember.findMany({
     where: { groupId: dashboard.groupId },
     orderBy: { createdAt: "asc" },
+    select: {
+      id: true,
+      groupId: true,
+      role: true,
+      displayName: true,
+      avatarUrl: true,
+      email: true,
+      userId: true,
+      createdAt: true,
+      updatedAt: true,
+    },
   });
+
+  let responseDashboard: {
+    id: string;
+    groupId: string | null;
+    updatedAt: string;
+  } = {
+    id: dashboard.id,
+    groupId: dashboard.groupId,
+    updatedAt: dashboard.updatedAt.toISOString(),
+  };
+  let members = membersAfterDelete;
+  if (membersAfterDelete.length <= 1) {
+    const affectedDashboardIds = (
+      await prisma.dashboard.findMany({
+        where: { groupId: dashboard.groupId },
+        select: { id: true },
+      })
+    ).map((item) => item.id);
+    await prisma.dashboard.updateMany({
+      where: { groupId: dashboard.groupId },
+      data: {
+        groupId: null,
+        ...(membersAfterDelete[0]?.userId
+          ? { ownerId: membersAfterDelete[0].userId }
+          : {}),
+      },
+    });
+    await prisma.groupMember.deleteMany({
+      where: { groupId: dashboard.groupId },
+    });
+    const updatedDashboards = affectedDashboardIds.length
+      ? await prisma.dashboard.findMany({
+          where: { id: { in: affectedDashboardIds } },
+          select: { id: true, groupId: true, updatedAt: true },
+        })
+      : [];
+    const targetDashboard =
+      updatedDashboards.find((item) => item.id === dashboard.id) ?? null;
+    if (targetDashboard) {
+      responseDashboard = {
+        id: targetDashboard.id,
+        groupId: targetDashboard.groupId,
+        updatedAt: targetDashboard.updatedAt.toISOString(),
+      };
+    }
+    members = [];
+    updatedDashboards.forEach((item) => {
+      publishDashboardUpdate({
+        dashboardId: item.id,
+        updatedAt: item.updatedAt.toISOString(),
+      });
+    });
+  }
 
   return NextResponse.json({
     ok: true,
+    dashboard: responseDashboard,
+    removedGroupId: dashboard.groupId,
     members: members.map(mapMember),
   });
 }

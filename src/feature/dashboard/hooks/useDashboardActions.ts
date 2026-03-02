@@ -3,6 +3,7 @@ import {
   createDashboard as createDashboardRecord,
   deleteDashboardCascade,
   getOrCreateLocalProfileId,
+  removeSharedDashboardLocally,
   updateDashboardName,
 } from "@/shared/db/db";
 import type { Dashboard, Id, Widget } from "@/shared/db/schema";
@@ -24,6 +25,7 @@ type ActionsResult = {
   createDashboard: (name: string) => Promise<void>;
   renameDashboard: (dashboardId: Id, name: string) => Promise<void>;
   deleteDashboard: (dashboardId: Id) => Promise<void>;
+  leaveDashboard: (dashboardId: Id) => Promise<void>;
 };
 
 export function useDashboardActions({
@@ -66,11 +68,48 @@ export function useDashboardActions({
     [activeDashboardId, dashboards, setActiveDashboardIdByUser]
   );
 
+  const leaveDashboard = useCallback(
+    async (targetId: Id) => {
+      const targetDashboard = dashboards?.find((dashboard) => dashboard.id === targetId);
+      if (!targetDashboard?.groupId) return;
+
+      const response = await fetch(`/api/dashboards/${targetId}/leave`, {
+        method: "POST",
+      });
+      const payload = (await response.json()) as {
+        ok?: boolean;
+        error?: string;
+      };
+      if (!response.ok || !payload.ok) {
+        throw new Error(payload.error || "Failed to leave dashboard.");
+      }
+
+      const removedDashboards =
+        dashboards?.filter(
+          (dashboard) => dashboard.groupId === targetDashboard.groupId
+        ) ?? [targetDashboard];
+      for (const dashboard of removedDashboards) {
+        await removeSharedDashboardLocally(dashboard.id, targetDashboard.groupId);
+      }
+
+      if (!activeDashboardId) return;
+      if (!removedDashboards.some((dashboard) => dashboard.id === activeDashboardId)) {
+        return;
+      }
+      const removedIds = new Set(removedDashboards.map((dashboard) => dashboard.id));
+      const remaining =
+        dashboards?.filter((dashboard) => !removedIds.has(dashboard.id)) ?? [];
+      setActiveDashboardIdByUser(remaining[0]?.id);
+    },
+    [activeDashboardId, dashboards, setActiveDashboardIdByUser]
+  );
+
   return {
     addWidget,
     commitWidgetLayout,
     createDashboard,
     renameDashboard,
     deleteDashboard,
+    leaveDashboard,
   };
 }
