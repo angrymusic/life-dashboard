@@ -536,28 +536,45 @@ export async function DELETE(
   };
   let members = membersAfterDelete;
   if (membersAfterDelete.length <= 1) {
-    const updated = await prisma.dashboard.update({
-      where: { id: dashboard.id },
+    const affectedDashboardIds = (
+      await prisma.dashboard.findMany({
+        where: { groupId: dashboard.groupId },
+        select: { id: true },
+      })
+    ).map((item) => item.id);
+    await prisma.dashboard.updateMany({
+      where: { groupId: dashboard.groupId },
       data: {
         groupId: null,
         ...(membersAfterDelete[0]?.userId
           ? { ownerId: membersAfterDelete[0].userId }
           : {}),
       },
-      select: { id: true, groupId: true, updatedAt: true },
     });
     await prisma.groupMember.deleteMany({
       where: { groupId: dashboard.groupId },
     });
-    responseDashboard = {
-      id: updated.id,
-      groupId: updated.groupId,
-      updatedAt: updated.updatedAt.toISOString(),
-    };
+    const updatedDashboards = affectedDashboardIds.length
+      ? await prisma.dashboard.findMany({
+          where: { id: { in: affectedDashboardIds } },
+          select: { id: true, groupId: true, updatedAt: true },
+        })
+      : [];
+    const targetDashboard =
+      updatedDashboards.find((item) => item.id === dashboard.id) ?? null;
+    if (targetDashboard) {
+      responseDashboard = {
+        id: targetDashboard.id,
+        groupId: targetDashboard.groupId,
+        updatedAt: targetDashboard.updatedAt.toISOString(),
+      };
+    }
     members = [];
-    publishDashboardUpdate({
-      dashboardId: updated.id,
-      updatedAt: responseDashboard.updatedAt,
+    updatedDashboards.forEach((item) => {
+      publishDashboardUpdate({
+        dashboardId: item.id,
+        updatedAt: item.updatedAt.toISOString(),
+      });
     });
   }
 

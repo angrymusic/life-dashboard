@@ -88,27 +88,44 @@ export async function POST(
     updatedAt: new Date().toISOString(),
   };
   if (remainingMembers.length <= 1) {
-    const updated = await prisma.dashboard.update({
-      where: { id: dashboard.id },
+    const affectedDashboardIds = (
+      await prisma.dashboard.findMany({
+        where: { groupId: dashboard.groupId },
+        select: { id: true },
+      })
+    ).map((item) => item.id);
+    await prisma.dashboard.updateMany({
+      where: { groupId: dashboard.groupId },
       data: {
         groupId: null,
         ...(remainingMembers[0]?.userId
           ? { ownerId: remainingMembers[0].userId }
           : {}),
       },
-      select: { id: true, groupId: true, updatedAt: true },
     });
     await prisma.groupMember.deleteMany({
       where: { groupId: dashboard.groupId },
     });
-    nextDashboard = {
-      id: updated.id,
-      groupId: updated.groupId,
-      updatedAt: updated.updatedAt.toISOString(),
-    };
-    publishDashboardUpdate({
-      dashboardId: updated.id,
-      updatedAt: nextDashboard.updatedAt,
+    const updatedDashboards = affectedDashboardIds.length
+      ? await prisma.dashboard.findMany({
+          where: { id: { in: affectedDashboardIds } },
+          select: { id: true, groupId: true, updatedAt: true },
+        })
+      : [];
+    const targetDashboard =
+      updatedDashboards.find((item) => item.id === dashboard.id) ?? null;
+    if (targetDashboard) {
+      nextDashboard = {
+        id: targetDashboard.id,
+        groupId: targetDashboard.groupId,
+        updatedAt: targetDashboard.updatedAt.toISOString(),
+      };
+    }
+    updatedDashboards.forEach((item) => {
+      publishDashboardUpdate({
+        dashboardId: item.id,
+        updatedAt: item.updatedAt.toISOString(),
+      });
     });
   }
 
