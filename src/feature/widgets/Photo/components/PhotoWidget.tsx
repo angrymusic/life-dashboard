@@ -1,7 +1,7 @@
 import Image from "next/image";
 import type { ChangeEvent, KeyboardEvent, PointerEvent } from "react";
-import { useCallback, useRef } from "react";
-import { Upload, X } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import { LoaderCircle, Upload, X } from "lucide-react";
 import { PhotoViewerDialog } from "@/feature/widgets/Photo/components/PhotoViewerDialog";
 import { usePhotoViewer } from "@/feature/widgets/Photo/hooks/usePhotoViewer";
 import { usePhotoWidget } from "@/feature/widgets/Photo/hooks/usePhotoWidget";
@@ -25,7 +25,10 @@ export function PhotoWidget({ widgetId, canEdit = true }: PhotoWidgetProps) {
   const { photoUrl, hasPhoto, replacePhoto, clearPhoto } =
     usePhotoWidget(widgetId);
   const viewer = usePhotoViewer(photoUrl);
+  const [isReplacingPhoto, setIsReplacingPhoto] = useState(false);
+  const [isImageLoading, setIsImageLoading] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const imageRef = useRef<HTMLImageElement>(null);
   const pointerStateRef = useRef<{
     pointerId: number;
     startX: number;
@@ -39,12 +42,27 @@ export function PhotoWidget({ widgetId, canEdit = true }: PhotoWidgetProps) {
     inputRef.current?.click();
   }, [canEdit]);
 
+  useEffect(() => {
+    if (!photoUrl) {
+      setIsImageLoading(false);
+      return;
+    }
+    const image = imageRef.current;
+    setIsImageLoading(!(image?.complete && image.naturalWidth > 0));
+  }, [photoUrl]);
+
   const handleFileChange = useCallback(
-    (event: ChangeEvent<HTMLInputElement>) => {
+    async (event: ChangeEvent<HTMLInputElement>) => {
       const file = event.target.files?.[0];
       if (!file) return;
-      void replacePhoto(file);
-      event.currentTarget.value = "";
+      const input = event.currentTarget;
+      setIsReplacingPhoto(true);
+      try {
+        await replacePhoto(file);
+      } finally {
+        setIsReplacingPhoto(false);
+        input.value = "";
+      }
     },
     [replacePhoto]
   );
@@ -52,6 +70,7 @@ export function PhotoWidget({ widgetId, canEdit = true }: PhotoWidgetProps) {
   const uploadItem = {
     text: hasPhoto ? t("사진 변경", "Change photo") : t("사진 업로드", "Upload photo"),
     icon: <Upload className="size-4" />,
+    disabled: isReplacingPhoto,
     onClick: openFileDialog,
   };
 
@@ -61,6 +80,7 @@ export function PhotoWidget({ widgetId, canEdit = true }: PhotoWidgetProps) {
         {
           text: t("사진 비우기", "Clear photo"),
           icon: <X className="size-4" />,
+          disabled: isReplacingPhoto,
           onClick: () => void clearPhoto(),
         },
       ]
@@ -80,7 +100,8 @@ export function PhotoWidget({ widgetId, canEdit = true }: PhotoWidgetProps) {
     extraItems,
   });
 
-  const showActions = canEdit && actions.length > 0;
+  const showActions = canEdit && actions.length > 0 && !isReplacingPhoto;
+  const isPhotoBusy = isReplacingPhoto || (Boolean(photoUrl) && isImageLoading);
 
   const handlePhotoPointerDown = useCallback(
     (event: PointerEvent<HTMLDivElement>) => {
@@ -143,7 +164,7 @@ export function PhotoWidget({ widgetId, canEdit = true }: PhotoWidgetProps) {
 
   return (
     <WidgetCard className="p-0">
-      <div className="relative h-full w-full">
+      <div className="relative h-full w-full" aria-busy={isPhotoBusy}>
         {showActions ? (
           <div className="absolute right-2 top-2 z-10">
             <ActionMenuButton
@@ -167,6 +188,7 @@ export function PhotoWidget({ widgetId, canEdit = true }: PhotoWidgetProps) {
             aria-label={t("사진 전체 화면 보기", "Open photo in full screen")}
           >
             <Image
+              ref={imageRef}
               src={photoUrl}
               alt={t("업로드된 사진", "Uploaded photo")}
               width={1}
@@ -174,24 +196,58 @@ export function PhotoWidget({ widgetId, canEdit = true }: PhotoWidgetProps) {
               unoptimized
               className="pointer-events-none block h-full w-auto max-w-none shrink-0"
               draggable={false}
+              onLoad={() => setIsImageLoading(false)}
+              onError={() => setIsImageLoading(false)}
             />
+            {isPhotoBusy ? (
+              <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/35 px-4">
+                <div
+                  role="status"
+                  aria-live="polite"
+                  className="inline-flex items-center gap-2 rounded-full bg-black/60 px-3 py-1.5 text-xs font-medium text-white"
+                >
+                  <LoaderCircle className="size-4 animate-spin" />
+                  <span>
+                    {isReplacingPhoto
+                      ? t("사진 저장 중...", "Saving photo...")
+                      : t("사진 불러오는 중...", "Loading photo...")}
+                  </span>
+                </div>
+              </div>
+            ) : null}
           </div>
         ) : (
           <div className="flex h-full w-full flex-col items-center justify-center gap-2 text-sm text-gray-400">
-            <Upload className="size-6" />
-            <div className="text-sm font-medium text-gray-500">
-              {t("사진이 없습니다", "No photo")}
-            </div>
-            {canEdit ? (
-              <Button
-                type="button"
-                variant="secondary"
-                size="sm"
-                onClick={openFileDialog}
-              >
-                {t("사진 업로드", "Upload photo")}
-              </Button>
-            ) : null}
+            {isReplacingPhoto ? (
+              <>
+                <LoaderCircle className="size-6 animate-spin text-primary" />
+                <div
+                  role="status"
+                  aria-live="polite"
+                  className="text-sm font-medium text-gray-500"
+                >
+                  {t("사진 저장 중...", "Saving photo...")}
+                </div>
+              </>
+            ) : (
+              <>
+                <Upload className="size-6" />
+                <div className="text-sm font-medium text-gray-500">
+                  {t("사진이 없습니다", "No photo")}
+                </div>
+                {canEdit ? (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    onClick={openFileDialog}
+                    disabled={isReplacingPhoto}
+                  >
+                    {t("사진 업로드", "Upload photo")}
+                  </Button>
+                ) : null}
+              </>
+            )}
           </div>
         )}
 
