@@ -2,6 +2,7 @@ import type { ReactNode } from "react";
 import type { CreateWidgetPayload } from "@/shared/db/db";
 import type { Id, WidgetLayout, WidgetType } from "@/shared/db/schema";
 import type { WidgetOption } from "@/feature/dashboard/types/widget";
+import type { AppLanguage } from "@/shared/i18n/language";
 import { createWidgetLayout, type LayoutItemSize } from "./layout";
 import { CalendarWidget } from "@/feature/widgets/Calendar/components/CalendarWidget";
 import { ChartWidget } from "@/feature/widgets/Chart/components/ChartWidget";
@@ -14,6 +15,7 @@ import { WeatherWidget } from "@/feature/widgets/Weather/components/WeatherWidge
 
 type WidgetCreateContext = {
   existingLayouts: WidgetLayout[];
+  language: AppLanguage;
 };
 
 type WidgetCreateResult = {
@@ -33,10 +35,15 @@ type WidgetRegistryEntry = WidgetOption & {
 };
 
 const createWithLayout =
-  (preset: LayoutItemSize, extras: Omit<WidgetCreateResult, "layout"> = {}) =>
-  ({ existingLayouts }: WidgetCreateContext): WidgetCreateResult => ({
-    layout: createWidgetLayout(existingLayouts, preset),
-    ...extras,
+  (
+    preset: LayoutItemSize,
+    extras:
+      | Omit<WidgetCreateResult, "layout">
+      | ((context: WidgetCreateContext) => Omit<WidgetCreateResult, "layout">) = {}
+  ) =>
+  (context: WidgetCreateContext): WidgetCreateResult => ({
+    layout: createWidgetLayout(context.existingLayouts, preset),
+    ...(typeof extras === "function" ? extras(context) : extras),
   });
 
 const widgetRegistryEntries = [
@@ -103,13 +110,17 @@ const widgetRegistryEntries = [
     description: "Track progress over time",
     create: createWithLayout(
       { w: 6, h: 9, minW: 4, minH: 8 },
-      {
+      ({ language }) => ({
         settings: { isConfigured: false },
         payload: {
           type: "chart",
-          data: { name: "Metric", unit: undefined, chartType: "line" },
+          data: {
+            name: language === "ko" ? "차트" : "Metric",
+            unit: undefined,
+            chartType: "line",
+          },
         },
-      }
+      })
     ),
     render: ({ widgetId, canEdit }) => (
       <ChartWidget widgetId={widgetId} canEdit={canEdit} />
