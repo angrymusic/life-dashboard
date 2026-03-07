@@ -319,6 +319,12 @@ export default function DashboardManagerDialog({
                 </Button>
               ) : null}
             </div>
+            <DialogDescription>
+              {t(
+                "대시보드를 선택하고 새로 만들거나 이름을 바꾸고 삭제할 수 있어요.",
+                "Select a dashboard, create a new one, rename it, or delete it."
+              )}
+            </DialogDescription>
             {refreshError ? (
               <div className="text-xs text-red-500">{refreshError}</div>
             ) : null}
