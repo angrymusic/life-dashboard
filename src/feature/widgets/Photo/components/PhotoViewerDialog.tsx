@@ -1,5 +1,6 @@
 import Image from "next/image";
-import { Minus, Plus, RotateCcw, X } from "lucide-react";
+import { LoaderCircle, Minus, Plus, RotateCcw, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import type { PhotoViewerController } from "@/feature/widgets/Photo/hooks/usePhotoViewer";
 import { Button } from "@/shared/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from "@/shared/ui/dialog";
@@ -32,6 +33,17 @@ export function PhotoViewerDialog({ photoUrl, viewer }: PhotoViewerDialogProps) 
     handleImageLoad,
     zoom,
   } = viewer;
+  const [isImageLoading, setIsImageLoading] = useState(false);
+  const imageRef = useRef<HTMLImageElement>(null);
+
+  useEffect(() => {
+    if (!isViewerOpen || !photoUrl) {
+      setIsImageLoading(false);
+      return;
+    }
+    const image = imageRef.current;
+    setIsImageLoading(!(image?.complete && image.naturalWidth > 0));
+  }, [isViewerOpen, photoUrl]);
 
   return (
     <Dialog open={isViewerOpen} onOpenChange={handleViewerOpenChange}>
@@ -111,7 +123,20 @@ export function PhotoViewerDialog({ photoUrl, viewer }: PhotoViewerDialogProps) 
             onPointerUp={handleViewerPointerEnd}
             onPointerCancel={handleViewerPointerEnd}
           >
+            {isImageLoading ? (
+              <div className="absolute inset-0 z-10 flex items-center justify-center px-4">
+                <div
+                  role="status"
+                  aria-live="polite"
+                  className="inline-flex items-center gap-2 rounded-full bg-black/60 px-3 py-1.5 text-xs font-medium text-white"
+                >
+                  <LoaderCircle className="size-4 animate-spin" />
+                  <span>{t("사진 불러오는 중...", "Loading photo...")}</span>
+                </div>
+              </div>
+            ) : null}
             <Image
+              ref={imageRef}
               src={photoUrl}
               alt={t("업로드된 사진 원본", "Uploaded photo original")}
               width={1}
@@ -119,11 +144,13 @@ export function PhotoViewerDialog({ photoUrl, viewer }: PhotoViewerDialogProps) 
               unoptimized
               draggable={false}
               onLoad={(event) => {
+                setIsImageLoading(false);
                 handleImageLoad(
                   event.currentTarget.naturalWidth,
                   event.currentTarget.naturalHeight
                 );
               }}
+              onError={() => setIsImageLoading(false)}
               className="pointer-events-none absolute left-1/2 top-1/2 h-auto max-h-full w-auto max-w-full select-none"
               style={{
                 transform: `translate(-50%, -50%) translate(${offset.x}px, ${offset.y}px) scale(${zoom})`,

@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronDown, LogIn, X } from "lucide-react";
+import { ChevronDown, LoaderCircle, LogIn, X } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import Header from "./Header";
@@ -17,6 +17,21 @@ import type { WidgetLockMap } from "@/feature/dashboard/types/widgetLock";
 import { signIn } from "next-auth/react";
 
 type CopyStatus = "idle" | "success" | "error";
+
+function DashboardLoadingState({ label }: { label: string }) {
+  return (
+    <div className="p-6">
+      <div
+        role="status"
+        aria-live="polite"
+        className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-card px-3 py-2 text-sm text-muted-foreground shadow-sm"
+      >
+        <LoaderCircle className="size-4 animate-spin text-primary" />
+        <span>{label}</span>
+      </div>
+    </div>
+  );
+}
 
 type DashboardViewProps = {
   dashboards?: Dashboard[];
@@ -293,24 +308,28 @@ export default function DashboardView({
       ) : null}
 
       {!dashboardId ? (
-        <div className="p-6 text-sm">
+        <div className="text-sm">
           {dashboardError ? (
-            <div className="space-y-3 text-red-600">
+            <div className="space-y-3 p-6 text-red-600">
               <div>{t("대시보드를 생성하지 못했어요.", "Failed to create dashboard.")}</div>
               <Button variant="outline" size="sm" onClick={onRetryCreateDashboard}>
                 {t("다시 시도", "Retry")}
               </Button>
             </div>
           ) : (
-            <div className="text-gray-500">
-              {isCreating
-                ? t("대시보드 생성 중...", "Creating dashboard...")
-                : t("대시보드를 불러오는 중...", "Loading dashboards...")}
-            </div>
+            <DashboardLoadingState
+              label={
+                isCreating
+                  ? t("대시보드 생성 중...", "Creating dashboard...")
+                  : t("대시보드를 불러오는 중...", "Loading dashboards...")
+              }
+            />
           )}
         </div>
       ) : !widgets ? (
-        <div className="p-6 text-sm text-gray-400">Loading widgets...</div>
+        <DashboardLoadingState
+          label={t("위젯을 불러오는 중...", "Loading widgets...")}
+        />
       ) : (
         <GridLayout
           widgets={widgets}
