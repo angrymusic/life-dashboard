@@ -6,6 +6,7 @@ import { useI18n } from "@/shared/i18n/client";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogFooter,
@@ -21,6 +22,8 @@ type Props = {
   onAdd: (type: AddableWidgetType) => void;
   disabled?: boolean;
 };
+
+const DIALOG_CLOSE_DELAY_MS = 200;
 
 export function AddWidgetDialog({
   open,
@@ -78,9 +81,11 @@ export function AddWidgetDialog({
 
   const handleAdd = (type: AddableWidgetType) => {
     if (disabled) return;
-    onAdd(type);
     onOpenChange(false);
     setSelected(null);
+    window.setTimeout(() => {
+      onAdd(type);
+    }, DIALOG_CLOSE_DELAY_MS);
   };
 
   return (
@@ -94,6 +99,12 @@ export function AddWidgetDialog({
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>{t("위젯 추가", "Add widget")}</DialogTitle>
+          <DialogDescription>
+            {t(
+              "추가할 위젯 종류를 선택하세요.",
+              "Choose the type of widget to add."
+            )}
+          </DialogDescription>
         </DialogHeader>
 
         <div
