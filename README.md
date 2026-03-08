@@ -10,6 +10,8 @@ LifeDashboard는 로컬 우선(local-first) 방식의 개인 대시보드 빌더
 - 위젯: Calendar, Memo, Photo, Todo, D-day, Mood, Chart(지표), Weather
 - Dexie + outbox 기반 로컬 우선 저장 및 동기화 파이프라인
 - NextAuth(Google 로그인) 기반 공유 대시보드/멤버 권한
+- 공유 대시보드 편집 시 위젯 잠금으로 동시 수정 충돌 완화
+- 게스트 온보딩과 모바일 홈 화면 설치 안내
 - 스냅샷 내보내기/가져오기 엔드포인트 및 마이그레이션 스테이징
 - 디스크 기반 사진 업로드 저장
 
@@ -63,11 +65,13 @@ DATA_GO_KR_SERVICE_KEY=replace-me
 ```bash
 UPLOAD_DIR=./data/uploads
 UPLOAD_MAX_BYTES=10485760
+NEXT_PUBLIC_APP_URL=https://lifedashboard.example.com
 RATE_LIMIT_BACKEND=database
 RATE_LIMIT_PRUNE_INTERVAL_MS=300000
 TRUST_PROXY_HEADERS=true
 TRUST_PROXY_IP_HEADER=cf-connecting-ip
 CSP_MODE=enforce
+WIDGET_LOCK_TTL_MS=60000
 MIGRATION_STAGING_DIR=./data/migration-staging
 MIGRATION_STAGING_RETENTION_DAYS=7
 MIGRATION_STAGING_MAX_FILES_PER_USER=30
@@ -116,6 +120,7 @@ MIGRATION_IMPORT_MAX_RECORDS=20000
 | `DATA_GO_KR_SERVICE_KEY` | 공휴일/기념일 API(Data.go.kr) 키입니다. | 필수 |
 | `UPLOAD_DIR` | 업로드 파일 저장 루트 경로입니다. | `./data/uploads` |
 | `UPLOAD_MAX_BYTES` | 1개 이미지 업로드 최대 바이트입니다. | `10485760` (10MB) |
+| `NEXT_PUBLIC_APP_URL` | 공개 메타데이터/캐노니컬 URL 기준 주소입니다. | 기본 `NEXTAUTH_URL` 순으로 fallback |
 | `UPLOAD_PENDING_TTL_MS` | 임시 업로드(PendingUpload) 만료 시간(ms)입니다. | `86400000` (24시간) |
 | `UPLOAD_PENDING_MAX_FILES` | 사용자별 임시 업로드 최대 파일 수입니다. | `300` |
 | `UPLOAD_PENDING_MAX_BYTES` | 사용자별 임시 업로드 총 용량 제한(바이트)입니다. | `209715200` (200MB) |
@@ -126,8 +131,7 @@ MIGRATION_IMPORT_MAX_RECORDS=20000
 | `TRUST_PROXY_HEADERS` | 프록시 IP 헤더를 신뢰할지 여부입니다. | 기본 `false` |
 | `TRUST_PROXY_IP_HEADER` | 신뢰할 클라이언트 IP 헤더명입니다. | `cf-connecting-ip` |
 | `CSP_MODE` | CSP 적용 모드입니다(`enforce`/`report-only`). | `enforce` |
-| `CSRF_PROTECTION` | 변경 요청(POST/PATCH/DELETE) Origin/Referer 검사 여부입니다. | 기본 `true` |
-| `CSRF_TRUSTED_ORIGINS` | 추가 허용 Origin 목록(쉼표 구분)입니다. | 기본 빈값 |
+| `WIDGET_LOCK_TTL_MS` | 공유 대시보드 위젯 편집 잠금 유지 시간(ms)입니다. | `60000` |
 | `PHOTO_UPLOAD_RATE_LIMIT` | 사진 업로드 API 요청 허용 횟수입니다. | `30` |
 | `PHOTO_UPLOAD_RATE_WINDOW_MS` | 사진 업로드 레이트리밋 윈도우(ms)입니다. | `60000` |
 | `SYNC_APPLY_RATE_LIMIT` | `/api/sync/apply` 요청 허용 횟수입니다. | `120` |
@@ -205,11 +209,13 @@ pnpm dev
 - 사진 업로드 파일은 `UPLOAD_DIR`(기본 `data/uploads`) 아래에 저장됩니다.
   임시 업로드는 추적되며, 만료 파일은 자동 정리됩니다.
   관련 사진(photo) 레코드가 삭제되면 고아(orphan) 파일도 함께 정리됩니다.
+- 공개 배포에서 메타데이터/캐노니컬 URL을 명확히 하려면 `NEXT_PUBLIC_APP_URL`을 설정하세요.
+  미설정 시 `NEXTAUTH_URL`, Vercel 기본 URL 순으로 fallback 합니다.
 - `TRUST_PROXY_HEADERS=true`는 요청이 항상 신뢰 가능한 프록시(예: Cloudflare Tunnel)를 거칠 때만 사용하세요.
   `TRUST_PROXY_IP_HEADER`는 프록시가 제어하는 헤더(`cf-connecting-ip`, `x-real-ip`, `x-forwarded-for`)로 설정해야 합니다.
 - `CSP_MODE` 기본값은 `enforce`입니다. `report-only`는 정책 튜닝 시 일시적으로만 사용하세요.
-- `CSRF_PROTECTION` 기본값은 `true`이며, 변경 요청 API에서 `Origin`/`Referer`를 검증합니다.
-  필요하면 `CSRF_TRUSTED_ORIGINS`에 추가 허용 Origin을 쉼표로 구분해 설정하세요.
+- 공유 대시보드에서 위젯 편집 잠금은 기본 60초 뒤 자동 만료됩니다.
+  필요하면 `WIDGET_LOCK_TTL_MS`로 유지 시간을 조정하세요.
 - 지오코딩(Geocode) API는 기본적으로 인증이 필요합니다.
   신뢰 가능한 사설 환경에서만 `GEOCODE_REQUIRE_AUTH=false`를 고려하세요.
 - 마이그레이션 import API는 기본 비활성화 상태입니다.
