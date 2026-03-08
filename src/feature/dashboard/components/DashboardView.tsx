@@ -15,6 +15,7 @@ import type { AddableWidgetType } from "@/feature/dashboard/libs/widgetRegistry"
 import { useI18n } from "@/shared/i18n/client";
 import type { WidgetLockMap } from "@/feature/dashboard/types/widgetLock";
 import { signIn } from "next-auth/react";
+import { getAuthErrorMessage } from "@/feature/dashboard/libs/authErrorMessage";
 
 type CopyStatus = "idle" | "success" | "error";
 
@@ -83,7 +84,7 @@ export default function DashboardView({
 }: DashboardViewProps) {
   const { t } = useI18n();
   const searchParams = useSearchParams();
-  const isOAuthCallbackError = searchParams.get("error") === "OAuthCallback";
+  const authErrorMessage = getAuthErrorMessage(searchParams.get("error"), t);
   const [showScrollToBottom, setShowScrollToBottom] = useState(false);
   const [isGuestSignInBannerDismissed, setIsGuestSignInBannerDismissed] =
     useState(false);
@@ -283,12 +284,9 @@ export default function DashboardView({
         </div>
       ) : null}
 
-      {isOAuthCallbackError ? (
+      {authErrorMessage ? (
         <div className="mx-4 mt-3 rounded-lg border border-red-200/70 bg-red-50 px-4 py-3 text-xs text-red-700">
-          {t(
-            "로그인 실패했습니다. 다시 시도하세요.",
-            "Sign-in failed. Please try again."
-          )}
+          {authErrorMessage}
         </div>
       ) : null}
 
