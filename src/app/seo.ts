@@ -3,8 +3,12 @@ export const SITE_DESCRIPTION =
   "Dashboard builder for planning tasks, notes, photos, weather, and shared life routines in one place.";
 export const SITE_KEYWORDS = [
   "life dashboard",
+  "라이프 대시보드",
+  "인생 대시보드",
   "family dashboard",
+  "가족 대시보드",
   "life planner",
+  "일정 관리",
   "task management",
   "note taking",
   "photo dashboard",

@@ -1,7 +1,21 @@
+import type { Metadata } from "next";
 import DashboardContainer from "@/feature/dashboard/components/DashboardContainer";
 import { getAbsoluteUrl, SITE_DESCRIPTION, SITE_NAME } from "./seo";
 
 const siteUrl = getAbsoluteUrl("/");
+
+export const metadata: Metadata = {
+  title: "Life Dashboard - Shared planner for family routines",
+  description:
+    "Build a shared life dashboard for tasks, notes, photos, weather, and routines. Works for personal planning and family collaboration.",
+  alternates: {
+    canonical: "/",
+    languages: {
+      "en-US": "/",
+      "ko-KR": "/",
+    },
+  },
+};
 
 const websiteJsonLd = {
   "@context": "https://schema.org",
@@ -45,10 +59,11 @@ export default function DashboardPage() {
       />
       <script
         type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(webApplicationJsonLd) }}
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(webApplicationJsonLd),
+        }}
       />
       <DashboardContainer />
     </main>
   );
 }
-  

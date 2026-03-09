@@ -51,6 +51,7 @@ export const metadata: Metadata = {
     title: `${SITE_NAME}`,
     description: SITE_DESCRIPTION,
     locale: "en_US",
+    alternateLocale: ["ko_KR"],
     images: [
       {
         url: "/opengraph-image",
