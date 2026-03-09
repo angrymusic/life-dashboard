@@ -2,7 +2,17 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { FormEvent } from "react";
-import { Check, LogOut, Pencil, Plus, RefreshCw, Trash2, X } from "lucide-react";
+import { useRouter } from "next/navigation";
+import {
+  ArrowRight,
+  Check,
+  LogOut,
+  Pencil,
+  Plus,
+  RefreshCw,
+  Trash2,
+  X,
+} from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import {
   Dialog,
@@ -48,6 +58,7 @@ export default function DashboardManagerDialog({
   onRefreshDashboards,
   isRefreshingDashboards,
 }: DashboardManagerDialogProps) {
+  const router = useRouter();
   const { t } = useI18n();
   const { data: session } = useSession();
   const members = useMembers();
@@ -79,7 +90,10 @@ export default function DashboardManagerDialog({
   }, [members, sessionEmail]);
   const creatorEmailByGroupId = useMemo(() => {
     if (!members) return new Map<string, string>();
-    const earliestByGroup = new Map<string, { createdAt: string; email: string }>();
+    const earliestByGroup = new Map<
+      string,
+      { createdAt: string; email: string }
+    >();
     for (const member of members) {
       const normalizedEmail = member.email?.trim().toLowerCase();
       if (!normalizedEmail) continue;
@@ -92,43 +106,47 @@ export default function DashboardManagerDialog({
       }
     }
     return new Map(
-      [...earliestByGroup.entries()].map(([groupId, value]) => [groupId, value.email])
+      [...earliestByGroup.entries()].map(([groupId, value]) => [
+        groupId,
+        value.email,
+      ]),
     );
   }, [members]);
 
   const isDashboardCreator = (dashboard?: Dashboard) =>
     Boolean(
       dashboard &&
-        (!dashboard.groupId ||
-          (isSignedIn &&
-            sessionEmail &&
-            creatorEmailByGroupId.get(dashboard.groupId) &&
-            creatorEmailByGroupId.get(dashboard.groupId) === sessionEmail))
+      (!dashboard.groupId ||
+        (isSignedIn &&
+          sessionEmail &&
+          creatorEmailByGroupId.get(dashboard.groupId) &&
+          creatorEmailByGroupId.get(dashboard.groupId) === sessionEmail)),
     );
 
   const canRenameDashboard = (dashboard?: Dashboard) =>
     Boolean(
       dashboard &&
-        (!dashboard.groupId ||
-          (isSignedIn && roleByGroupId.get(dashboard.groupId) === "parent"))
+      (!dashboard.groupId ||
+        (isSignedIn && roleByGroupId.get(dashboard.groupId) === "parent")),
     );
   const canDeleteDashboard = (dashboard?: Dashboard) =>
     Boolean(
       dashboard &&
-        canDelete &&
-        (!dashboard.groupId || isDashboardCreator(dashboard))
+      canDelete &&
+      (!dashboard.groupId || isDashboardCreator(dashboard)),
     );
   const canLeaveDashboard = (dashboard?: Dashboard) =>
     Boolean(
       dashboard &&
-        dashboard.groupId &&
-        isSignedIn &&
-        creatorEmailByGroupId.get(dashboard.groupId) &&
-        !isDashboardCreator(dashboard)
+      dashboard.groupId &&
+      isSignedIn &&
+      creatorEmailByGroupId.get(dashboard.groupId) &&
+      !isDashboardCreator(dashboard),
     );
   const hasRenameRestriction =
     dashboards?.some(
-      (dashboard) => Boolean(dashboard.groupId) && !canRenameDashboard(dashboard)
+      (dashboard) =>
+        Boolean(dashboard.groupId) && !canRenameDashboard(dashboard),
     ) ?? false;
 
   useEffect(() => {
@@ -168,7 +186,10 @@ export default function DashboardManagerDialog({
       const message =
         err instanceof Error
           ? localizeErrorMessage(err.message, t)
-          : t("목록 새로고침에 실패했어요.", "Failed to refresh dashboard list.");
+          : t(
+              "목록 새로고침에 실패했어요.",
+              "Failed to refresh dashboard list.",
+            );
       setRefreshError(message);
     }
   };
@@ -191,6 +212,11 @@ export default function DashboardManagerDialog({
   const handleSelectDashboard = (dashboardId: Id) => {
     onSelectDashboard(dashboardId);
     onOpenChange(false);
+  };
+
+  const handleOpenTemplatesHub = () => {
+    onOpenChange(false);
+    router.push("/templates");
   };
 
   const handleDeleteRequest = (dashboard: Dashboard) => {
@@ -260,7 +286,7 @@ export default function DashboardManagerDialog({
     event.preventDefault();
     if (!editingDashboardId) return;
     const target = dashboards?.find(
-      (dashboard) => dashboard.id === editingDashboardId
+      (dashboard) => dashboard.id === editingDashboardId,
     );
     if (!target) return;
     if (!canRenameDashboard(target) || isRenaming) return;
@@ -300,7 +326,10 @@ export default function DashboardManagerDialog({
                   type="button"
                   variant="outline"
                   size="sm"
-                  aria-label={t("대시보드 목록 새로고침", "Refresh dashboard list")}
+                  aria-label={t(
+                    "대시보드 목록 새로고침",
+                    "Refresh dashboard list",
+                  )}
                   onClick={() => void handleRefreshDashboards()}
                   disabled={
                     Boolean(isRefreshingDashboards) ||
@@ -313,7 +342,7 @@ export default function DashboardManagerDialog({
                   <RefreshCw
                     className={cn(
                       "size-3.5",
-                      isRefreshingDashboards ? "animate-spin" : ""
+                      isRefreshingDashboards ? "animate-spin" : "",
                     )}
                   />
                 </Button>
@@ -321,8 +350,8 @@ export default function DashboardManagerDialog({
             </div>
             <DialogDescription>
               {t(
-                "대시보드를 선택하고 새로 만들거나 이름을 바꾸고 삭제할 수 있어요.",
-                "Select a dashboard, create a new one, rename it, or delete it."
+                "대시보드를 선택하고 새로 만들거나 이름을 바꾸고 삭제할 수 있어요. 템플릿으로 바로 시작할 수도 있어요.",
+                "Select a dashboard, create a new one, rename it, or delete it. You can also start from a template.",
               )}
             </DialogDescription>
             {refreshError ? (
@@ -335,7 +364,7 @@ export default function DashboardManagerDialog({
                 <div className="rounded-md border border-amber-200/70 bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:border-amber-400/30 dark:bg-amber-400/10 dark:text-amber-200">
                   {t(
                     "공유 대시보드 이름 변경은 관리자만 가능해요.",
-                    "Only admins can rename shared dashboards."
+                    "Only admins can rename shared dashboards.",
                   )}
                 </div>
               ) : null}
@@ -364,7 +393,7 @@ export default function DashboardManagerDialog({
                           "flex flex-wrap items-center gap-2 rounded-lg border px-3 py-2 transition sm:flex-nowrap",
                           isActive
                             ? "border-primary/40 bg-primary/10"
-                            : "border-gray-200 bg-white/70 hover:bg-white/90 dark:border-gray-700/70 dark:bg-gray-900/20"
+                            : "border-gray-200 bg-white/70 hover:bg-white/90 dark:border-gray-700/70 dark:bg-gray-900/20",
                         )}
                       >
                         {isEditing ? (
@@ -386,7 +415,10 @@ export default function DashboardManagerDialog({
                                   }
                                 }}
                                 className="w-full min-w-[120px] rounded-md border border-gray-300 bg-transparent px-2 py-1 text-base outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-700"
-                                aria-label={t("대시보드 이름", "Dashboard name")}
+                                aria-label={t(
+                                  "대시보드 이름",
+                                  "Dashboard name",
+                                )}
                                 aria-invalid={renameError ? "true" : "false"}
                                 title={renameError ?? undefined}
                                 disabled={isRenaming}
@@ -432,10 +464,12 @@ export default function DashboardManagerDialog({
                                   "shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-medium",
                                   isShared
                                     ? "border-amber-200/70 bg-amber-50 text-amber-700 dark:border-amber-400/30 dark:bg-amber-400/10 dark:text-amber-200"
-                                    : "border-gray-200/70 bg-gray-100 text-gray-500 dark:border-gray-600/60 dark:bg-gray-700/30 dark:text-gray-200"
+                                    : "border-gray-200/70 bg-gray-100 text-gray-500 dark:border-gray-600/60 dark:bg-gray-700/30 dark:text-gray-200",
                                 )}
                               >
-                                {isShared ? t("공유", "Shared") : t("개인", "Personal")}
+                                {isShared
+                                  ? t("공유", "Shared")
+                                  : t("개인", "Personal")}
                               </span>
                               {isActive ? (
                                 <Check className="ml-auto size-4 text-primary" />
@@ -494,7 +528,10 @@ export default function DashboardManagerDialog({
                         type="button"
                         variant="ghost"
                         size="icon-sm"
-                        aria-label={t("새 대시보드 취소", "Cancel new dashboard")}
+                        aria-label={t(
+                          "새 대시보드 취소",
+                          "Cancel new dashboard",
+                        )}
                         onClick={() => {
                           setIsCreateFormOpen(false);
                           setDraftName("");
@@ -515,10 +552,11 @@ export default function DashboardManagerDialog({
                         <input
                           className="w-full rounded-md border border-gray-300 bg-transparent px-3 py-2 text-base outline-none focus:ring-1 focus:ring-blue-500 dark:border-gray-700"
                           value={draftName}
-                          onChange={(event) =>
-                            setDraftName(event.target.value)
-                          }
-                          placeholder={t("예: 패밀리 보드", "e.g., Family board")}
+                          onChange={(event) => setDraftName(event.target.value)}
+                          placeholder={t(
+                            "예: 패밀리 보드",
+                            "e.g., Family board",
+                          )}
                           autoFocus
                           disabled={isCreating}
                         />
@@ -527,7 +565,7 @@ export default function DashboardManagerDialog({
                         <span className="min-w-0 text-[11px] text-gray-400">
                           {t(
                             "개인 대시보드는 언제든 이름을 바꿀 수 있고, 공유 대시보드는 관리자만 변경할 수 있어요.",
-                            "Personal dashboards can be renamed anytime. Shared dashboards can be renamed by admins only."
+                            "Personal dashboards can be renamed anytime. Shared dashboards can be renamed by admins only.",
                           )}
                         </span>
                         <div className="flex w-full justify-end gap-2 sm:w-auto">
@@ -548,7 +586,9 @@ export default function DashboardManagerDialog({
                             size="sm"
                             disabled={!draftName.trim() || isCreating}
                           >
-                            {isCreating ? t("생성 중...", "Creating...") : t("생성", "Create")}
+                            {isCreating
+                              ? t("생성 중...", "Creating...")
+                              : t("생성", "Create")}
                           </Button>
                         </div>
                       </div>
@@ -564,7 +604,7 @@ export default function DashboardManagerDialog({
                         <div className="text-xs text-gray-400">
                           {t(
                             "개인/공유 대시보드를 자유롭게 만들 수 있어요.",
-                            "Create personal or shared dashboards freely."
+                            "Create personal or shared dashboards freely.",
                           )}
                         </div>
                       </div>
@@ -581,7 +621,23 @@ export default function DashboardManagerDialog({
                     </div>
                   </div>
                 )}
-
+                <div className="rounded-lg border border-border/80 bg-accent/55 p-3">
+                  <div className="text-sm leading-6 text-foreground/85">
+                    {t(
+                      "🙋🏼 어떻게 시작해야 할지 모르겠나요? 템플릿으로 시작해보세요.",
+                      "🙋🏼 Not sure where to start? Try starting from a template.",
+                    )}
+                  </div>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-full justify-between border-border/80 bg-card/80 text-foreground hover:bg-card"
+                    onClick={handleOpenTemplatesHub}
+                  >
+                    <span>{t("템플릿 허브 열기", "Open templates hub")}</span>
+                    <ArrowRight className="size-4" />
+                  </Button>
+                </div>
               </div>
             </div>
           </div>
@@ -599,7 +655,9 @@ export default function DashboardManagerDialog({
       >
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>{t("대시보드를 삭제할까요?", "Delete this dashboard?")}</DialogTitle>
+            <DialogTitle>
+              {t("대시보드를 삭제할까요?", "Delete this dashboard?")}
+            </DialogTitle>
           </DialogHeader>
           <DialogDescription asChild>
             <div className="space-y-2 text-sm text-gray-500">
@@ -609,14 +667,14 @@ export default function DashboardManagerDialog({
               <div>
                 {t(
                   "이 대시보드의 위젯과 기록이 모두 삭제됩니다.",
-                  "All widgets and records in this dashboard will be deleted."
+                  "All widgets and records in this dashboard will be deleted.",
                 )}
               </div>
               {deleteTarget?.groupId ? (
                 <div className="text-xs text-gray-400">
                   {t(
                     "공유 대시보드는 멤버들과 공유된 데이터에도 영향을 줄 수 있어요.",
-                    "Deleting a shared dashboard can affect data shared with members."
+                    "Deleting a shared dashboard can affect data shared with members.",
                   )}
                 </div>
               ) : null}
@@ -659,7 +717,9 @@ export default function DashboardManagerDialog({
       >
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>{t("대시보드에서 나갈까요?", "Leave this dashboard?")}</DialogTitle>
+            <DialogTitle>
+              {t("대시보드에서 나갈까요?", "Leave this dashboard?")}
+            </DialogTitle>
           </DialogHeader>
           <DialogDescription asChild>
             <div className="space-y-2 text-sm text-gray-500">
@@ -669,7 +729,7 @@ export default function DashboardManagerDialog({
               <div>
                 {t(
                   "나가면 이 대시보드가 내 목록에서 사라져요.",
-                  "This dashboard will be removed from your list after leaving."
+                  "This dashboard will be removed from your list after leaving.",
                 )}
               </div>
               {deleteError ? (
@@ -692,7 +752,9 @@ export default function DashboardManagerDialog({
               onClick={handleLeaveConfirm}
               disabled={isDeleting}
             >
-              {isDeleting ? t("나가는 중...", "Leaving...") : t("나가기", "Leave")}
+              {isDeleting
+                ? t("나가는 중...", "Leaving...")
+                : t("나가기", "Leave")}
             </Button>
           </DialogFooter>
         </DialogContent>
