@@ -1,5 +1,5 @@
 import type { Metadata } from "next";
-import DashboardTemplatesLandingPage from "@/feature/dashboard/components/DashboardTemplatesLandingPage";
+import DashboardTemplatesLandingPage from "@/feature/dashboard/components/templates/DashboardTemplatesLandingPage";
 
 export const metadata: Metadata = {
   title: "Dashboard Templates for Family, Personal, and Couple Scenarios",

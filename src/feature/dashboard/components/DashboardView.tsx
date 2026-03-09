@@ -7,7 +7,7 @@ import Header from "./Header";
 import Footer from "./Footer";
 import GridLayout from "./GridLayout";
 import { AddWidgetDialog } from "./AddWidgetDialog";
-import DashboardTemplatesSection from "./DashboardTemplatesSection";
+import DashboardTemplatesSection from "./templates/DashboardTemplatesSection";
 import GuestOnboardingTutorial from "./GuestOnboardingTutorial";
 import HomeScreenInstallPrompt from "./HomeScreenInstallPrompt";
 import { Button } from "@/shared/ui/button";

@@ -11,7 +11,7 @@ import { useMembers } from "@/shared/db/queries";
 import { useI18n } from "@/shared/i18n/client";
 import { useSession } from "next-auth/react";
 import AccountDialog from "./AccountDialog";
-import DashboardManagerDialog from "./DashboardManagerDialog";
+import DashboardManagerDialog from "./dashboard-manager/DashboardManagerDialog";
 import MembersDialog from "./MembersDialog";
 
 type HeaderProps = {

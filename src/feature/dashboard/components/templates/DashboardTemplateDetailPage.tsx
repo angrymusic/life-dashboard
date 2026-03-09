@@ -19,7 +19,7 @@ import {
   applyDashboardTemplateToExistingDashboard,
 } from "@/feature/dashboard/libs/applyDashboardTemplate";
 import { persistLastActiveDashboardId } from "@/feature/dashboard/libs/activeDashboardStorage";
-import TemplateDashboardPreview from "@/feature/dashboard/components/TemplateDashboardPreview";
+import TemplateDashboardPreview from "./TemplateDashboardPreview";
 
 type DashboardTemplateDetailPageProps = {
   template: DashboardTemplate;

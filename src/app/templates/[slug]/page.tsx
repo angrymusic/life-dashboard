@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
-import DashboardTemplateDetailPage from "@/feature/dashboard/components/DashboardTemplateDetailPage";
+import DashboardTemplateDetailPage from "@/feature/dashboard/components/templates/DashboardTemplateDetailPage";
 import {
   dashboardTemplates,
   getDashboardTemplate,
