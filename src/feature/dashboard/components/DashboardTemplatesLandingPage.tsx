@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { ArrowRight, CheckCircle2 } from "lucide-react";
 import { Button } from "@/shared/ui/button";
 import { useI18n } from "@/shared/i18n/client";
@@ -47,6 +48,8 @@ const faqs = [
 
 export default function DashboardTemplatesLandingPage() {
   const { language, t } = useI18n();
+  const searchParams = useSearchParams();
+  const dashboardId = searchParams.get("dashboardId");
 
   return (
     <main className="min-h-screen bg-[radial-gradient(circle_at_top,_rgba(191,126,71,0.10),_transparent_35%),linear-gradient(180deg,_rgba(251,248,241,1)_0%,_rgba(246,240,229,1)_100%)] px-4 py-8 sm:px-6 lg:px-8">
@@ -83,7 +86,13 @@ export default function DashboardTemplatesLandingPage() {
           {dashboardTemplates.map((template) => (
             <Link
               key={template.slug}
-              href={`/templates/${template.slug}`}
+              href={
+                dashboardId
+                  ? `/templates/${template.slug}?dashboardId=${encodeURIComponent(
+                      dashboardId
+                    )}`
+                  : `/templates/${template.slug}`
+              }
               className="group rounded-[28px] border border-border/80 bg-card/90 p-6 shadow-sm transition hover:border-primary/35 hover:bg-card"
             >
               <div className="text-sm font-medium text-primary">

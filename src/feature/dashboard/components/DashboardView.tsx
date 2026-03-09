@@ -7,6 +7,7 @@ import Header from "./Header";
 import Footer from "./Footer";
 import GridLayout from "./GridLayout";
 import { AddWidgetDialog } from "./AddWidgetDialog";
+import DashboardTemplatesSection from "./DashboardTemplatesSection";
 import GuestOnboardingTutorial from "./GuestOnboardingTutorial";
 import HomeScreenInstallPrompt from "./HomeScreenInstallPrompt";
 import { Button } from "@/shared/ui/button";
@@ -329,15 +330,20 @@ export default function DashboardView({
           label={t("위젯을 불러오는 중...", "Loading widgets...")}
         />
       ) : (
-        <GridLayout
-          widgets={widgets}
-          onLayoutCommit={onLayoutCommit}
-          canEditWidget={canEditWidget}
-          lockEnabled={lockEnabled}
-          widgetLocks={widgetLocks}
-          onTouchWidgetLock={onTouchWidgetLock}
-          onReleaseAllWidgetLocks={onReleaseAllWidgetLocks}
-        />
+        <>
+          {widgets.length === 0 ? (
+            <DashboardTemplatesSection dashboardId={dashboardId} />
+          ) : null}
+          <GridLayout
+            widgets={widgets}
+            onLayoutCommit={onLayoutCommit}
+            canEditWidget={canEditWidget}
+            lockEnabled={lockEnabled}
+            widgetLocks={widgetLocks}
+            onTouchWidgetLock={onTouchWidgetLock}
+            onReleaseAllWidgetLocks={onReleaseAllWidgetLocks}
+          />
+        </>
       )}
 
       {showScrollToBottom ? (

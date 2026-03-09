@@ -54,6 +54,10 @@ type TemplateMoodSeed = {
   note?: LocalizedText;
 };
 
+type TemplatePhotoSeed = {
+  src: string;
+};
+
 type TemplateWidget = {
   type: WidgetType;
   title: LocalizedText;
@@ -85,6 +89,7 @@ export type DashboardTemplate = {
   dday?: TemplateDdaySeed;
   chart?: TemplateChartSeed;
   mood?: TemplateMoodSeed;
+  photo?: TemplatePhotoSeed;
 };
 
 export const dashboardTemplates: DashboardTemplate[] = [
@@ -158,6 +163,25 @@ export const dashboardTemplates: DashboardTemplate[] = [
         },
       },
       {
+        type: "photo",
+        title: {
+          ko: "가족 사진",
+          en: "Family photo",
+        },
+        description: {
+          ko: "함께한 순간을 메인 화면에서 바로 볼 수 있습니다.",
+          en: "Keep a shared family moment visible on the dashboard.",
+        },
+        layout: {
+          x: 7,
+          y: 0,
+          w: 5,
+          h: 9,
+          minW: 2,
+          minH: 5,
+        },
+      },
+      {
         type: "todo",
         title: {
           ko: "오늘 할 일",
@@ -169,9 +193,9 @@ export const dashboardTemplates: DashboardTemplate[] = [
         },
         layout: {
           x: 7,
-          y: 0,
+          y: 9,
           w: 5,
-          h: 10,
+          h: 7,
           minW: 2,
           minH: 6,
         },
@@ -187,10 +211,10 @@ export const dashboardTemplates: DashboardTemplate[] = [
           en: "Keep a shared note for the week ahead.",
         },
         layout: {
-          x: 7,
-          y: 6,
-          w: 5,
-          h: 6,
+          x: 0,
+          y: 16,
+          w: 4,
+          h: 8,
           minW: 2,
           minH: 4,
         },
@@ -206,9 +230,9 @@ export const dashboardTemplates: DashboardTemplate[] = [
           en: "Count down to a trip or important family date.",
         },
         layout: {
-          x: 0,
-          y: 13,
-          w: 4,
+          x: 4,
+          y: 16,
+          w: 3,
           h: 8,
           minW: 2,
           minH: 6,
@@ -225,9 +249,9 @@ export const dashboardTemplates: DashboardTemplate[] = [
           en: "Track weekly budget flow with a ready-made chart.",
         },
         layout: {
-          x: 4,
-          y: 13,
-          w: 8,
+          x: 7,
+          y: 16,
+          w: 5,
           h: 8,
           minW: 4,
           minH: 8,
@@ -324,6 +348,9 @@ export const dashboardTemplates: DashboardTemplate[] = [
         { dateOffsetDays: -7, value: 10 },
         { dateOffsetDays: 0, value: 16 },
       ],
+    },
+    photo: {
+      src: "/happy_family.png",
     },
   },
   {
@@ -621,9 +648,28 @@ export const dashboardTemplates: DashboardTemplate[] = [
           x: 0,
           y: 0,
           w: 7,
-          h: 16,
+          h: 14,
           minW: 4,
           minH: 12,
+        },
+      },
+      {
+        type: "photo",
+        title: {
+          ko: "우리 사진",
+          en: "Couple photo",
+        },
+        description: {
+          ko: "함께한 사진을 시작 화면에서 바로 볼 수 있습니다.",
+          en: "Keep a shared moment visible on the dashboard.",
+        },
+        layout: {
+          x: 7,
+          y: 0,
+          w: 5,
+          h: 8,
+          minW: 2,
+          minH: 5,
         },
       },
       {
@@ -638,7 +684,7 @@ export const dashboardTemplates: DashboardTemplate[] = [
         },
         layout: {
           x: 7,
-          y: 0,
+          y: 8,
           w: 5,
           h: 6,
           minW: 2,
@@ -657,7 +703,7 @@ export const dashboardTemplates: DashboardTemplate[] = [
         },
         layout: {
           x: 7,
-          y: 6,
+          y: 14,
           w: 5,
           h: 8,
           minW: 2,
@@ -675,9 +721,9 @@ export const dashboardTemplates: DashboardTemplate[] = [
           en: "Track errands and prep tasks for both people.",
         },
         layout: {
-          x: 7,
-          y: 10,
-          w: 5,
+          x: 0,
+          y: 16,
+          w: 7,
           h: 8,
           minW: 2,
           minH: 6,
@@ -752,6 +798,9 @@ export const dashboardTemplates: DashboardTemplate[] = [
         en: "Anniversary getaway",
       },
       offsetDays: 42,
+    },
+    photo: {
+      src: "/happy_couple.png",
     },
   },
 ];

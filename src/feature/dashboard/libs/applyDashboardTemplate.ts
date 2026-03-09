@@ -29,6 +29,11 @@ type ApplyDashboardTemplateParams = {
   language: AppLanguage;
 };
 
+type ApplyDashboardTemplateToExistingDashboardParams =
+  ApplyDashboardTemplateParams & {
+    dashboardId: Id;
+  };
+
 type SeedDashboardTemplateParams = {
   dashboardId: Id;
   slug: DashboardTemplateSlug;
@@ -52,6 +57,25 @@ function buildDateAtTime(
   const nextDate = addDays(baseDate, offsetDays);
   nextDate.setHours(hour, minute, 0, 0);
   return nextDate;
+}
+
+async function buildTemplatePhotoPayload(src: string) {
+  const response = await fetch(src);
+  if (!response.ok) {
+    throw new Error("Template photo not found.");
+  }
+
+  const blob = await response.blob();
+
+  return {
+    type: "photo" as const,
+    data: {
+      blob,
+      mimeType: blob.type || "application/octet-stream",
+      caption: undefined,
+      takenAt: nowIso(),
+    },
+  };
 }
 
 export async function clearTemplateDashboardData(dashboardId: Id) {
@@ -121,6 +145,22 @@ export async function seedDashboardTemplate({
                   color: template.memo.color,
                 },
               }
+            : undefined,
+        },
+        writeOptions
+      );
+      continue;
+    }
+
+    if (widget.type === "photo") {
+      await addWidget(
+        {
+          dashboardId,
+          type: widget.type,
+          layout: widget.layout,
+          createdBy,
+          payload: template.photo
+            ? await buildTemplatePhotoPayload(template.photo.src)
             : undefined,
         },
         writeOptions
@@ -349,6 +389,43 @@ export async function applyDashboardTemplate({
       } catch {
         // Ignore cleanup failure and preserve the original error.
       }
+    }
+    throw error;
+  }
+}
+
+export async function applyDashboardTemplateToExistingDashboard({
+  dashboardId,
+  slug,
+  language,
+}: ApplyDashboardTemplateToExistingDashboardParams) {
+  const template = getDashboardTemplate(slug);
+  if (!template) {
+    throw new Error("Template not found.");
+  }
+
+  const targetDashboard = await db.dashboards.get(dashboardId);
+  if (!targetDashboard) {
+    throw new Error("Dashboard not found.");
+  }
+
+  const createdBy = (targetDashboard.ownerId ?? getOrCreateLocalProfileId()) as Id;
+
+  try {
+    await clearTemplateDashboardData(dashboardId);
+    await seedDashboardTemplate({
+      dashboardId,
+      slug,
+      language,
+      createdBy,
+    });
+
+    return dashboardId;
+  } catch (error) {
+    try {
+      await clearTemplateDashboardData(dashboardId);
+    } catch {
+      // Ignore cleanup failure and preserve the original error.
     }
     throw error;
   }

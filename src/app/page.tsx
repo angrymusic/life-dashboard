@@ -1,5 +1,4 @@
 import DashboardContainer from "@/feature/dashboard/components/DashboardContainer";
-import DashboardTemplatesSection from "@/feature/dashboard/components/DashboardTemplatesSection";
 import { getAbsoluteUrl, SITE_DESCRIPTION, SITE_NAME } from "./seo";
 
 const siteUrl = getAbsoluteUrl("/");
@@ -49,7 +48,6 @@ export default function DashboardPage() {
         dangerouslySetInnerHTML={{ __html: JSON.stringify(webApplicationJsonLd) }}
       />
       <DashboardContainer />
-      <DashboardTemplatesSection />
     </main>
   );
 }
