@@ -15,7 +15,7 @@ import {
   newId,
   nowIso,
 } from "@/shared/db/db";
-import type { Id, YMD } from "@/shared/db/schema";
+import type { Id, OutboxEvent, YMD } from "@/shared/db/schema";
 import type { AppLanguage } from "@/shared/i18n/language";
 import {
   getDashboardTemplate,
@@ -81,6 +81,10 @@ async function buildTemplatePhotoPayload(src: string) {
 }
 
 export async function clearTemplateDashboardData(dashboardId: Id) {
+  const preservedOutboxEvents = (
+    await db.outbox.where("dashboardId").equals(dashboardId).toArray()
+  ).filter((event): event is OutboxEvent => event.entityType === "dashboard");
+
   await db.transaction(
     "rw",
     [
@@ -99,6 +103,9 @@ export async function clearTemplateDashboardData(dashboardId: Id) {
     ],
     async () => {
       await db.outbox.where("dashboardId").equals(dashboardId).delete();
+      if (preservedOutboxEvents.length > 0) {
+        await db.outbox.bulkPut(preservedOutboxEvents);
+      }
       await Promise.all([
         db.widgets.where("dashboardId").equals(dashboardId).delete(),
         db.memos.where("dashboardId").equals(dashboardId).delete(),
