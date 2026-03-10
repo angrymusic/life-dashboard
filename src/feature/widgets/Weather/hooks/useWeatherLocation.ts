@@ -9,12 +9,15 @@ const STORAGE_KEY = "lifedashboard.weatherLocation";
 const SOURCE_STORAGE_KEY = "lifedashboard.weatherLocationSource";
 const LOCATION_SYNC_EVENT = "lifedashboard:weather-location-changed";
 let geolocationPromise: Promise<WeatherLocation | null> | null = null;
+let autoGeolocationAttempted = false;
 const REVERSE_GEOCODE_CACHE_TTL_MS = 5 * 60 * 1000;
+const REVERSE_GEOCODE_AUTH_ERROR_TTL_MS = 60 * 1000;
 const reverseGeocodePromiseByKey = new Map<string, Promise<string | null>>();
 const reverseGeocodeLabelCacheByKey = new Map<
   string,
   { label: string; expiresAt: number }
 >();
+const reverseGeocodeAuthErrorUntilByKey = new Map<string, number>();
 const CURRENT_LOCATION_LABEL = {
   ko: "현재 위치",
   en: "Current location",
@@ -79,6 +82,35 @@ function inferStoredLocationSource(
 
 function buildCoordinateLabel(latitude: number, longitude: number) {
   return `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`;
+}
+
+function hasReverseGeocodeAuthError(key: string) {
+  const expiresAt = reverseGeocodeAuthErrorUntilByKey.get(key);
+  if (!expiresAt) return false;
+  if (expiresAt <= Date.now()) {
+    reverseGeocodeAuthErrorUntilByKey.delete(key);
+    return false;
+  }
+  return true;
+}
+
+function shouldResolveCurrentLocationLabel(
+  location: WeatherLocation,
+  currentLocationLabel: string
+) {
+  const normalizedLabel = location.label.trim();
+  if (!normalizedLabel) return true;
+  if (
+    normalizedLabel === currentLocationLabel ||
+    normalizedLabel === CURRENT_LOCATION_LABEL.ko ||
+    normalizedLabel === CURRENT_LOCATION_LABEL.en
+  ) {
+    return true;
+  }
+  return (
+    normalizedLabel ===
+    buildCoordinateLabel(location.latitude, location.longitude)
+  );
 }
 
 function buildReverseGeocodeKey(
@@ -232,6 +264,9 @@ export function useWeatherLocation() {
       );
       const cachedLabel = getCachedReverseGeocodeLabel(cacheKey);
       if (cachedLabel) return cachedLabel;
+      if (hasReverseGeocodeAuthError(cacheKey)) {
+        return baseLocation.label;
+      }
 
       const inFlight = reverseGeocodePromiseByKey.get(cacheKey);
       if (inFlight) {
@@ -248,7 +283,16 @@ export function useWeatherLocation() {
       const request = (async () => {
         try {
           const response = await fetch(url);
-          if (!response.ok) return null;
+          if (!response.ok) {
+            if (response.status === 401 || response.status === 403) {
+              reverseGeocodeAuthErrorUntilByKey.set(
+                cacheKey,
+                Date.now() + REVERSE_GEOCODE_AUTH_ERROR_TTL_MS
+              );
+            }
+            return null;
+          }
+          reverseGeocodeAuthErrorUntilByKey.delete(cacheKey);
           const payload = (await response.json()) as { label?: string | null };
           const nextLabel = payload.label?.trim();
           if (!nextLabel) return null;
@@ -350,13 +394,16 @@ export function useWeatherLocation() {
 
     if (hasStoredLocation) {
       if (locationSource !== "current") return;
+      if (
+        !shouldResolveCurrentLocationLabel(
+          storedLocation,
+          currentLocationLabel
+        )
+      ) {
+        return;
+      }
       void (async () => {
-        const label =
-          (await resolveLocationLabel({
-            ...storedLocation,
-            label: currentLocationLabel,
-          })) ||
-          currentLocationLabel;
+        const label = await resolveLocationLabel(storedLocation);
         if (label === storedLocation.label) return;
         persistLocation({ ...storedLocation, label }, "current");
       })();
@@ -364,6 +411,8 @@ export function useWeatherLocation() {
     }
 
     void (async () => {
+      if (autoGeolocationAttempted) return;
+      autoGeolocationAttempted = true;
       if (!navigator.geolocation || !("permissions" in navigator)) return;
       const status = await navigator.permissions.query({
         name: "geolocation" as PermissionName,

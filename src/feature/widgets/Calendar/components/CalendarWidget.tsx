@@ -194,7 +194,12 @@ export function CalendarWidget({
     setSpecialDayDialogOpen(nextOpen);
   };
 
-  const { location } = useWeatherLocation();
+  const {
+    location,
+    locationSource,
+    setLocationByCoordinates,
+    refreshCurrentLocation,
+  } = useWeatherLocation();
   const { forecast, isLoading: isWeatherLoading } = useWeatherForecast(widgetId, {
     location,
     days: 7,
@@ -719,6 +724,10 @@ export function CalendarWidget({
           open={weatherLocationDialogOpen}
           onOpenChange={setWeatherLocationDialogOpen}
           disableSave={isWeatherLoading}
+          location={location}
+          locationSource={locationSource}
+          setLocationByCoordinates={setLocationByCoordinates}
+          refreshCurrentLocation={refreshCurrentLocation}
         />
 
         <div className="mt-2 flex-1 min-h-0 overflow-auto">

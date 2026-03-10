@@ -11,6 +11,12 @@ import { getLastActiveDashboardStorageKey } from "@/feature/dashboard/libs/activ
 import { readJson } from "@/feature/dashboard/libs/readJson";
 import { useI18n } from "@/shared/i18n/client";
 import { localizeErrorMessage } from "@/shared/i18n/errorMessage";
+import { clearManagedOfflineCaches } from "@/shared/lib/offlineCaches";
+import {
+  clearPendingSignOutDataPolicy,
+  getPendingSignOutDataPolicy,
+  getKeepOfflineDataOnSessionEnd,
+} from "@/shared/lib/offlineDataRetention";
 
 type BootstrappingParams = {
   dashboards?: Dashboard[];
@@ -157,6 +163,7 @@ export function useDashboardBootstrapping({
 
     if (isSignedIn) {
       localStorage.setItem(AUTHENTICATED_CACHE_MARKER_KEY, "1");
+      clearPendingSignOutDataPolicy();
       return;
     }
 
@@ -175,7 +182,20 @@ export function useDashboardBootstrapping({
       );
     }
 
-    if (!hasAuthenticatedMarker && !hasProtectedDashboards) return;
+    const pendingSignOutDataPolicy = getPendingSignOutDataPolicy();
+
+    if (!hasAuthenticatedMarker && !hasProtectedDashboards) {
+      if (pendingSignOutDataPolicy) {
+        clearPendingSignOutDataPolicy();
+      }
+      return;
+    }
+
+    if (pendingSignOutDataPolicy === "keep") return;
+
+    const shouldKeepOfflineData =
+      getKeepOfflineDataOnSessionEnd() && pendingSignOutDataPolicy !== "clear";
+    if (shouldKeepOfflineData) return;
 
     let cancelled = false;
     const timeoutId = window.setTimeout(() => {
@@ -192,6 +212,7 @@ export function useDashboardBootstrapping({
       void (async () => {
         try {
           await clearLocalDataExceptMigrationState();
+          await clearManagedOfflineCaches();
           if (sessionCleanupTaskIdRef.current !== taskId) {
             return;
           }
@@ -206,6 +227,7 @@ export function useDashboardBootstrapping({
             key.startsWith("lifedashboard.")
           );
           keysToRemove.forEach((key) => localStorage.removeItem(key));
+          clearPendingSignOutDataPolicy();
           userSelectedRef.current = false;
           pendingRestoreRef.current = null;
           setActiveDashboardId(undefined);

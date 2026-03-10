@@ -65,7 +65,12 @@ type WeatherWidgetProps = {
 
 export function WeatherWidget({ widgetId, canEdit = true }: WeatherWidgetProps) {
   const { t, locale } = useI18n();
-  const { location, refreshCurrentLocation } = useWeatherLocation();
+  const {
+    location,
+    locationSource,
+    setLocationByCoordinates,
+    refreshCurrentLocation,
+  } = useWeatherLocation();
   const { forecast, isLoading, error, refresh } = useWeatherForecast(widgetId, {
     location,
   });
@@ -289,6 +294,10 @@ export function WeatherWidget({ widgetId, canEdit = true }: WeatherWidgetProps) 
             if (!nextOpen) setLocationActionError(null);
           }}
           disableSave={isLoading || isUpdatingLocation}
+          location={location}
+          locationSource={locationSource}
+          setLocationByCoordinates={setLocationByCoordinates}
+          refreshCurrentLocation={refreshCurrentLocation}
         />
       </div>
     </WidgetCard>
