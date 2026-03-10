@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ChangeEvent } from "react";
 import { Copy, LogIn, LogOut } from "lucide-react";
 import Image from "next/image";
 import { Button } from "@/shared/ui/button";
@@ -19,6 +19,12 @@ import {
 import { useI18n } from "@/shared/i18n/client";
 import { signIn, signOut } from "next-auth/react";
 import type { Session } from "next-auth";
+import {
+  clearPendingSignOutDataPolicy,
+  getKeepOfflineDataOnSessionEnd,
+  setPendingSignOutDataPolicy,
+  setKeepOfflineDataOnSessionEnd,
+} from "@/shared/lib/offlineDataRetention";
 
 type AccountDialogProps = {
   open: boolean;
@@ -43,7 +49,12 @@ export default function AccountDialog({
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [isDeletingLocal, setIsDeletingLocal] = useState(false);
   const [isSigningOut, setIsSigningOut] = useState(false);
+  const [signOutDialogOpen, setSignOutDialogOpen] = useState(false);
   const [isInAppBrowser, setIsInAppBrowser] = useState(false);
+  const [keepOfflineDataOnSessionEnd, setKeepOfflineDataOnSessionEndState] =
+    useState(() => getKeepOfflineDataOnSessionEnd());
+  const [keepOfflineDataOnSignOut, setKeepOfflineDataOnSignOut] =
+    useState(() => getKeepOfflineDataOnSessionEnd());
   const [copyStatus, setCopyStatus] = useState<
     "idle" | "success" | "error"
   >("idle");
@@ -77,15 +88,42 @@ export default function AccountDialog({
     }
   };
 
+  const handleOpenSignOutDialog = () => {
+    if (isSigningOut) return;
+    setKeepOfflineDataOnSignOut(keepOfflineDataOnSessionEnd);
+    setSignOutDialogOpen(true);
+  };
+
   const handleSignOut = async () => {
     if (isSigningOut) return;
     setIsSigningOut(true);
+    setPendingSignOutDataPolicy(
+      keepOfflineDataOnSignOut ? "keep" : "clear"
+    );
+
     try {
-      await clearLocalData();
+      if (!keepOfflineDataOnSignOut) {
+        try {
+          await clearLocalData();
+        } catch {
+          // Continue sign out even if local cleanup fails.
+        }
+      }
+
+      await signOut({ callbackUrl: "/" });
     } catch {
-      // Continue sign out even if local cleanup fails.
+      clearPendingSignOutDataPolicy();
+      setIsSigningOut(false);
+      return;
     }
-    await signOut({ callbackUrl: "/" });
+
+    setSignOutDialogOpen(false);
+  };
+
+  const handleKeepOfflineDataChange = (event: ChangeEvent<HTMLInputElement>) => {
+    const nextChecked = event.target.checked;
+    setKeepOfflineDataOnSessionEndState(nextChecked);
+    setKeepOfflineDataOnSessionEnd(nextChecked);
   };
 
   const handleCopyCurrentLink = async () => {
@@ -238,6 +276,31 @@ export default function AccountDialog({
               </button>
             </div>
           </div>
+          {isSignedIn ? (
+            <label className="flex items-start gap-3 rounded-md border border-gray-200/80 bg-white/50 px-3 py-2 dark:border-gray-700/70 dark:bg-gray-900/20">
+              <input
+                type="checkbox"
+                className="mt-0.5 h-4 w-4 rounded border-gray-300 text-primary"
+                checked={keepOfflineDataOnSessionEnd}
+                onChange={handleKeepOfflineDataChange}
+                disabled={isSigningOut || isDeletingLocal}
+              />
+              <div className="min-w-0">
+                <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                  {t(
+                    "세션 종료 시 오프라인 데이터 유지",
+                    "Keep offline data when the session ends"
+                  )}
+                </div>
+                <div className="mt-1 text-xs text-gray-500">
+                  {t(
+                    "세션이 만료되거나 복구되지 않아도 이 기기의 개인 대시보드와 동기화 대기 변경을 유지합니다. 직접 로그아웃할 때는 별도로 유지 여부를 선택할 수 있습니다.",
+                    "Keep personal dashboards and pending sync changes on this device even if the session expires or cannot be restored. When you sign out manually, you can choose whether to keep them."
+                  )}
+                </div>
+              </div>
+            </label>
+          ) : null}
           <div className="flex flex-wrap justify-end gap-2">
             {isSignedIn ? (
               <>
@@ -253,7 +316,7 @@ export default function AccountDialog({
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => void handleSignOut()}
+                  onClick={handleOpenSignOutDialog}
                   disabled={isSigningOut || isDeletingLocal}
                 >
                   <LogOut className="size-4" />
@@ -320,6 +383,66 @@ export default function AccountDialog({
               disabled={isDeletingLocal || isSigningOut}
             >
               {isDeletingLocal ? t("삭제 중...", "Deleting...") : t("삭제", "Delete")}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={signOutDialogOpen} onOpenChange={setSignOutDialogOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>{t("로그아웃할까요?", "Sign out?")}</DialogTitle>
+            <DialogDescription>
+              {t(
+                "이번 로그아웃에서 이 기기의 오프라인 데이터를 유지할지 선택해 주세요.",
+                "Choose whether to keep this device's offline data for this sign-out."
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <label className="flex items-start gap-3 rounded-md border border-gray-200/80 bg-white/50 px-3 py-2 dark:border-gray-700/70 dark:bg-gray-900/20">
+            <input
+              type="checkbox"
+              className="mt-0.5 h-4 w-4 rounded border-gray-300 text-primary"
+              checked={keepOfflineDataOnSignOut}
+              onChange={(event) => setKeepOfflineDataOnSignOut(event.target.checked)}
+              disabled={isSigningOut}
+            />
+            <div className="min-w-0">
+              <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                {t(
+                  "로그아웃 후에도 오프라인 데이터 유지",
+                  "Keep offline data after sign-out"
+                )}
+              </div>
+              <div className="mt-1 text-xs text-gray-500">
+                {keepOfflineDataOnSignOut
+                  ? t(
+                      "개인 대시보드와 동기화 대기 변경을 이 기기에 유지합니다. 다시 로그인하면 outbox가 이어서 동기화됩니다.",
+                      "Personal dashboards and pending sync changes stay on this device. The outbox will sync after you sign in again."
+                    )
+                  : t(
+                      "이 기기의 로컬 대시보드, 기록, 동기화 대기 변경을 모두 삭제한 뒤 로그아웃합니다.",
+                      "Local dashboards, records, and pending sync changes on this device will be removed before sign-out."
+                    )}
+              </div>
+            </div>
+          </label>
+          <DialogFooter>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setSignOutDialogOpen(false)}
+              disabled={isSigningOut}
+            >
+              {t("취소", "Cancel")}
+            </Button>
+            <Button
+              type="button"
+              onClick={() => void handleSignOut()}
+              disabled={isSigningOut}
+            >
+              {isSigningOut
+                ? t("로그아웃 중...", "Signing out...")
+                : t("로그아웃", "Sign out")}
             </Button>
           </DialogFooter>
         </DialogContent>

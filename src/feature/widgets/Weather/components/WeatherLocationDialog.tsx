@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useWeatherLocation } from "@/feature/widgets/Weather/hooks/useWeatherLocation";
+import type {
+  WeatherLocationSource,
+} from "@/feature/widgets/Weather/hooks/useWeatherLocation";
+import type { WeatherLocation } from "@/feature/widgets/Weather/libs/openMeteo";
 import { useI18n } from "@/shared/i18n/client";
 import { cn } from "@/shared/lib/utils";
 import { Button } from "@/shared/ui/button";
@@ -32,6 +35,13 @@ type WeatherLocationDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   disableSave?: boolean;
+  location: WeatherLocation;
+  locationSource: WeatherLocationSource;
+  setLocationByCoordinates: (
+    params: { latitude: number; longitude: number; label?: string },
+    source?: WeatherLocationSource
+  ) => Promise<void>;
+  refreshCurrentLocation: () => Promise<boolean>;
 };
 
 const LOCATION_OPTION_CURRENT = "__current__";
@@ -136,14 +146,12 @@ export function WeatherLocationDialog({
   open,
   onOpenChange,
   disableSave = false,
+  location,
+  locationSource,
+  setLocationByCoordinates,
+  refreshCurrentLocation,
 }: WeatherLocationDialogProps) {
   const { t, language } = useI18n();
-  const {
-    location,
-    locationSource,
-    setLocationByCoordinates,
-    refreshCurrentLocation,
-  } = useWeatherLocation();
   const wasOpenRef = useRef(false);
 
   const [selectedLocationOption, setSelectedLocationOption] =
