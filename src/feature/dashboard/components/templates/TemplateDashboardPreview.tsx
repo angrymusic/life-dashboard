@@ -21,11 +21,11 @@ export default function TemplateDashboardPreview({
   template,
   language,
 }: TemplateDashboardPreviewProps) {
-  const previewDashboardId = useMemo(
-    () => `template-preview:${template.slug}`,
-    [template.slug]
-  );
   const previewKey = `${template.slug}:${language}`;
+  const previewDashboardId = useMemo(
+    () => `template-preview:${previewKey}:${crypto.randomUUID()}`,
+    [previewKey]
+  );
   const [seedState, setSeedState] = useState<{
     readyKey: string | null;
     failedKey: string | null;
