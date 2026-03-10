@@ -44,7 +44,7 @@ export default function DashboardTemplateDetailPage({
   const targetWidgets = useDashboardWidgets(targetDashboardId ?? undefined);
   const targetDashboard =
     dashboards?.find((dashboard) => dashboard.id === targetDashboardId) ?? null;
-  const { widgetCreatorId } = useDashboardPermissions({
+  const { isAdmin, widgetCreatorId } = useDashboardPermissions({
     activeDashboard: targetDashboard ?? undefined,
     authEmail,
     isSignedIn,
@@ -57,6 +57,10 @@ export default function DashboardTemplateDetailPage({
     Boolean(targetDashboard) &&
     Array.isArray(targetWidgets) &&
     targetWidgets.length === 0;
+  const isBlockedSharedApply =
+    shouldApplyToExistingDashboard &&
+    Boolean(targetDashboard?.groupId) &&
+    !isAdmin;
   const templatesHubHref = targetDashboardId
     ? `/templates?dashboardId=${encodeURIComponent(targetDashboardId)}`
     : "/templates";
@@ -68,6 +72,15 @@ export default function DashboardTemplateDetailPage({
     if (authStatus === "loading" || isStarting || isResolvingTargetDashboard) {
       return;
     }
+    if (isBlockedSharedApply) {
+      setError(
+        t(
+          "공유 대시보드에 템플릿 적용은 관리자만 할 수 있어요.",
+          "Only admins can apply a template to a shared dashboard."
+        )
+      );
+      return;
+    }
 
     setIsStarting(true);
     setError(null);
@@ -77,6 +90,7 @@ export default function DashboardTemplateDetailPage({
         ? await applyDashboardTemplateToExistingDashboard({
             createdBy: (widgetCreatorId ?? getOrCreateLocalProfileId()) as Id,
             dashboardId: targetDashboardId,
+            isAdmin,
             slug: template.slug,
             language,
           })
@@ -152,7 +166,12 @@ export default function DashboardTemplateDetailPage({
                   : getLocalizedText(template.dashboardName, language)}
               </div>
               <p className="mt-3 text-sm leading-6 text-muted-foreground">
-                {shouldApplyToExistingDashboard
+                {isBlockedSharedApply
+                  ? t(
+                      "공유 대시보드에 템플릿을 채워 넣는 작업은 관리자만 할 수 있어요.",
+                      "Only admins can fill a shared dashboard with a template."
+                    )
+                  : shouldApplyToExistingDashboard
                   ? t(
                       "이 비어 있는 대시보드에 템플릿 위젯과 예시 데이터가 바로 채워집니다.",
                       "This empty dashboard will be filled with the template widgets and sample data.",
@@ -169,13 +188,16 @@ export default function DashboardTemplateDetailPage({
                 disabled={
                   authStatus === "loading" ||
                   isStarting ||
-                  isResolvingTargetDashboard
+                  isResolvingTargetDashboard ||
+                  isBlockedSharedApply
                 }
               >
                 {isStarting
                   ? shouldApplyToExistingDashboard
                     ? t("템플릿 적용 중...", "Applying template...")
                     : t("대시보드 생성 중...", "Creating dashboard...")
+                  : isBlockedSharedApply
+                    ? t("관리자만 적용 가능", "Admins only")
                   : shouldApplyToExistingDashboard
                     ? t(
                         "이 대시보드에 템플릿 적용하기",

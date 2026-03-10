@@ -33,6 +33,7 @@ type ApplyDashboardTemplateToExistingDashboardParams =
   ApplyDashboardTemplateParams & {
     createdBy: Id;
     dashboardId: Id;
+    isAdmin: boolean;
   };
 
 type SeedDashboardTemplateParams = {
@@ -398,6 +399,7 @@ export async function applyDashboardTemplate({
 export async function applyDashboardTemplateToExistingDashboard({
   createdBy,
   dashboardId,
+  isAdmin,
   slug,
   language,
 }: ApplyDashboardTemplateToExistingDashboardParams) {
@@ -409,6 +411,9 @@ export async function applyDashboardTemplateToExistingDashboard({
   const targetDashboard = await db.dashboards.get(dashboardId);
   if (!targetDashboard) {
     throw new Error("Dashboard not found.");
+  }
+  if (targetDashboard.groupId && !isAdmin) {
+    throw new Error("Only admins can apply templates to shared dashboards.");
   }
 
   try {

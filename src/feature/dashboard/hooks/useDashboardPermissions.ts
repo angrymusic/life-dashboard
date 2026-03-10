@@ -15,6 +15,7 @@ type PermissionsParams = {
 type PermissionsResult = {
   canCreateWidget: boolean;
   canEditWidget: (widget: Widget) => boolean;
+  isAdmin: boolean;
   widgetCreatorId?: Id;
 };
 
@@ -52,6 +53,7 @@ export function useDashboardPermissions({
   return {
     canCreateWidget: permissionState.canCreateWidget,
     canEditWidget,
+    isAdmin: permissionState.isAdmin,
     widgetCreatorId: permissionState.widgetCreatorId,
   };
 }

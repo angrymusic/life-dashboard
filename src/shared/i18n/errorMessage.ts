@@ -29,6 +29,10 @@ const MESSAGE_MAP: Record<string, { ko: string; en: string }> = {
     ko: "공유 대시보드가 아니에요.",
     en: "Dashboard is not shared",
   },
+  "Only admins can apply templates to shared dashboards.": {
+    ko: "공유 대시보드에 템플릿 적용은 관리자만 할 수 있어요.",
+    en: "Only admins can apply templates to shared dashboards.",
+  },
   "Member not found": {
     ko: "구성원을 찾을 수 없어요.",
     en: "Member not found",
