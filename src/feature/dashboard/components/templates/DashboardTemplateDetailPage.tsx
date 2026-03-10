@@ -6,7 +6,9 @@ import { useSession } from "next-auth/react";
 import { ArrowLeft, ArrowRight } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/shared/ui/button";
+import { getOrCreateLocalProfileId } from "@/shared/db/db";
 import { useDashboardWidgets, useDashboards } from "@/shared/db/queries";
+import type { Id } from "@/shared/db/schema";
 import { useI18n } from "@/shared/i18n/client";
 import { localizeErrorMessage } from "@/shared/i18n/errorMessage";
 import {
@@ -14,6 +16,7 @@ import {
   getLocalizedText,
   type DashboardTemplate,
 } from "@/feature/dashboard/libs/dashboardTemplates";
+import { useDashboardPermissions } from "@/feature/dashboard/hooks/useDashboardPermissions";
 import {
   applyDashboardTemplate,
   applyDashboardTemplateToExistingDashboard,
@@ -35,11 +38,17 @@ export default function DashboardTemplateDetailPage({
   const dashboards = useDashboards();
   const [error, setError] = useState<string | null>(null);
   const [isStarting, setIsStarting] = useState(false);
+  const isSignedIn = authStatus === "authenticated";
   const authEmail = session?.user?.email?.trim().toLowerCase() ?? null;
   const targetDashboardId = searchParams.get("dashboardId");
   const targetWidgets = useDashboardWidgets(targetDashboardId ?? undefined);
   const targetDashboard =
     dashboards?.find((dashboard) => dashboard.id === targetDashboardId) ?? null;
+  const { widgetCreatorId } = useDashboardPermissions({
+    activeDashboard: targetDashboard ?? undefined,
+    authEmail,
+    isSignedIn,
+  });
   const isResolvingTargetDashboard =
     Boolean(targetDashboardId) &&
     (dashboards === undefined || targetWidgets === undefined);
@@ -66,6 +75,7 @@ export default function DashboardTemplateDetailPage({
     try {
       const dashboardId = shouldApplyToExistingDashboard && targetDashboardId
         ? await applyDashboardTemplateToExistingDashboard({
+            createdBy: (widgetCreatorId ?? getOrCreateLocalProfileId()) as Id,
             dashboardId: targetDashboardId,
             slug: template.slug,
             language,

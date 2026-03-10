@@ -31,6 +31,7 @@ type ApplyDashboardTemplateParams = {
 
 type ApplyDashboardTemplateToExistingDashboardParams =
   ApplyDashboardTemplateParams & {
+    createdBy: Id;
     dashboardId: Id;
   };
 
@@ -395,6 +396,7 @@ export async function applyDashboardTemplate({
 }
 
 export async function applyDashboardTemplateToExistingDashboard({
+  createdBy,
   dashboardId,
   slug,
   language,
@@ -408,8 +410,6 @@ export async function applyDashboardTemplateToExistingDashboard({
   if (!targetDashboard) {
     throw new Error("Dashboard not found.");
   }
-
-  const createdBy = (targetDashboard.ownerId ?? getOrCreateLocalProfileId()) as Id;
 
   try {
     await clearTemplateDashboardData(dashboardId);
