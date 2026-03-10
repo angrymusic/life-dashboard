@@ -79,7 +79,11 @@ async function handleNavigationRequest(request) {
     const response = await fetch(request);
 
     if (response.ok) {
-      await cache.put(request, response.clone());
+      try {
+        await cache.put(request, response.clone());
+      } catch {
+        // Ignore cache write failures so live navigations still use the network response.
+      }
     }
 
     return response;
