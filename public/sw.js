@@ -115,7 +115,11 @@ async function handleStaticAssetRequest(request) {
   const response = await fetch(request);
 
   if (response.ok) {
-    await cache.put(request, response.clone());
+    try {
+      await cache.put(request, response.clone());
+    } catch {
+      // Ignore cache write failures so online asset requests still succeed.
+    }
   }
 
   return response;
