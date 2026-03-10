@@ -17,6 +17,7 @@ import {
   detectInAppBrowser,
 } from "@/shared/lib/inAppBrowser";
 import { useI18n } from "@/shared/i18n/client";
+import { clearManagedOfflineCaches } from "@/shared/lib/offlineCaches";
 import { signIn, signOut } from "next-auth/react";
 import type { Session } from "next-auth";
 import {
@@ -71,6 +72,7 @@ export default function AccountDialog({
 
   const clearLocalData = async () => {
     await deleteLocalDatabase();
+    await clearManagedOfflineCaches();
     const keysToRemove = Object.keys(localStorage).filter((key) =>
       key.startsWith("lifedashboard.")
     );

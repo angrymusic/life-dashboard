@@ -11,6 +11,7 @@ import { getLastActiveDashboardStorageKey } from "@/feature/dashboard/libs/activ
 import { readJson } from "@/feature/dashboard/libs/readJson";
 import { useI18n } from "@/shared/i18n/client";
 import { localizeErrorMessage } from "@/shared/i18n/errorMessage";
+import { clearManagedOfflineCaches } from "@/shared/lib/offlineCaches";
 import {
   clearPendingSignOutDataPolicy,
   getPendingSignOutDataPolicy,
@@ -211,6 +212,7 @@ export function useDashboardBootstrapping({
       void (async () => {
         try {
           await clearLocalDataExceptMigrationState();
+          await clearManagedOfflineCaches();
           if (sessionCleanupTaskIdRef.current !== taskId) {
             return;
           }
