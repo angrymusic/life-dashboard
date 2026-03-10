@@ -83,7 +83,10 @@ async function buildTemplatePhotoPayload(src: string) {
 export async function clearTemplateDashboardData(dashboardId: Id) {
   const preservedOutboxEvents = (
     await db.outbox.where("dashboardId").equals(dashboardId).toArray()
-  ).filter((event): event is OutboxEvent => event.entityType === "dashboard");
+  ).filter(
+    (event): event is OutboxEvent =>
+      event.entityType === "dashboard" || event.operation === "delete"
+  );
 
   await db.transaction(
     "rw",

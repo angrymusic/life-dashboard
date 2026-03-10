@@ -112,11 +112,15 @@ describe("clearTemplateDashboardData", () => {
     resetState();
   });
 
-  it("preserves dashboard outbox events while clearing template widget data", async () => {
+  it("preserves dashboard and pending delete outbox events while clearing template data", async () => {
     resetState({
       widgets: [
         { id: "widget-1", dashboardId: "dashboard-1" },
         { id: "widget-2", dashboardId: "dashboard-2" },
+      ],
+      todos: [
+        { id: "todo-1", dashboardId: "dashboard-1", widgetId: "widget-1" },
+        { id: "todo-2", dashboardId: "dashboard-2", widgetId: "widget-2" },
       ],
       outbox: [
         {
@@ -135,6 +139,22 @@ describe("clearTemplateDashboardData", () => {
           operation: "upsert",
         },
         {
+          id: "widget:widget-deleted-1",
+          entityType: "widget",
+          entityId: "widget-deleted-1",
+          dashboardId: "dashboard-1",
+          widgetId: "widget-deleted-1",
+          operation: "delete",
+        },
+        {
+          id: "todo:todo-deleted-1",
+          entityType: "todo",
+          entityId: "todo-deleted-1",
+          dashboardId: "dashboard-1",
+          widgetId: "widget-deleted-1",
+          operation: "delete",
+        },
+        {
           id: "widget:widget-2",
           entityType: "widget",
           entityId: "widget-2",
@@ -148,6 +168,9 @@ describe("clearTemplateDashboardData", () => {
     await clearTemplateDashboardData("dashboard-1");
 
     expect(state.widgets).toEqual([{ id: "widget-2", dashboardId: "dashboard-2" }]);
+    expect(state.todos).toEqual([
+      { id: "todo-2", dashboardId: "dashboard-2", widgetId: "widget-2" },
+    ]);
     expect(state.outbox).toEqual([
       {
         id: "widget:widget-2",
@@ -163,6 +186,22 @@ describe("clearTemplateDashboardData", () => {
         entityId: "dashboard-1",
         dashboardId: "dashboard-1",
         operation: "upsert",
+      },
+      {
+        id: "widget:widget-deleted-1",
+        entityType: "widget",
+        entityId: "widget-deleted-1",
+        dashboardId: "dashboard-1",
+        widgetId: "widget-deleted-1",
+        operation: "delete",
+      },
+      {
+        id: "todo:todo-deleted-1",
+        entityType: "todo",
+        entityId: "todo-deleted-1",
+        dashboardId: "dashboard-1",
+        widgetId: "widget-deleted-1",
+        operation: "delete",
       },
     ]);
   });
