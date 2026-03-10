@@ -29,6 +29,7 @@ type Props = {
   widgetLocks?: WidgetLockMap;
   onTouchWidgetLock?: (widgetId: string) => void;
   onReleaseAllWidgetLocks?: () => void;
+  widgetContentClassName?: string;
 };
 
 const MOBILE_BREAKPOINT = 768;
@@ -74,6 +75,7 @@ export default function GridLayout({
   widgetLocks = {},
   onTouchWidgetLock,
   onReleaseAllWidgetLocks,
+  widgetContentClassName,
 }: Props) {
   const { t } = useI18n();
   const { width, containerRef, mounted } = useContainerWidth();
@@ -195,7 +197,10 @@ export default function GridLayout({
                     onTouchWidgetLock?.(w.id);
                   }}
                 >
-                  <div key={`${w.id}:${canEdit ? "edit" : "readonly"}`} className="h-full">
+                  <div
+                    key={`${w.id}:${canEdit ? "edit" : "readonly"}`}
+                    className={cn("h-full", widgetContentClassName)}
+                  >
                     {entry ? entry.render({ widgetId: w.id, canEdit }) : null}
                   </div>
                   {lockEnabled && lock ? (

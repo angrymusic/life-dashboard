@@ -7,6 +7,7 @@ import {
 } from "@/shared/db/db";
 import type { Dashboard, Id } from "@/shared/db/schema";
 import { useEnsureDashboard } from "@/feature/dashboard/hooks/useEnsureDashboard";
+import { getLastActiveDashboardStorageKey } from "@/feature/dashboard/libs/activeDashboardStorage";
 import { readJson } from "@/feature/dashboard/libs/readJson";
 import { useI18n } from "@/shared/i18n/client";
 import { localizeErrorMessage } from "@/shared/i18n/errorMessage";
@@ -64,9 +65,7 @@ export function useDashboardBootstrapping({
   const lastActiveDashboardKey =
     typeof window === "undefined"
       ? null
-      : authEmail
-        ? `lifedashboard.lastActiveDashboardId:${authEmail}`
-        : `lifedashboard.lastActiveDashboardId:local:${getOrCreateLocalProfileId()}`;
+      : getLastActiveDashboardStorageKey(authEmail);
 
   const setActiveDashboardIdByUser = useCallback((nextId?: Id) => {
     userSelectedRef.current = true;
