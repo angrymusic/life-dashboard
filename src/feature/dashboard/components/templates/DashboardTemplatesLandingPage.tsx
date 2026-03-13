@@ -61,8 +61,8 @@ export default function DashboardTemplatesLandingPage() {
             </div>
             <h1 className="mt-3 text-3xl font-semibold tracking-tight text-foreground sm:text-5xl">
               {t(
-                "검색 의도와 실제 사용 흐름을 같이 잡는 시작 페이지",
-                "Landing pages that match search intent and real onboarding"
+                "템플릿 허브",
+                "Template Hub"
               )}
             </h1>
             <p className="mt-4 text-base leading-7 text-muted-foreground sm:text-lg">
