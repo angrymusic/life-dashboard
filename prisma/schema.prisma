@@ -110,6 +110,7 @@ model Dashboard {
   calendarEvents CalendarEvent[]
   weatherCaches  WeatherCache[]
   widgetLocks    WidgetLock[]
+  weeklySummaries WeeklySummary[]
 
   @@index([ownerId])
   @@index([groupId])
@@ -138,6 +139,7 @@ model Widget {
   events    CalendarEvent[]
   weatherCache WeatherCache?
   lock      WidgetLock?
+  weeklySummaries WeeklySummary[]
 
   @@index([dashboardId])
   @@index([createdBy])
@@ -347,4 +349,27 @@ model WidgetLock {
 
   @@index([dashboardId, expiresAt])
   @@index([userId, expiresAt])
+}
+
+model WeeklySummary {
+  id              String   @id @default(uuid())
+  widgetId        String
+  dashboardId     String
+  windowStartYmd  String
+  windowEndYmd    String
+  status          String
+  summaryKo       String?
+  summaryEn       String?
+  stats           Json?
+  model           String?
+  generatedAt     DateTime?
+  error           String?
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  widget    Widget    @relation(fields: [widgetId], references: [id], onDelete: Cascade)
+  dashboard Dashboard @relation(fields: [dashboardId], references: [id], onDelete: Cascade)
+
+  @@unique([widgetId, windowStartYmd])
+  @@index([dashboardId, windowStartYmd])
 }

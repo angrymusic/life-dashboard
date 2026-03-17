@@ -52,6 +52,8 @@ export function AddWidgetDialog({
         return t("차트", "Chart");
       case "weather":
         return t("날씨", "Weather");
+      case "weeklySummary":
+        return t("주간 요약", "Weekly Summary");
       default:
         return type;
     }
@@ -74,6 +76,11 @@ export function AddWidgetDialog({
         return t("목표 진행을 시간 순으로 기록해요", "Track progress over time");
       case "weather":
         return t("이번 주 날씨를 확인해요", "Check this week's weather");
+      case "weeklySummary":
+        return t(
+          "지난 7일을 요약해요",
+          "Summarize the past 7 days"
+        );
       default:
         return "";
     }

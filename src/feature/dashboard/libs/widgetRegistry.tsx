@@ -12,6 +12,7 @@ import { MoodWidget } from "@/feature/widgets/Mood/components/MoodWidget";
 import { PhotoWidget } from "@/feature/widgets/Photo/components/PhotoWidget";
 import { TodoWidget } from "@/feature/widgets/Todo/components/TodoWidget";
 import { WeatherWidget } from "@/feature/widgets/Weather/components/WeatherWidget";
+import { WeeklySummaryWidget } from "@/feature/widgets/WeeklySummary/components/WeeklySummaryWidget";
 
 type WidgetCreateContext = {
   existingLayouts: WidgetLayout[];
@@ -133,6 +134,18 @@ const widgetRegistryEntries = [
     create: createWithLayout({ w: 3, h: 5, minW: 2, minH: 5 }),
     render: ({ widgetId, canEdit }) => (
       <WeatherWidget widgetId={widgetId} canEdit={canEdit} />
+    ),
+  },
+  {
+    type: "weeklySummary",
+    title: "Weekly Summary",
+    description: "Summarize the past week",
+    create: createWithLayout(
+      { w: 4, h: 6, minW: 3, minH: 6 },
+      { settings: { summaryWeekday: 0 } }
+    ),
+    render: ({ widgetId, canEdit }) => (
+      <WeeklySummaryWidget widgetId={widgetId} canEdit={canEdit} />
     ),
   },
 ] as const satisfies ReadonlyArray<WidgetRegistryEntry>;
