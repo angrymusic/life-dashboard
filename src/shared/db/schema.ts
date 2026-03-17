@@ -19,7 +19,8 @@ export type WidgetType =
   | "chart"
   | "notice"
   | "mood"
-  | "weather";
+  | "weather"
+  | "weeklySummary";
 
 export type Role = "parent" | "child";
 

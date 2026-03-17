@@ -102,6 +102,8 @@ MIGRATION_IMPORT_RATE_LIMIT=5
 MIGRATION_IMPORT_RATE_WINDOW_MS=600000
 MIGRATION_IMPORT_MAX_BYTES=5242880
 MIGRATION_IMPORT_MAX_RECORDS=20000
+GEMINI_API_KEY=replace-me
+GEMINI_SUMMARY_MODEL=gemini-2.5-flash-lite
 ```
 
 ### 환경 변수 설명
@@ -148,6 +150,8 @@ MIGRATION_IMPORT_MAX_RECORDS=20000
 | `SPECIAL_DAYS_RATE_LIMIT` | 공휴일/기념일 API 요청 허용 횟수입니다. | `30` |
 | `SPECIAL_DAYS_RATE_WINDOW_MS` | 공휴일/기념일 API 레이트리밋 윈도우(ms)입니다. | `60000` |
 | `SPECIAL_DAYS_TIMEOUT_MS` | 공휴일/기념일 외부 API 타임아웃(ms)입니다. | `8000` |
+| `GEMINI_API_KEY` | 주간 요약 위젯이 Gemini API로 요약을 생성할 때 사용하는 키입니다. | 요약 AI 사용 시 권장 |
+| `GEMINI_SUMMARY_MODEL` | 주간 요약 생성에 사용할 Gemini 모델명입니다. | `gemini-2.5-flash-lite` |
 | `MIGRATION_STAGING_DIR` | 마이그레이션 import 스냅샷 임시 저장 경로입니다. | `./data/migration-staging` |
 | `MIGRATION_STAGING_RETENTION_DAYS` | 임시 스냅샷 보관 일수입니다. | `7` |
 | `MIGRATION_STAGING_MAX_FILES_PER_USER` | 사용자별 임시 스냅샷 최대 파일 수입니다. | `30` |
@@ -212,6 +216,8 @@ pnpm dev
   필요하면 `CSRF_TRUSTED_ORIGINS`에 추가 허용 Origin을 쉼표로 구분해 설정하세요.
 - 지오코딩(Geocode) API는 기본적으로 인증이 필요합니다.
   신뢰 가능한 사설 환경에서만 `GEOCODE_REQUIRE_AUTH=false`를 고려하세요.
+- `GEMINI_API_KEY`가 없으면 주간 요약 위젯은 규칙 기반 fallback 요약으로 동작합니다.
+  Gemini 기반 요약을 사용하려면 API 키를 설정하세요.
 - 마이그레이션 import API는 기본 비활성화 상태입니다.
   사용하려면 `ENABLE_MIGRATION_IMPORT=true`와 `MIGRATION_IMPORT_TOKEN`을 설정하세요.
 - 마이그레이션 import 요청에는 반드시 `x-migration-import-token: <MIGRATION_IMPORT_TOKEN>` 헤더가 포함되어야 합니다.

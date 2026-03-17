@@ -28,7 +28,8 @@ type WidgetType =
   | "chart"
   | "notice"
   | "mood"
-  | "weather";
+  | "weather"
+  | "weeklySummary";
 
 type WidgetLayout = {
   x: number;
@@ -227,7 +228,8 @@ function isWidgetType(v: unknown): v is WidgetType {
     v === "chart" ||
     v === "notice" ||
     v === "mood" ||
-    v === "weather"
+    v === "weather" ||
+    v === "weeklySummary"
   );
 }
 
