@@ -11,6 +11,7 @@ import type { AppLanguage } from "@/shared/i18n/language";
 
 const SUMMARY_VERSION = 3;
 const SUMMARY_DEBUG_ENABLED = process.env.DEBUG_GEMINI_SUMMARY === "1";
+const RULE_BASED_SUMMARY_MODEL = "rule-based-fallback";
 const MIN_SUMMARY_BOUNDARY_OFFSET_MS = -14 * 60 * 60 * 1000;
 const MAX_SUMMARY_BOUNDARY_OFFSET_MS = 12 * 60 * 60 * 1000;
 const MAX_SUMMARY_BOUNDARY_OFFSET_DRIFT_MS = 2 * 60 * 60 * 1000;
@@ -219,13 +220,24 @@ async function generateSummaryText(
       .filter(Boolean)
       .join("\n");
 
-    const generated = await generateTextWithGemini({
-      prompt,
-      model: attempt === 0 ? undefined : "gemini-flash-latest",
-      maxOutputTokens: 768,
-      temperature: attempt === 0 ? 0.2 : 0,
-      thinkingMode: "minimize",
-    });
+    let generated: Awaited<ReturnType<typeof generateTextWithGemini>>;
+    try {
+      generated = await generateTextWithGemini({
+        prompt,
+        model: attempt === 0 ? undefined : "gemini-flash-latest",
+        maxOutputTokens: 768,
+        temperature: attempt === 0 ? 0.2 : 0,
+        thinkingMode: "minimize",
+      });
+    } catch (error) {
+      if (
+        error instanceof Error &&
+        error.message === "Missing GEMINI_API_KEY"
+      ) {
+        return buildFallbackSummary(stats, language);
+      }
+      throw error;
+    }
     const summary = generated.text.trim();
     debugSummary("attempt", {
       attempt: attempt + 1,
@@ -259,6 +271,80 @@ async function generateSummaryText(
     };
   }
   throw new Error("Gemini returned an empty summary");
+}
+
+function buildFallbackSummary(
+  stats: SummaryStats,
+  language: AppLanguage,
+): GeneratedSummary {
+  const topMood = Object.entries(stats.moodCounts).sort((a, b) => {
+    if (b[1] !== a[1]) return b[1] - a[1];
+    return a[0].localeCompare(b[0]);
+  })[0];
+
+  if (language === "ko") {
+    const extraHighlights = [
+      stats.photoCount > 0 ? `사진 ${stats.photoCount}장` : "",
+      stats.metricEntryCount > 0 ? `지표 기록 ${stats.metricEntryCount}건` : "",
+      stats.ddayCount > 0 ? `디데이 ${stats.ddayCount}개` : "",
+      stats.noticeCount > 0 ? `공지 ${stats.noticeCount}개` : "",
+    ].filter(Boolean);
+    const extraSentence = topMood
+      ? extraHighlights.length > 0
+        ? `기분 기록으로는 ${topMood[0]}가 ${topMood[1]}번으로 가장 많았고 ${extraHighlights
+            .slice(0, 2)
+            .join(", ")}도 함께 남아 있어요.`
+        : `기분 기록으로는 ${topMood[0]}가 ${topMood[1]}번으로 가장 많았어요.`
+      : extraHighlights.length > 0
+        ? `${extraHighlights.slice(0, 2).join(", ")}이 이번 주의 흔적으로 남아 있어요.`
+        : "눈에 띄는 추가 기록은 많지 않았지만 한 주의 흐름은 차분히 남아 있어요.";
+
+    return {
+      model: RULE_BASED_SUMMARY_MODEL,
+      summary: [
+        `지난 7일 동안 할 일 ${stats.todoTotal}개 중 ${stats.todoDone}개를 마쳤고 일정 ${stats.eventCount}개와 메모 ${stats.memoCount}개가 기록됐어요.`,
+        extraSentence,
+        stats.todoPending > 0
+          ? `남은 할 일 ${stats.todoPending}개도 다음 주에 하나씩 정리해 보세요.`
+          : "지금의 흐름을 이어서 다음 주도 차분하게 쌓아가 보세요.",
+      ].join(" "),
+    };
+  }
+
+  const extraHighlights = [
+    stats.photoCount > 0
+      ? `${stats.photoCount} photo${stats.photoCount === 1 ? "" : "s"}`
+      : "",
+    stats.metricEntryCount > 0
+      ? `${stats.metricEntryCount} metric entr${stats.metricEntryCount === 1 ? "y" : "ies"}`
+      : "",
+    stats.ddayCount > 0
+      ? `${stats.ddayCount} D-day reminder${stats.ddayCount === 1 ? "" : "s"}`
+      : "",
+    stats.noticeCount > 0
+      ? `${stats.noticeCount} notice${stats.noticeCount === 1 ? "" : "s"}`
+      : "",
+  ].filter(Boolean);
+  const extraSentence = topMood
+    ? extraHighlights.length > 0
+      ? `The most common mood was ${topMood[0]} at ${topMood[1]} entr${topMood[1] === 1 ? "y" : "ies"}, and ${extraHighlights
+          .slice(0, 2)
+          .join(", ")} also stood out.`
+      : `The most common mood was ${topMood[0]} at ${topMood[1]} entr${topMood[1] === 1 ? "y" : "ies"}.`
+    : extraHighlights.length > 0
+      ? `${extraHighlights.slice(0, 2).join(", ")} also added context to the week.`
+      : "There was not much extra activity, but the week's overall rhythm is still visible.";
+
+  return {
+    model: RULE_BASED_SUMMARY_MODEL,
+    summary: [
+      `Over the last 7 days, ${stats.todoDone} of ${stats.todoTotal} todos were completed, with ${stats.eventCount} events and ${stats.memoCount} memos recorded.`,
+      extraSentence,
+      stats.todoPending > 0
+        ? `You still have ${stats.todoPending} open todo${stats.todoPending === 1 ? "" : "s"}, so next week has a clear starting point.`
+        : "You closed the week with a clean slate, so carry that pace into the next one.",
+    ].join(" "),
+  };
 }
 
 async function acquireSummaryLock(widgetId: string, windowStartYmd: string) {

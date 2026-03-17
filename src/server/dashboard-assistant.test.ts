@@ -1,4 +1,5 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { Prisma } from "@prisma/client";
 
 const {
   prisma,
@@ -63,6 +64,7 @@ vi.mock("@/server/gemini", () => ({
 }));
 
 import {
+  getOrCreateWeeklySummary,
   validateSummaryWindow,
 } from "./dashboard-assistant";
 
@@ -98,5 +100,74 @@ describe("validateSummaryWindow", () => {
     });
 
     expect(result).toBeNull();
+  });
+});
+
+describe("getOrCreateWeeklySummary", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    prisma.weeklySummary.findUnique.mockResolvedValue(null);
+    prisma.weeklySummary.upsert.mockResolvedValue({
+      status: "pending",
+    });
+    prisma.weeklySummary.update.mockImplementation(
+      async ({ data }: { data: Record<string, unknown> }) => ({
+        status: "ready",
+        summaryKo:
+          typeof data.summaryKo === "string" ? data.summaryKo : null,
+        summaryEn:
+          typeof data.summaryEn === "string" ? data.summaryEn : null,
+        stats: (data.stats as Prisma.JsonValue) ?? Prisma.JsonNull,
+        generatedAt:
+          data.generatedAt instanceof Date ? data.generatedAt : new Date(),
+        error: null,
+        model: typeof data.model === "string" ? data.model : null,
+        windowStartYmd: "2026-03-11",
+        windowEndYmd: "2026-03-18",
+      }),
+    );
+    prisma.todo.findMany.mockResolvedValue([]);
+    prisma.mood.findMany.mockResolvedValue([]);
+    prisma.memo.findMany.mockResolvedValue([]);
+    prisma.calendarEvent.findMany.mockResolvedValue([]);
+    prisma.metricEntry.findMany.mockResolvedValue([]);
+    prisma.dday.findMany.mockResolvedValue([]);
+    prisma.photo.findMany.mockResolvedValue([]);
+    prisma.notice.findMany.mockResolvedValue([]);
+    prisma.weatherCache.findMany.mockResolvedValue([]);
+    prisma.$queryRaw.mockImplementation(async () => [{ locked: true }]);
+    expandCalendarEvents.mockReturnValue([]);
+    parseOpenMeteoDaily.mockReturnValue([]);
+  });
+
+  it("returns a ready fallback summary when the Gemini API key is missing", async () => {
+    generateTextWithGemini.mockRejectedValue(
+      new Error("Missing GEMINI_API_KEY"),
+    );
+
+    const result = await getOrCreateWeeklySummary({
+      widgetId: "widget-1",
+      dashboardId: "dashboard-1",
+      windowStartYmd: "2026-03-11",
+      windowEndYmd: "2026-03-18",
+      windowStartAt: "2026-03-10T15:00:00.000Z",
+      windowEndAt: "2026-03-17T15:00:00.000Z",
+      startAt: new Date("2026-03-10T15:00:00.000Z"),
+      endAt: new Date("2026-03-17T15:00:00.000Z"),
+      language: "en",
+    });
+
+    expect(result.status).toBe("ready");
+    expect(result.model).toBe("rule-based-fallback");
+    expect(result.summary).toContain("last 7 days");
+    expect(prisma.weeklySummary.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          status: "ready",
+          model: "rule-based-fallback",
+          error: null,
+        }),
+      }),
+    );
   });
 });
