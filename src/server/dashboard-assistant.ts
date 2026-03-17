@@ -11,6 +11,10 @@ import type { AppLanguage } from "@/shared/i18n/language";
 
 const SUMMARY_VERSION = 3;
 const SUMMARY_DEBUG_ENABLED = process.env.DEBUG_GEMINI_SUMMARY === "1";
+const MIN_SUMMARY_BOUNDARY_OFFSET_MS = -14 * 60 * 60 * 1000;
+const MAX_SUMMARY_BOUNDARY_OFFSET_MS = 12 * 60 * 60 * 1000;
+const MAX_SUMMARY_BOUNDARY_OFFSET_DRIFT_MS = 2 * 60 * 60 * 1000;
+const SUMMARY_BOUNDARY_GRANULARITY_MS = 15 * 60 * 1000;
 
 type SummaryStats = {
   summaryVersion: number;
@@ -95,21 +99,21 @@ function parseIsoBoundary(value: string) {
   return parsed;
 }
 
-function toYmd(date: Date) {
-  const yyyy = date.getFullYear();
-  const mm = String(date.getMonth() + 1).padStart(2, "0");
-  const dd = String(date.getDate()).padStart(2, "0");
-  return `${yyyy}-${mm}-${dd}`;
-}
-
-function parseYmd(ymd: string) {
+function parseYmdBoundaryUtc(ymd: string) {
   if (!isYmd(ymd)) return null;
   const [year, month, day] = ymd.split("-").map(Number);
-  const date = new Date(year, month - 1, day);
+  const date = new Date(Date.UTC(year, month - 1, day));
   if (Number.isNaN(date.getTime())) return null;
-  if (toYmd(date) !== ymd) return null;
-  date.setHours(0, 0, 0, 0);
+  if (date.toISOString().slice(0, 10) !== ymd) return null;
   return date;
+}
+
+function isValidSummaryBoundaryOffset(offsetMs: number) {
+  return (
+    offsetMs >= MIN_SUMMARY_BOUNDARY_OFFSET_MS &&
+    offsetMs <= MAX_SUMMARY_BOUNDARY_OFFSET_MS &&
+    Math.abs(offsetMs % SUMMARY_BOUNDARY_GRANULARITY_MS) === 0
+  );
 }
 
 function normalizeText(value: string | null | undefined, maxLength = 120) {
@@ -343,8 +347,8 @@ export function validateSummaryWindow(input: {
   windowStartAt: string;
   windowEndAt: string;
 }) {
-  const startDate = parseYmd(input.windowStartYmd);
-  const endDate = parseYmd(input.windowEndYmd);
+  const startDate = parseYmdBoundaryUtc(input.windowStartYmd);
+  const endDate = parseYmdBoundaryUtc(input.windowEndYmd);
   const startAt = parseIsoBoundary(input.windowStartAt);
   const endAt = parseIsoBoundary(input.windowEndAt);
   if (!startDate || !endDate || !startAt || !endAt) return null;
@@ -354,6 +358,17 @@ export function validateSummaryWindow(input: {
   );
   if (diffDays !== 7) return null;
   if (endAt.getTime() <= startAt.getTime()) return null;
+
+  const startOffsetMs = startAt.getTime() - startDate.getTime();
+  const endOffsetMs = endAt.getTime() - endDate.getTime();
+  if (!isValidSummaryBoundaryOffset(startOffsetMs)) return null;
+  if (!isValidSummaryBoundaryOffset(endOffsetMs)) return null;
+  if (
+    Math.abs(endOffsetMs - startOffsetMs) >
+    MAX_SUMMARY_BOUNDARY_OFFSET_DRIFT_MS
+  ) {
+    return null;
+  }
 
   return {
     ...input,
