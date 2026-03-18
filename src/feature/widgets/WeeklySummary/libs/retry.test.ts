@@ -39,4 +39,14 @@ describe("shouldRetryMissingWidget", () => {
       }),
     ).toBe(false);
   });
+
+  it("does not retry when the widget timestamp is in the future", () => {
+    expect(
+      shouldRetryMissingWidget({
+        errorMessage: "Widget not found",
+        widgetCreatedAt: "2026-03-18T10:00:30.000Z",
+        now: Date.parse("2026-03-18T10:00:00.000Z"),
+      }),
+    ).toBe(false);
+  });
 });

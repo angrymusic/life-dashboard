@@ -19,5 +19,6 @@ export function shouldRetryMissingWidget(params: {
     return false;
   }
 
-  return (params.now ?? Date.now()) - createdAtMs <= TRANSIENT_WIDGET_NOT_FOUND_WINDOW_MS;
+  const ageMs = (params.now ?? Date.now()) - createdAtMs;
+  return ageMs >= 0 && ageMs <= TRANSIENT_WIDGET_NOT_FOUND_WINDOW_MS;
 }
