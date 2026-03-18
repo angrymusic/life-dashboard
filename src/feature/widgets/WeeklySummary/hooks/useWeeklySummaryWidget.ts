@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { updateWidgetSettings } from "@/shared/db/db";
 import { useWidget } from "@/shared/db/queries";
 import { SummaryWeekday, getSummaryWindow, isSummaryWeekday } from "@/feature/widgets/WeeklySummary/libs/window";
+import { shouldRetryMissingWidget } from "@/feature/widgets/WeeklySummary/libs/retry";
 
 type SummaryState = {
   isLoading: boolean;
@@ -39,6 +40,7 @@ export function useWeeklySummaryWidget(widgetId: string) {
   const summaryWeekday = isSummaryWeekday(settings.summaryWeekday)
     ? settings.summaryWeekday
     : DEFAULT_WEEKDAY;
+  const widgetCreatedAt = widget?.createdAt;
 
   const summaryWindow = useMemo(
     () => getSummaryWindow(summaryWeekday),
@@ -94,9 +96,28 @@ export function useWeeklySummaryWidget(widgetId: string) {
         });
       } catch (error) {
         if (cancelled) return;
+        const message =
+          error instanceof Error ? error.message : "Failed to load summary";
+        if (
+          shouldRetryMissingWidget({
+            errorMessage: message,
+            widgetCreatedAt,
+          })
+        ) {
+          setSummaryState({
+            isLoading: false,
+            error: null,
+            data: {
+              status: "pending",
+              windowStartYmd: summaryWindow.windowStartYmd,
+              windowEndYmd: summaryWindow.windowEndYmd,
+            },
+          });
+          return;
+        }
         setSummaryState({
           isLoading: false,
-          error: error instanceof Error ? error.message : "Failed to load summary",
+          error: message,
           data: null,
         });
       }
@@ -107,7 +128,7 @@ export function useWeeklySummaryWidget(widgetId: string) {
     return () => {
       cancelled = true;
     };
-  }, [widget?.dashboardId, widgetId, summaryWindow, reloadNonce]);
+  }, [widget?.dashboardId, widgetCreatedAt, widgetId, summaryWindow, reloadNonce]);
 
   useEffect(() => {
     if (summaryState.data?.status !== "pending" || summaryState.isLoading) {
