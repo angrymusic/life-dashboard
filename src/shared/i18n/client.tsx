@@ -6,7 +6,7 @@ import {
   useContext,
   useEffect,
   useMemo,
-  useState,
+  useSyncExternalStore,
 } from "react";
 import {
   detectLanguageFromNavigator,
@@ -25,6 +25,7 @@ type I18nContextValue = {
 };
 
 const I18nContext = createContext<I18nContextValue | null>(null);
+const LANGUAGE_CHANGE_EVENT = "lifedashboard-language-change";
 
 type I18nProviderProps = {
   children: React.ReactNode;
@@ -36,17 +37,44 @@ function writeLanguageCookie(language: AppLanguage) {
   document.cookie = `${LANGUAGE_COOKIE_KEY}=${language}; path=/; max-age=31536000; samesite=lax`;
 }
 
-export function I18nProvider({ children, initialLanguage }: I18nProviderProps) {
-  const [language, setLanguageState] = useState<AppLanguage>(() => {
-    if (typeof window === "undefined") {
-      return initialLanguage;
+function getBrowserLanguage() {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  const stored = normalizeLanguage(localStorage.getItem(LANGUAGE_STORAGE_KEY));
+  return stored ?? detectLanguageFromNavigator(window.navigator);
+}
+
+function subscribeToLanguageChange(onStoreChange: () => void) {
+  if (typeof window === "undefined") {
+    return () => {};
+  }
+
+  const handleStorage = (event: StorageEvent) => {
+    if (event.key && event.key !== LANGUAGE_STORAGE_KEY) {
+      return;
     }
+    onStoreChange();
+  };
 
-    const stored = normalizeLanguage(localStorage.getItem(LANGUAGE_STORAGE_KEY));
-    if (stored) return stored;
+  window.addEventListener("storage", handleStorage);
+  window.addEventListener("languagechange", onStoreChange);
+  window.addEventListener(LANGUAGE_CHANGE_EVENT, onStoreChange);
 
-    return detectLanguageFromNavigator(window.navigator);
-  });
+  return () => {
+    window.removeEventListener("storage", handleStorage);
+    window.removeEventListener("languagechange", onStoreChange);
+    window.removeEventListener(LANGUAGE_CHANGE_EVENT, onStoreChange);
+  };
+}
+
+export function I18nProvider({ children, initialLanguage }: I18nProviderProps) {
+  const language = useSyncExternalStore(
+    subscribeToLanguageChange,
+    () => getBrowserLanguage() ?? initialLanguage,
+    () => initialLanguage
+  );
 
   useEffect(() => {
     if (typeof document !== "undefined") {
@@ -56,11 +84,10 @@ export function I18nProvider({ children, initialLanguage }: I18nProviderProps) {
   }, [language]);
 
   const setLanguage = useCallback((next: AppLanguage) => {
-    setLanguageState(next);
     if (typeof window !== "undefined") {
       localStorage.setItem(LANGUAGE_STORAGE_KEY, next);
+      window.dispatchEvent(new Event(LANGUAGE_CHANGE_EVENT));
     }
-    writeLanguageCookie(next);
   }, []);
 
   const value = useMemo<I18nContextValue>(
