@@ -8,6 +8,7 @@ import {
 import { subscribeWidgetLockUpdate } from "@/server/widget-lock-updates";
 import { subscribeWidgetUpdate } from "@/server/widget-updates";
 import {
+  getWidgetLockTtlMs,
   listActiveWidgetLocks,
   WidgetLockUnavailableError,
 } from "@/server/widget-locks";
@@ -187,13 +188,18 @@ export async function GET(
       void (async () => {
         let lockReadyPayload: {
           enabled: boolean;
+          ttlMs?: number;
           locks: Awaited<ReturnType<typeof listActiveWidgetLocks>>;
         } = { enabled: false, locks: [] };
 
         if (dashboard.groupId) {
           try {
             const locks = await listActiveWidgetLocks(dashboardId, userId);
-            lockReadyPayload = { enabled: true, locks };
+            lockReadyPayload = {
+              enabled: true,
+              ttlMs: getWidgetLockTtlMs(),
+              locks,
+            };
           } catch (error) {
             if (!(error instanceof WidgetLockUnavailableError)) {
               close();
