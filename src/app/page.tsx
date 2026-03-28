@@ -1,3 +1,4 @@
+import { headers } from "next/headers";
 import DashboardContainer from "@/feature/dashboard/components/DashboardContainer";
 import { getAbsoluteUrl, SITE_DESCRIPTION, SITE_NAME } from "./seo";
 
@@ -34,16 +35,20 @@ const webApplicationJsonLd = {
   ],
 };
 
-export default function DashboardPage() {
+export default async function DashboardPage() {
+  const nonce = (await headers()).get("x-nonce") ?? undefined;
+
   return (
     <main>
       <h1 className="sr-only">{SITE_NAME}</h1>
       <p className="sr-only">{SITE_DESCRIPTION}</p>
       <script
+        nonce={nonce}
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(websiteJsonLd) }}
       />
       <script
+        nonce={nonce}
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(webApplicationJsonLd) }}
       />
