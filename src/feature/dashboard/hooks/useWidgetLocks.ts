@@ -17,9 +17,10 @@ type UseWidgetLocksResult = {
 };
 
 const LOCK_FALLBACK_POLL_INTERVAL_MS = 5000;
-const LOCK_HEARTBEAT_INTERVAL_MS = 15000;
-const LOCK_IDLE_RELEASE_MS = 20000;
-const LOCK_EXPIRY_PRUNE_INTERVAL_MS = 1000;
+const DEFAULT_LOCK_TTL_MS = 60_000;
+const LOCK_HEARTBEAT_DIVISOR = 4;
+const LOCK_IDLE_RELEASE_DIVISOR = 3;
+const MIN_LOCK_HEARTBEAT_INTERVAL_MS = 5000;
 const MIN_TOUCH_ACQUIRE_GAP_MS = 2500;
 
 function toWidgetLockMap(items: WidgetLock[]) {
@@ -57,6 +58,42 @@ function parseJsonPayload<T>(value: string): T | null {
   }
 }
 
+function parseLockTtlMs(value: unknown) {
+  if (typeof value !== "number") return null;
+  if (!Number.isFinite(value) || value <= 0) return null;
+  return value;
+}
+
+function getLockHeartbeatIntervalMs(ttlMs: number) {
+  return Math.max(
+    MIN_LOCK_HEARTBEAT_INTERVAL_MS,
+    Math.floor(ttlMs / LOCK_HEARTBEAT_DIVISOR)
+  );
+}
+
+function getLockIdleReleaseMs(ttlMs: number) {
+  return Math.max(
+    getLockHeartbeatIntervalMs(ttlMs) + 1000,
+    Math.floor(ttlMs / LOCK_IDLE_RELEASE_DIVISOR)
+  );
+}
+
+function getNextExpiryDelayMs(widgetLocks: WidgetLockMap) {
+  let nextExpiryAtMs = Number.POSITIVE_INFINITY;
+
+  for (const lock of Object.values(widgetLocks)) {
+    const expiresAtMs = Date.parse(lock.expiresAt);
+    if (!Number.isFinite(expiresAtMs)) continue;
+    nextExpiryAtMs = Math.min(nextExpiryAtMs, expiresAtMs);
+  }
+
+  if (!Number.isFinite(nextExpiryAtMs)) {
+    return null;
+  }
+
+  return Math.max(0, nextExpiryAtMs - Date.now());
+}
+
 export function useWidgetLocks({
   activeDashboard,
   isSignedIn,
@@ -70,11 +107,25 @@ export function useWidgetLocks({
 
   const [widgetLocks, setWidgetLocks] = useState<WidgetLockMap>({});
   const [lockStorageEnabled, setLockStorageEnabled] = useState(true);
+  const [lockTtlMs, setLockTtlMs] = useState(DEFAULT_LOCK_TTL_MS);
+  const [isPageVisible, setIsPageVisible] = useState(() => {
+    if (typeof document === "undefined") return true;
+    return document.visibilityState !== "hidden";
+  });
   const lockEnabled = lockEligible && lockStorageEnabled;
   const widgetLocksRef = useRef(widgetLocks);
   const touchedAtRef = useRef<Map<Id, number>>(new Map());
   const inFlightRef = useRef<Set<Id>>(new Set());
   const lastAcquireAtRef = useRef<Map<Id, number>>(new Map());
+  const lockHeartbeatIntervalMs = useMemo(
+    () => getLockHeartbeatIntervalMs(lockTtlMs),
+    [lockTtlMs]
+  );
+  const lockIdleReleaseMs = useMemo(
+    () => getLockIdleReleaseMs(lockTtlMs),
+    [lockTtlMs]
+  );
+  const nextExpiryDelayMs = useMemo(() => getNextExpiryDelayMs(widgetLocks), [widgetLocks]);
 
   const resetLocalState = useCallback(() => {
     setWidgetLocks({});
@@ -86,6 +137,19 @@ export function useWidgetLocks({
   useEffect(() => {
     setLockStorageEnabled(true);
   }, [lockEligible, dashboardId]);
+
+  useEffect(() => {
+    if (typeof document === "undefined") return;
+
+    const handleVisibilityChange = () => {
+      setIsPageVisible(document.visibilityState !== "hidden");
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, []);
 
   useEffect(() => {
     widgetLocksRef.current = widgetLocks;
@@ -111,6 +175,7 @@ export function useWidgetLocks({
       const payload = await readJson<{
         ok?: boolean;
         enabled?: boolean;
+        ttlMs?: unknown;
         locks?: unknown;
       }>(response);
       if (!response.ok || !payload?.ok) return;
@@ -120,6 +185,10 @@ export function useWidgetLocks({
         return;
       }
       if (!isWidgetLockArray(payload.locks)) return;
+      const ttlMs = parseLockTtlMs(payload.ttlMs);
+      if (ttlMs) {
+        setLockTtlMs(ttlMs);
+      }
       setLockStorageEnabled(true);
       setWidgetLocks(toWidgetLockMap(payload.locks));
     } catch {
@@ -142,6 +211,7 @@ export function useWidgetLocks({
         const payload = await readJson<{
           ok?: boolean;
           enabled?: boolean;
+          ttlMs?: unknown;
           lock?: WidgetLock;
         }>(response);
 
@@ -158,6 +228,10 @@ export function useWidgetLocks({
           return;
         }
         if (!payload.lock) return;
+        const ttlMs = parseLockTtlMs(payload.ttlMs);
+        if (ttlMs) {
+          setLockTtlMs(ttlMs);
+        }
         setLockStorageEnabled(true);
         applySingleLock(payload.lock);
       } catch {
@@ -265,74 +339,74 @@ export function useWidgetLocks({
   );
 
   useEffect(() => {
-    if (!endpoint || !lockEligible) {
-      resetLocalState();
-      return;
-    }
+    if (endpoint && lockEligible) return;
+
+    resetLocalState();
+  }, [endpoint, lockEligible, resetLocalState]);
+
+  useEffect(() => {
+    if (!endpoint || !lockEligible || !streamEndpoint) return;
+    if (typeof window.EventSource !== "function") return;
 
     void fetchLocks();
 
-    if (typeof window.EventSource === "function" && streamEndpoint) {
-      const eventSource = new window.EventSource(streamEndpoint);
+    const eventSource = new window.EventSource(streamEndpoint);
 
-      const handleWidgetLockReady = (event: Event) => {
-        const message = event as MessageEvent<string>;
-        const payload = parseJsonPayload<{ enabled?: boolean; locks?: unknown }>(
-          message.data
-        );
-        if (!payload) return;
-        if (!payload.enabled) {
-          setLockStorageEnabled(false);
-          resetLocalState();
-          return;
-        }
-        if (!isWidgetLockArray(payload.locks)) return;
-        setLockStorageEnabled(true);
-        setWidgetLocks(toWidgetLockMap(payload.locks));
-      };
-
-      const handleWidgetLockUpdated = (event: Event) => {
-        const message = event as MessageEvent<string>;
-        const payload = parseJsonPayload<{
-          type?: "upsert" | "delete";
-          lock?: unknown;
-          widgetId?: string;
-        }>(message.data);
-        if (!payload) return;
-        if (payload.type === "upsert" && payload.lock) {
-          if (isWidgetLock(payload.lock)) {
-            setLockStorageEnabled(true);
-            applySingleLock(payload.lock);
-          }
-          return;
-        }
-        if (payload.type === "delete" && typeof payload.widgetId === "string") {
-          clearSingleLock(payload.widgetId);
-        }
-      };
-
-      const handleForbidden = () => {
+    const handleWidgetLockReady = (event: Event) => {
+      const message = event as MessageEvent<string>;
+      const payload = parseJsonPayload<{
+        enabled?: boolean;
+        ttlMs?: unknown;
+        locks?: unknown;
+      }>(message.data);
+      if (!payload) return;
+      if (!payload.enabled) {
+        setLockStorageEnabled(false);
         resetLocalState();
-      };
+        return;
+      }
+      if (!isWidgetLockArray(payload.locks)) return;
+      const ttlMs = parseLockTtlMs(payload.ttlMs);
+      if (ttlMs) {
+        setLockTtlMs(ttlMs);
+      }
+      setLockStorageEnabled(true);
+      setWidgetLocks(toWidgetLockMap(payload.locks));
+    };
 
-      eventSource.addEventListener("widget-lock-ready", handleWidgetLockReady);
-      eventSource.addEventListener("widget-lock-updated", handleWidgetLockUpdated);
-      eventSource.addEventListener("forbidden", handleForbidden);
+    const handleWidgetLockUpdated = (event: Event) => {
+      const message = event as MessageEvent<string>;
+      const payload = parseJsonPayload<{
+        type?: "upsert" | "delete";
+        lock?: unknown;
+        widgetId?: string;
+      }>(message.data);
+      if (!payload) return;
+      if (payload.type === "upsert" && payload.lock) {
+        if (isWidgetLock(payload.lock)) {
+          setLockStorageEnabled(true);
+          applySingleLock(payload.lock);
+        }
+        return;
+      }
+      if (payload.type === "delete" && typeof payload.widgetId === "string") {
+        clearSingleLock(payload.widgetId);
+      }
+    };
 
-      return () => {
-        eventSource.removeEventListener("widget-lock-ready", handleWidgetLockReady);
-        eventSource.removeEventListener("widget-lock-updated", handleWidgetLockUpdated);
-        eventSource.removeEventListener("forbidden", handleForbidden);
-        eventSource.close();
-      };
-    }
+    const handleForbidden = () => {
+      resetLocalState();
+    };
 
-    const intervalId = window.setInterval(() => {
-      void fetchLocks();
-    }, LOCK_FALLBACK_POLL_INTERVAL_MS);
+    eventSource.addEventListener("widget-lock-ready", handleWidgetLockReady);
+    eventSource.addEventListener("widget-lock-updated", handleWidgetLockUpdated);
+    eventSource.addEventListener("forbidden", handleForbidden);
 
     return () => {
-      window.clearInterval(intervalId);
+      eventSource.removeEventListener("widget-lock-ready", handleWidgetLockReady);
+      eventSource.removeEventListener("widget-lock-updated", handleWidgetLockUpdated);
+      eventSource.removeEventListener("forbidden", handleForbidden);
+      eventSource.close();
     };
   }, [
     endpoint,
@@ -345,50 +419,83 @@ export function useWidgetLocks({
   ]);
 
   useEffect(() => {
-    if (!endpoint || !lockEnabled) return;
+    if (!endpoint || !lockEligible || !isPageVisible) return;
+    if (typeof window.EventSource === "function" && streamEndpoint) return;
+
+    void fetchLocks();
 
     const intervalId = window.setInterval(() => {
-      const now = Date.now();
-      for (const [widgetId, touchedAt] of touchedAtRef.current.entries()) {
-        const currentLock = widgetLocksRef.current[widgetId];
-        if (currentLock && !currentLock.isMine) {
-          touchedAtRef.current.delete(widgetId);
-          continue;
-        }
-
-        if (now - touchedAt > LOCK_IDLE_RELEASE_MS) {
-          releaseWidgetLock(widgetId);
-          continue;
-        }
-
-        lastAcquireAtRef.current.set(widgetId, now);
-        void acquireWidgetLock(widgetId);
-      }
-    }, LOCK_HEARTBEAT_INTERVAL_MS);
+      void fetchLocks();
+    }, LOCK_FALLBACK_POLL_INTERVAL_MS);
 
     return () => {
       window.clearInterval(intervalId);
     };
-  }, [acquireWidgetLock, endpoint, lockEnabled, releaseWidgetLock]);
+  }, [endpoint, fetchLocks, isPageVisible, lockEligible, streamEndpoint]);
+
+  const runHeartbeat = useCallback(() => {
+    const now = Date.now();
+    for (const [widgetId, touchedAt] of touchedAtRef.current.entries()) {
+      const currentLock = widgetLocksRef.current[widgetId];
+      if (currentLock && !currentLock.isMine) {
+        touchedAtRef.current.delete(widgetId);
+        continue;
+      }
+
+      if (now - touchedAt > lockIdleReleaseMs) {
+        releaseWidgetLock(widgetId);
+        continue;
+      }
+
+      lastAcquireAtRef.current.set(widgetId, now);
+      void acquireWidgetLock(widgetId);
+    }
+  }, [acquireWidgetLock, lockIdleReleaseMs, releaseWidgetLock]);
 
   useEffect(() => {
-    if (!lockEnabled) return;
+    if (!endpoint || !lockEnabled || !isPageVisible) return;
 
-    const intervalId = window.setInterval(() => {
-      const now = Date.now();
-      for (const [widgetId, lock] of Object.entries(widgetLocksRef.current)) {
-        const expiresAtMs = Date.parse(lock.expiresAt);
-        if (!Number.isFinite(expiresAtMs)) continue;
-        if (expiresAtMs <= now) {
-          clearSingleLock(widgetId);
-        }
-      }
-    }, LOCK_EXPIRY_PRUNE_INTERVAL_MS);
+    runHeartbeat();
+
+    const intervalId = window.setInterval(runHeartbeat, lockHeartbeatIntervalMs);
 
     return () => {
       window.clearInterval(intervalId);
     };
-  }, [clearSingleLock, lockEnabled]);
+  }, [
+    endpoint,
+    lockEnabled,
+    isPageVisible,
+    lockHeartbeatIntervalMs,
+    runHeartbeat,
+  ]);
+
+  useEffect(() => {
+    if (!lockEnabled || nextExpiryDelayMs === null) return;
+
+    const timeoutId = window.setTimeout(() => {
+      const now = Date.now();
+      setWidgetLocks((current) => {
+        let changed = false;
+        const next: WidgetLockMap = {};
+
+        for (const [widgetId, lock] of Object.entries(current)) {
+          const expiresAtMs = Date.parse(lock.expiresAt);
+          if (Number.isFinite(expiresAtMs) && expiresAtMs <= now) {
+            changed = true;
+            continue;
+          }
+          next[widgetId] = lock;
+        }
+
+        return changed ? next : current;
+      });
+    }, nextExpiryDelayMs);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [lockEnabled, nextExpiryDelayMs]);
 
   useEffect(() => {
     if (!endpoint || !lockEnabled) return;
