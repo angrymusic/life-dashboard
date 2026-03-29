@@ -7,8 +7,9 @@ import {
   removeSharedDashboardLocally,
 } from "@/shared/db/db";
 import type { Dashboard, Id, Widget } from "@/shared/db/schema";
-import { useOutboxCount } from "@/shared/db/queries";
+import { useOutboxStatus } from "@/shared/db/queries";
 import { readJson } from "@/feature/dashboard/libs/readJson";
+import { getOutboxRetryDelay } from "@/feature/dashboard/libs/outboxRetry";
 import { getSyncClientId } from "@/shared/db/sync-client";
 
 type SyncParams = {
@@ -34,9 +35,48 @@ export function useDashboardSync({
   const [pendingRemoteUpdate, setPendingRemoteUpdate] = useState<string | null>(
     null
   );
+  const [outboxFlushTrigger, setOutboxFlushTrigger] = useState(0);
   const lastRemoteUpdatedAtRef = useRef<string | null>(null);
   const flushRef = useRef(false);
-  const outboxCount = useOutboxCount();
+  const pendingOutboxFlushRef = useRef(false);
+  const outboxRetryTimeoutRef = useRef<number | null>(null);
+  const outboxRetryAttemptRef = useRef(0);
+  const outboxStatus = useOutboxStatus();
+  const outboxCount = outboxStatus?.count;
+  const outboxLatestUpdatedAt = outboxStatus?.latestUpdatedAt;
+
+  const clearScheduledOutboxRetry = useCallback(() => {
+    if (typeof window === "undefined") return;
+    if (outboxRetryTimeoutRef.current === null) return;
+    window.clearTimeout(outboxRetryTimeoutRef.current);
+    outboxRetryTimeoutRef.current = null;
+  }, []);
+
+  const requestOutboxFlush = useCallback(
+    (options?: { resetBackoff?: boolean }) => {
+      if (!isServerBootstrapReady) return;
+      if (!isSignedIn) return;
+      if (typeof outboxCount !== "number" || outboxCount === 0) return;
+
+      if (options?.resetBackoff) {
+        outboxRetryAttemptRef.current = 0;
+      }
+      clearScheduledOutboxRetry();
+      setOutboxFlushTrigger((current) => current + 1);
+    },
+    [clearScheduledOutboxRetry, isServerBootstrapReady, isSignedIn, outboxCount]
+  );
+
+  const scheduleOutboxRetry = useCallback(() => {
+    if (typeof window === "undefined") return;
+    clearScheduledOutboxRetry();
+    outboxRetryAttemptRef.current += 1;
+    const delay = getOutboxRetryDelay(outboxRetryAttemptRef.current);
+    outboxRetryTimeoutRef.current = window.setTimeout(() => {
+      outboxRetryTimeoutRef.current = null;
+      setOutboxFlushTrigger((current) => current + 1);
+    }, delay);
+  }, [clearScheduledOutboxRetry]);
 
   const fetchAndApplySnapshot = useCallback(
     async (targetDashboardId: Id, groupId?: Id) => {
@@ -408,20 +448,86 @@ export function useDashboardSync({
   ]);
 
   useEffect(() => {
-    if (!isServerBootstrapReady) return;
-    if (!isSignedIn) return;
-    if (typeof outboxCount !== "number" || outboxCount === 0) return;
-    if (flushRef.current) return;
+    if (!isServerBootstrapReady || !isSignedIn) {
+      pendingOutboxFlushRef.current = false;
+      outboxRetryAttemptRef.current = 0;
+      clearScheduledOutboxRetry();
+      return;
+    }
+    if (typeof outboxCount !== "number" || outboxCount === 0) {
+      pendingOutboxFlushRef.current = false;
+      outboxRetryAttemptRef.current = 0;
+      clearScheduledOutboxRetry();
+      return;
+    }
+    if (flushRef.current) {
+      pendingOutboxFlushRef.current = true;
+      return;
+    }
 
+    pendingOutboxFlushRef.current = false;
+    clearScheduledOutboxRetry();
+    let cancelled = false;
     flushRef.current = true;
     void (async () => {
       try {
-        await flushOutbox();
+        const result = await flushOutbox();
+        if (cancelled) return;
+        if (!result.ok) {
+          scheduleOutboxRetry();
+          return;
+        }
+        outboxRetryAttemptRef.current = 0;
+        clearScheduledOutboxRetry();
+      } catch {
+        if (cancelled) return;
+        scheduleOutboxRetry();
       } finally {
         flushRef.current = false;
+        if (!cancelled && pendingOutboxFlushRef.current) {
+          pendingOutboxFlushRef.current = false;
+          setOutboxFlushTrigger((current) => current + 1);
+        }
       }
     })();
-  }, [isSignedIn, isServerBootstrapReady, outboxCount]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    clearScheduledOutboxRetry,
+    isSignedIn,
+    isServerBootstrapReady,
+    outboxCount,
+    outboxLatestUpdatedAt,
+    outboxFlushTrigger,
+    scheduleOutboxRetry,
+  ]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const handleOnline = () => {
+      requestOutboxFlush({ resetBackoff: true });
+    };
+    const handleVisibilityChange = () => {
+      if (document.visibilityState !== "visible") return;
+      requestOutboxFlush({ resetBackoff: true });
+    };
+
+    window.addEventListener("online", handleOnline);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [requestOutboxFlush]);
+
+  useEffect(() => {
+    return () => {
+      clearScheduledOutboxRetry();
+    };
+  }, [clearScheduledOutboxRetry]);
 
   return { pendingRemoteUpdate, applyRemoteUpdate };
 }

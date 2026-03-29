@@ -163,3 +163,21 @@ export function useMembers() {
 export function useOutboxCount() {
   return useLiveQuery(async () => db.outbox.count(), []);
 }
+
+export function useOutboxStatus() {
+  return useLiveQuery(async () => {
+    const count = await db.outbox.count();
+    if (count === 0) {
+      return {
+        count: 0,
+        latestUpdatedAt: null,
+      };
+    }
+
+    const latest = await db.outbox.orderBy("updatedAt").last();
+    return {
+      count,
+      latestUpdatedAt: latest?.updatedAt ?? null,
+    };
+  }, []);
+}
