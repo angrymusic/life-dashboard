@@ -234,7 +234,6 @@ export function useDashboardSync({
     const groupId = activeDashboard.groupId;
     const syncClientId = getSyncClientId();
     let cancelled = false;
-    let timeoutId: number | undefined;
     const inFlightWidgetUpdates = new Set<Id>();
     const queuedWidgetUpdates = new Map<
       Id,
@@ -358,87 +357,46 @@ export function useDashboardSync({
       }
     };
 
-    const schedule = () => {
-      timeoutId = window.setTimeout(poll, 10000);
+    if (typeof window.EventSource !== "function") return;
+
+    const eventSource = new window.EventSource(
+      `/api/dashboards/${currentDashboardId}/updates/stream`
+    );
+
+    const handleReady = (event: Event) => {
+      const message = event as MessageEvent<string>;
+      parseAndHandleUpdatedAt(message.data, { baseline: true });
     };
 
-    const poll = async () => {
+    const handleDashboardUpdated = (event: Event) => {
+      const message = event as MessageEvent<string>;
+      parseAndHandleUpdatedAt(message.data);
+    };
+
+    const handleWidgetUpdated = (event: Event) => {
+      const message = event as MessageEvent<string>;
+      parseAndHandleWidgetUpdated(message.data);
+    };
+
+    const handleForbidden = () => {
       if (cancelled) return;
-      if (document.visibilityState === "hidden") {
-        schedule();
-        return;
-      }
-      try {
-        const response = await fetch(
-          `/api/dashboards/${currentDashboardId}/updates`,
-          { cache: "no-store" }
-        );
-        const payload = await readJson<{
-          ok?: boolean;
-          updatedAt?: string;
-          clientId?: string;
-        }>(response);
-        if (cancelled) return;
-        if (response.status === 403 || response.status === 404) {
-          await removeSharedDashboardLocally(currentDashboardId, groupId);
-          cancelled = true;
-          return;
-        }
-        if (!response.ok || !payload?.ok || !payload.updatedAt) return;
-        if (consumeSelfEcho(payload.updatedAt, payload.clientId)) return;
-        handleRemoteUpdatedAt(payload.updatedAt);
-      } finally {
-        if (!cancelled) schedule();
-      }
+      cancelled = true;
+      eventSource.close();
+      void removeSharedDashboardLocally(currentDashboardId, groupId);
     };
 
-    if (typeof window.EventSource === "function") {
-      const eventSource = new window.EventSource(
-        `/api/dashboards/${currentDashboardId}/updates/stream`
-      );
-
-      const handleReady = (event: Event) => {
-        const message = event as MessageEvent<string>;
-        parseAndHandleUpdatedAt(message.data, { baseline: true });
-      };
-
-      const handleDashboardUpdated = (event: Event) => {
-        const message = event as MessageEvent<string>;
-        parseAndHandleUpdatedAt(message.data);
-      };
-
-      const handleWidgetUpdated = (event: Event) => {
-        const message = event as MessageEvent<string>;
-        parseAndHandleWidgetUpdated(message.data);
-      };
-
-      const handleForbidden = () => {
-        if (cancelled) return;
-        cancelled = true;
-        eventSource.close();
-        void removeSharedDashboardLocally(currentDashboardId, groupId);
-      };
-
-      eventSource.addEventListener("ready", handleReady);
-      eventSource.addEventListener("dashboard-updated", handleDashboardUpdated);
-      eventSource.addEventListener("widget-updated", handleWidgetUpdated);
-      eventSource.addEventListener("forbidden", handleForbidden);
-
-      return () => {
-        cancelled = true;
-        eventSource.removeEventListener("ready", handleReady);
-        eventSource.removeEventListener("dashboard-updated", handleDashboardUpdated);
-        eventSource.removeEventListener("widget-updated", handleWidgetUpdated);
-        eventSource.removeEventListener("forbidden", handleForbidden);
-        eventSource.close();
-      };
-    }
-
-    schedule();
+    eventSource.addEventListener("ready", handleReady);
+    eventSource.addEventListener("dashboard-updated", handleDashboardUpdated);
+    eventSource.addEventListener("widget-updated", handleWidgetUpdated);
+    eventSource.addEventListener("forbidden", handleForbidden);
 
     return () => {
       cancelled = true;
-      if (timeoutId) window.clearTimeout(timeoutId);
+      eventSource.removeEventListener("ready", handleReady);
+      eventSource.removeEventListener("dashboard-updated", handleDashboardUpdated);
+      eventSource.removeEventListener("widget-updated", handleWidgetUpdated);
+      eventSource.removeEventListener("forbidden", handleForbidden);
+      eventSource.close();
     };
   }, [
     activeDashboard?.groupId,

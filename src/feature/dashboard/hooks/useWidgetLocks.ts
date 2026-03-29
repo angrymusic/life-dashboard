@@ -16,7 +16,6 @@ type UseWidgetLocksResult = {
   releaseAllWidgetLocks: () => void;
 };
 
-const LOCK_FALLBACK_POLL_INTERVAL_MS = 5000;
 const LOCK_HEARTBEAT_INTERVAL_MS = 15000;
 const LOCK_IDLE_RELEASE_MS = 20000;
 const LOCK_EXPIRY_PRUNE_INTERVAL_MS = 1000;
@@ -272,67 +271,59 @@ export function useWidgetLocks({
 
     void fetchLocks();
 
-    if (typeof window.EventSource === "function" && streamEndpoint) {
-      const eventSource = new window.EventSource(streamEndpoint);
+    if (typeof window.EventSource !== "function" || !streamEndpoint) return;
 
-      const handleWidgetLockReady = (event: Event) => {
-        const message = event as MessageEvent<string>;
-        const payload = parseJsonPayload<{ enabled?: boolean; locks?: unknown }>(
-          message.data
-        );
-        if (!payload) return;
-        if (!payload.enabled) {
-          setLockStorageEnabled(false);
-          resetLocalState();
-          return;
-        }
-        if (!isWidgetLockArray(payload.locks)) return;
-        setLockStorageEnabled(true);
-        setWidgetLocks(toWidgetLockMap(payload.locks));
-      };
+    const eventSource = new window.EventSource(streamEndpoint);
 
-      const handleWidgetLockUpdated = (event: Event) => {
-        const message = event as MessageEvent<string>;
-        const payload = parseJsonPayload<{
-          type?: "upsert" | "delete";
-          lock?: unknown;
-          widgetId?: string;
-        }>(message.data);
-        if (!payload) return;
-        if (payload.type === "upsert" && payload.lock) {
-          if (isWidgetLock(payload.lock)) {
-            setLockStorageEnabled(true);
-            applySingleLock(payload.lock);
-          }
-          return;
-        }
-        if (payload.type === "delete" && typeof payload.widgetId === "string") {
-          clearSingleLock(payload.widgetId);
-        }
-      };
-
-      const handleForbidden = () => {
+    const handleWidgetLockReady = (event: Event) => {
+      const message = event as MessageEvent<string>;
+      const payload = parseJsonPayload<{ enabled?: boolean; locks?: unknown }>(
+        message.data
+      );
+      if (!payload) return;
+      if (!payload.enabled) {
+        setLockStorageEnabled(false);
         resetLocalState();
-      };
+        return;
+      }
+      if (!isWidgetLockArray(payload.locks)) return;
+      setLockStorageEnabled(true);
+      setWidgetLocks(toWidgetLockMap(payload.locks));
+    };
 
-      eventSource.addEventListener("widget-lock-ready", handleWidgetLockReady);
-      eventSource.addEventListener("widget-lock-updated", handleWidgetLockUpdated);
-      eventSource.addEventListener("forbidden", handleForbidden);
+    const handleWidgetLockUpdated = (event: Event) => {
+      const message = event as MessageEvent<string>;
+      const payload = parseJsonPayload<{
+        type?: "upsert" | "delete";
+        lock?: unknown;
+        widgetId?: string;
+      }>(message.data);
+      if (!payload) return;
+      if (payload.type === "upsert" && payload.lock) {
+        if (isWidgetLock(payload.lock)) {
+          setLockStorageEnabled(true);
+          applySingleLock(payload.lock);
+        }
+        return;
+      }
+      if (payload.type === "delete" && typeof payload.widgetId === "string") {
+        clearSingleLock(payload.widgetId);
+      }
+    };
 
-      return () => {
-        eventSource.removeEventListener("widget-lock-ready", handleWidgetLockReady);
-        eventSource.removeEventListener("widget-lock-updated", handleWidgetLockUpdated);
-        eventSource.removeEventListener("forbidden", handleForbidden);
-        eventSource.close();
-      };
-    }
+    const handleForbidden = () => {
+      resetLocalState();
+    };
 
-    const intervalId = window.setInterval(() => {
-      void fetchLocks();
-    }, LOCK_FALLBACK_POLL_INTERVAL_MS);
+    eventSource.addEventListener("widget-lock-ready", handleWidgetLockReady);
+    eventSource.addEventListener("widget-lock-updated", handleWidgetLockUpdated);
+    eventSource.addEventListener("forbidden", handleForbidden);
 
     return () => {
-      window.clearInterval(intervalId);
+      eventSource.removeEventListener("widget-lock-ready", handleWidgetLockReady);
+      eventSource.removeEventListener("widget-lock-updated", handleWidgetLockUpdated);
+      eventSource.removeEventListener("forbidden", handleForbidden);
+      eventSource.close();
     };
   }, [
     endpoint,
