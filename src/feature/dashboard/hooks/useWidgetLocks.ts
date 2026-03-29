@@ -16,7 +16,6 @@ type UseWidgetLocksResult = {
   releaseAllWidgetLocks: () => void;
 };
 
-const LOCK_FALLBACK_POLL_INTERVAL_MS = 5000;
 const DEFAULT_LOCK_TTL_MS = 60_000;
 const LOCK_HEARTBEAT_DIVISOR = 4;
 const LOCK_IDLE_RELEASE_DIVISOR = 3;
@@ -417,21 +416,6 @@ export function useWidgetLocks({
     clearSingleLock,
     resetLocalState,
   ]);
-
-  useEffect(() => {
-    if (!endpoint || !lockEligible || !isPageVisible) return;
-    if (typeof window.EventSource === "function" && streamEndpoint) return;
-
-    void fetchLocks();
-
-    const intervalId = window.setInterval(() => {
-      void fetchLocks();
-    }, LOCK_FALLBACK_POLL_INTERVAL_MS);
-
-    return () => {
-      window.clearInterval(intervalId);
-    };
-  }, [endpoint, fetchLocks, isPageVisible, lockEligible, streamEndpoint]);
 
   const runHeartbeat = useCallback(() => {
     const now = Date.now();

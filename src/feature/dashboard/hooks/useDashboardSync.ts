@@ -7,8 +7,9 @@ import {
   removeSharedDashboardLocally,
 } from "@/shared/db/db";
 import type { Dashboard, Id, Widget } from "@/shared/db/schema";
-import { useOutboxCount } from "@/shared/db/queries";
+import { useOutboxStatus } from "@/shared/db/queries";
 import { readJson } from "@/feature/dashboard/libs/readJson";
+import { getOutboxRetryDelay } from "@/feature/dashboard/libs/outboxRetry";
 import { getSyncClientId } from "@/shared/db/sync-client";
 
 type SyncParams = {
@@ -34,9 +35,48 @@ export function useDashboardSync({
   const [pendingRemoteUpdate, setPendingRemoteUpdate] = useState<string | null>(
     null
   );
+  const [outboxFlushTrigger, setOutboxFlushTrigger] = useState(0);
   const lastRemoteUpdatedAtRef = useRef<string | null>(null);
   const flushRef = useRef(false);
-  const outboxCount = useOutboxCount();
+  const pendingOutboxFlushRef = useRef(false);
+  const outboxRetryTimeoutRef = useRef<number | null>(null);
+  const outboxRetryAttemptRef = useRef(0);
+  const outboxStatus = useOutboxStatus();
+  const outboxCount = outboxStatus?.count;
+  const outboxLatestUpdatedAt = outboxStatus?.latestUpdatedAt;
+
+  const clearScheduledOutboxRetry = useCallback(() => {
+    if (typeof window === "undefined") return;
+    if (outboxRetryTimeoutRef.current === null) return;
+    window.clearTimeout(outboxRetryTimeoutRef.current);
+    outboxRetryTimeoutRef.current = null;
+  }, []);
+
+  const requestOutboxFlush = useCallback(
+    (options?: { resetBackoff?: boolean }) => {
+      if (!isServerBootstrapReady) return;
+      if (!isSignedIn) return;
+      if (typeof outboxCount !== "number" || outboxCount === 0) return;
+
+      if (options?.resetBackoff) {
+        outboxRetryAttemptRef.current = 0;
+      }
+      clearScheduledOutboxRetry();
+      setOutboxFlushTrigger((current) => current + 1);
+    },
+    [clearScheduledOutboxRetry, isServerBootstrapReady, isSignedIn, outboxCount]
+  );
+
+  const scheduleOutboxRetry = useCallback(() => {
+    if (typeof window === "undefined") return;
+    clearScheduledOutboxRetry();
+    outboxRetryAttemptRef.current += 1;
+    const delay = getOutboxRetryDelay(outboxRetryAttemptRef.current);
+    outboxRetryTimeoutRef.current = window.setTimeout(() => {
+      outboxRetryTimeoutRef.current = null;
+      setOutboxFlushTrigger((current) => current + 1);
+    }, delay);
+  }, [clearScheduledOutboxRetry]);
 
   const fetchAndApplySnapshot = useCallback(
     async (targetDashboardId: Id, groupId?: Id) => {
@@ -234,7 +274,6 @@ export function useDashboardSync({
     const groupId = activeDashboard.groupId;
     const syncClientId = getSyncClientId();
     let cancelled = false;
-    let timeoutId: number | undefined;
     const inFlightWidgetUpdates = new Set<Id>();
     const queuedWidgetUpdates = new Map<
       Id,
@@ -358,87 +397,46 @@ export function useDashboardSync({
       }
     };
 
-    const schedule = () => {
-      timeoutId = window.setTimeout(poll, 10000);
+    if (typeof window.EventSource !== "function") return;
+
+    const eventSource = new window.EventSource(
+      `/api/dashboards/${currentDashboardId}/updates/stream`
+    );
+
+    const handleReady = (event: Event) => {
+      const message = event as MessageEvent<string>;
+      parseAndHandleUpdatedAt(message.data, { baseline: true });
     };
 
-    const poll = async () => {
+    const handleDashboardUpdated = (event: Event) => {
+      const message = event as MessageEvent<string>;
+      parseAndHandleUpdatedAt(message.data);
+    };
+
+    const handleWidgetUpdated = (event: Event) => {
+      const message = event as MessageEvent<string>;
+      parseAndHandleWidgetUpdated(message.data);
+    };
+
+    const handleForbidden = () => {
       if (cancelled) return;
-      if (document.visibilityState === "hidden") {
-        schedule();
-        return;
-      }
-      try {
-        const response = await fetch(
-          `/api/dashboards/${currentDashboardId}/updates`,
-          { cache: "no-store" }
-        );
-        const payload = await readJson<{
-          ok?: boolean;
-          updatedAt?: string;
-          clientId?: string;
-        }>(response);
-        if (cancelled) return;
-        if (response.status === 403 || response.status === 404) {
-          await removeSharedDashboardLocally(currentDashboardId, groupId);
-          cancelled = true;
-          return;
-        }
-        if (!response.ok || !payload?.ok || !payload.updatedAt) return;
-        if (consumeSelfEcho(payload.updatedAt, payload.clientId)) return;
-        handleRemoteUpdatedAt(payload.updatedAt);
-      } finally {
-        if (!cancelled) schedule();
-      }
+      cancelled = true;
+      eventSource.close();
+      void removeSharedDashboardLocally(currentDashboardId, groupId);
     };
 
-    if (typeof window.EventSource === "function") {
-      const eventSource = new window.EventSource(
-        `/api/dashboards/${currentDashboardId}/updates/stream`
-      );
-
-      const handleReady = (event: Event) => {
-        const message = event as MessageEvent<string>;
-        parseAndHandleUpdatedAt(message.data, { baseline: true });
-      };
-
-      const handleDashboardUpdated = (event: Event) => {
-        const message = event as MessageEvent<string>;
-        parseAndHandleUpdatedAt(message.data);
-      };
-
-      const handleWidgetUpdated = (event: Event) => {
-        const message = event as MessageEvent<string>;
-        parseAndHandleWidgetUpdated(message.data);
-      };
-
-      const handleForbidden = () => {
-        if (cancelled) return;
-        cancelled = true;
-        eventSource.close();
-        void removeSharedDashboardLocally(currentDashboardId, groupId);
-      };
-
-      eventSource.addEventListener("ready", handleReady);
-      eventSource.addEventListener("dashboard-updated", handleDashboardUpdated);
-      eventSource.addEventListener("widget-updated", handleWidgetUpdated);
-      eventSource.addEventListener("forbidden", handleForbidden);
-
-      return () => {
-        cancelled = true;
-        eventSource.removeEventListener("ready", handleReady);
-        eventSource.removeEventListener("dashboard-updated", handleDashboardUpdated);
-        eventSource.removeEventListener("widget-updated", handleWidgetUpdated);
-        eventSource.removeEventListener("forbidden", handleForbidden);
-        eventSource.close();
-      };
-    }
-
-    schedule();
+    eventSource.addEventListener("ready", handleReady);
+    eventSource.addEventListener("dashboard-updated", handleDashboardUpdated);
+    eventSource.addEventListener("widget-updated", handleWidgetUpdated);
+    eventSource.addEventListener("forbidden", handleForbidden);
 
     return () => {
       cancelled = true;
-      if (timeoutId) window.clearTimeout(timeoutId);
+      eventSource.removeEventListener("ready", handleReady);
+      eventSource.removeEventListener("dashboard-updated", handleDashboardUpdated);
+      eventSource.removeEventListener("widget-updated", handleWidgetUpdated);
+      eventSource.removeEventListener("forbidden", handleForbidden);
+      eventSource.close();
     };
   }, [
     activeDashboard?.groupId,
@@ -450,20 +448,86 @@ export function useDashboardSync({
   ]);
 
   useEffect(() => {
-    if (!isServerBootstrapReady) return;
-    if (!isSignedIn) return;
-    if (typeof outboxCount !== "number" || outboxCount === 0) return;
-    if (flushRef.current) return;
+    if (!isServerBootstrapReady || !isSignedIn) {
+      pendingOutboxFlushRef.current = false;
+      outboxRetryAttemptRef.current = 0;
+      clearScheduledOutboxRetry();
+      return;
+    }
+    if (typeof outboxCount !== "number" || outboxCount === 0) {
+      pendingOutboxFlushRef.current = false;
+      outboxRetryAttemptRef.current = 0;
+      clearScheduledOutboxRetry();
+      return;
+    }
+    if (flushRef.current) {
+      pendingOutboxFlushRef.current = true;
+      return;
+    }
 
+    pendingOutboxFlushRef.current = false;
+    clearScheduledOutboxRetry();
+    let cancelled = false;
     flushRef.current = true;
     void (async () => {
       try {
-        await flushOutbox();
+        const result = await flushOutbox();
+        if (cancelled) return;
+        if (!result.ok) {
+          scheduleOutboxRetry();
+          return;
+        }
+        outboxRetryAttemptRef.current = 0;
+        clearScheduledOutboxRetry();
+      } catch {
+        if (cancelled) return;
+        scheduleOutboxRetry();
       } finally {
         flushRef.current = false;
+        if (!cancelled && pendingOutboxFlushRef.current) {
+          pendingOutboxFlushRef.current = false;
+          setOutboxFlushTrigger((current) => current + 1);
+        }
       }
     })();
-  }, [isSignedIn, isServerBootstrapReady, outboxCount]);
+
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    clearScheduledOutboxRetry,
+    isSignedIn,
+    isServerBootstrapReady,
+    outboxCount,
+    outboxLatestUpdatedAt,
+    outboxFlushTrigger,
+    scheduleOutboxRetry,
+  ]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const handleOnline = () => {
+      requestOutboxFlush({ resetBackoff: true });
+    };
+    const handleVisibilityChange = () => {
+      if (document.visibilityState !== "visible") return;
+      requestOutboxFlush({ resetBackoff: true });
+    };
+
+    window.addEventListener("online", handleOnline);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [requestOutboxFlush]);
+
+  useEffect(() => {
+    return () => {
+      clearScheduledOutboxRetry();
+    };
+  }, [clearScheduledOutboxRetry]);
 
   return { pendingRemoteUpdate, applyRemoteUpdate };
 }
