@@ -1,8 +1,8 @@
 import Image from "next/image";
+import dynamic from "next/dynamic";
 import type { ChangeEvent, KeyboardEvent, PointerEvent } from "react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { LoaderCircle, Upload, X } from "lucide-react";
-import { PhotoViewerDialog } from "@/feature/widgets/Photo/components/PhotoViewerDialog";
 import { usePhotoViewer } from "@/feature/widgets/Photo/hooks/usePhotoViewer";
 import { usePhotoWidget } from "@/feature/widgets/Photo/hooks/usePhotoWidget";
 import { WidgetCard } from "@/feature/widgets/shared/components/WidgetCard";
@@ -17,6 +17,13 @@ type PhotoWidgetProps = {
   widgetId: Id;
   canEdit?: boolean;
 };
+
+const PhotoViewerDialog = dynamic(
+  () =>
+    import("@/feature/widgets/Photo/components/PhotoViewerDialog").then(
+      (module) => module.PhotoViewerDialog
+    )
+);
 
 const PHOTO_CLICK_DRAG_THRESHOLD_PX = 6;
 
@@ -259,7 +266,9 @@ export function PhotoWidget({ widgetId, canEdit = true }: PhotoWidgetProps) {
           onChange={handleFileChange}
         />
 
-        {photoUrl ? <PhotoViewerDialog photoUrl={photoUrl} viewer={viewer} /> : null}
+        {photoUrl && viewer.isViewerOpen ? (
+          <PhotoViewerDialog photoUrl={photoUrl} viewer={viewer} />
+        ) : null}
 
         {canEdit ? (
           <WidgetDeleteDialog

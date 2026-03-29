@@ -15,9 +15,9 @@ import {
   toGridLayout,
 } from "@/feature/dashboard/libs/layout";
 import {
-  WidgetRegistry,
   isAddableWidgetType,
 } from "@/feature/dashboard/libs/widgetRegistry";
+import { WidgetRendererRegistry } from "@/feature/dashboard/libs/widgetRendererRegistry";
 import { useI18n } from "@/shared/i18n/client";
 import type { WidgetLockMap } from "@/feature/dashboard/types/widgetLock";
 
@@ -178,7 +178,7 @@ export default function GridLayout({
             const lock = widgetLocks[w.id];
             const lockedByOther = lockEnabled && Boolean(lock && !lock.isMine);
             const entry = isAddableWidgetType(w.type)
-              ? WidgetRegistry[w.type]
+              ? WidgetRendererRegistry[w.type]
               : null;
             return (
               <div key={w.id} className="h-full" data-widget-shell="true">
